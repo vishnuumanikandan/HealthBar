@@ -34,10 +34,38 @@ final class UserProgress {
     /// Computed from totalXP using Rank enum
     var rank: String
 
+    /// Comma-separated list of claimed streak milestone raw values
+    /// Uses inline default for SwiftData lightweight migration support
+    var claimedMilestones: String = ""
+
     /// Computed property: Current level based on totalXP
     /// Each level requires 100 XP (Level 1 = 0-99 XP, Level 2 = 100-199 XP, etc.)
     var currentLevel: Int {
         return totalXP / 100 + 1
+    }
+
+    /// Returns set of claimed milestone raw values
+    var claimedMilestoneSet: Set<Int> {
+        guard !claimedMilestones.isEmpty else { return [] }
+        return Set(claimedMilestones.split(separator: ",").compactMap { Int($0) })
+    }
+
+    /// Checks if a specific milestone has been claimed
+    /// - Parameter milestone: The milestone to check
+    /// - Returns: True if already claimed
+    func hasClaimed(_ milestone: StreakMilestone) -> Bool {
+        claimedMilestoneSet.contains(milestone.rawValue)
+    }
+
+    /// Claims a milestone (adds to claimed list)
+    /// - Parameter milestone: The milestone to claim
+    func claim(_ milestone: StreakMilestone) {
+        guard !hasClaimed(milestone) else { return }
+        if claimedMilestones.isEmpty {
+            claimedMilestones = "\(milestone.rawValue)"
+        } else {
+            claimedMilestones += ",\(milestone.rawValue)"
+        }
     }
 
     /// Initializes user progress with starting values

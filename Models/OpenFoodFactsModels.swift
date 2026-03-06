@@ -83,6 +83,15 @@ struct OpenFoodFactsNutriments: Codable {
     /// Sodium in grams per 100g (optional)
     let sodium_100g: Double?
 
+    /// Saturated fat in grams per 100g (optional)
+    let saturated_fat_100g: Double?
+
+    /// Cholesterol in milligrams per 100g (optional)
+    let cholesterol_100g: Double?
+
+    /// Potassium in milligrams per 100g (optional)
+    let potassium_100g: Double?
+
     // Custom coding keys to handle dashes in JSON keys
     enum CodingKeys: String, CodingKey {
         case energy_kcal_100g = "energy-kcal_100g"
@@ -96,6 +105,9 @@ struct OpenFoodFactsNutriments: Codable {
         case fiber_100g
         case sugars_100g
         case sodium_100g
+        case saturated_fat_100g = "saturated-fat_100g"
+        case cholesterol_100g
+        case potassium_100g
     }
 }
 
@@ -111,6 +123,31 @@ struct FoodNutrition {
     let toxinScore: Int
     let servingSize: String?
     let brand: String?
+
+    // MARK: - Advanced Nutrition (Optional)
+
+    /// Fiber in grams
+    let fiber: Double?
+
+    /// Sugar in grams
+    let sugar: Double?
+
+    /// Sodium in milligrams
+    let sodium: Double?
+
+    /// Saturated fat in grams
+    let saturatedFat: Double?
+
+    /// Cholesterol in milligrams
+    let cholesterol: Double?
+
+    /// Potassium in milligrams
+    let potassium: Double?
+
+    // MARK: - Product Image (Optional)
+
+    /// Product image data (resized JPEG)
+    let photoData: Data?
 }
 
 // MARK: - Barcode Errors
@@ -181,7 +218,10 @@ extension OpenFoodFactsNutriments {
             fat: nil,
             fiber_100g: 5.0,
             sugars_100g: 20.0,
-            sodium_100g: 0.5
+            sodium_100g: 0.5,
+            saturated_fat_100g: 4.0,
+            cholesterol_100g: 25.0,
+            potassium_100g: 300.0
         )
     }
 }
@@ -197,7 +237,14 @@ extension FoodNutrition {
             fat: 7.0,
             toxinScore: 35,
             servingSize: "50g",
-            brand: "Mock Brand"
+            brand: "Mock Brand",
+            fiber: 2.5,
+            sugar: 10.0,
+            sodium: 250.0,
+            saturatedFat: 2.0,
+            cholesterol: 12.5,
+            potassium: 150.0,
+            photoData: nil
         )
     }
 }

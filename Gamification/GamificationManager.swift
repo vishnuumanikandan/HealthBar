@@ -144,6 +144,29 @@ final class GamificationManager {
         return dayDifference >= 2
     }
 
+    // MARK: - Streak Milestones
+
+    /// Checks if a streak milestone should be awarded and claims it
+    /// - Parameters:
+    ///   - streak: Current streak count
+    ///   - progress: UserProgress to update (will be modified)
+    /// - Returns: The milestone that was claimed, or nil if none
+    func checkForMilestone(streak: Int, progress: inout UserProgress) -> StreakMilestone? {
+        // Check for next unclaimed milestone
+        guard let milestone = StreakMilestone.nextUnclaimedMilestone(
+            for: streak,
+            claimedMilestones: progress.claimedMilestoneSet
+        ) else {
+            return nil
+        }
+
+        // Claim the milestone and award bonus XP
+        progress.claim(milestone)
+        _ = addXP(amount: milestone.bonusXP, to: &progress)
+
+        return milestone
+    }
+
     // MARK: - Quest Generation
 
     /// Generates 3 random daily quests
@@ -172,7 +195,7 @@ final class GamificationManager {
         for template in selectedTemplates {
             let quest = DailyQuest(
                 title: template.title,
-                description: template.description,
+                questDescription: template.description,
                 xpReward: template.xp,
                 isCompleted: false,
                 date: date,

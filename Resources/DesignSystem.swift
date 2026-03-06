@@ -24,48 +24,48 @@ enum DesignSystem {
 
         // MARK: Background Colors
 
-        /// Clean light background (#F8FAF9 light, #0F1B13 dark forest)
-        static let primaryBackground = Color("PrimaryBackground")
+        /// Clean light background - rich green tint (#DCFCE7 light, #0F1B13 dark forest)
+        static let primaryBackground = Color(light: Color(hex: "#DCFCE7"), dark: Color(hex: "#0F1B13"))
 
-        /// Slightly elevated background (#FFFFFF light, #1A2B1E dark)
-        static let secondaryBackground = Color("SecondaryBackground")
+        /// Slightly elevated background - deeper mint (#E8F9F0 light, #1A2B1E dark)
+        static let secondaryBackground = Color(light: Color(hex: "#E8F9F0"), dark: Color(hex: "#1A2B1E"))
 
-        /// Elevated card background (#FFFFFF with shadow light, #1F3326 dark)
-        static let cardBackground = Color("CardBackground")
+        /// Elevated card background - white with noticeable green (#F3FDF7 light, #1F3326 dark)
+        static let cardBackground = Color(light: Color(hex: "#F3FDF7"), dark: Color(hex: "#1F3326"))
 
         // MARK: Accent Colors
 
-        /// Vibrant leaf green (#10B981) - main health/success color
-        static let primary = Color("Primary")
+        /// Vibrant deep green (#059669) - main health/success color
+        static let primary = Color(hex: "#059669")
 
-        /// Fresh mint (#6EE7B7) - secondary actions, highlights
-        static let secondary = Color("Secondary")
+        /// Rich emerald (#10B981) - secondary actions, highlights
+        static let secondary = Color(hex: "#10B981")
 
-        /// Warm amber (#F59E0B) - streaks, fire, warmth
-        static let energy = Color("Energy")
+        /// Bold amber (#D97706) - streaks, fire, warmth
+        static let energy = Color(hex: "#D97706")
 
-        /// Deep forest green (#059669) - leveling up, achievements
-        static let growth = Color("Growth")
+        /// Dark forest green (#047857) - leveling up, achievements
+        static let growth = Color(hex: "#047857")
 
-        /// Soft orange (#FB923C) - cautions
-        static let warning = Color("Warning")
+        /// Deep orange (#EA580C) - cautions
+        static let warning = Color(hex: "#EA580C")
 
-        /// Coral red (#EF4444) - deletions, errors
-        static let danger = Color("Danger")
+        /// Strong red (#DC2626) - deletions, errors
+        static let danger = Color(hex: "#DC2626")
 
         // MARK: Neutral Colors
 
         /// Dark charcoal (#111827 light, #F9FAFB dark)
-        static let textPrimary = Color("TextPrimary")
+        static let textPrimary = Color(light: Color(hex: "#111827"), dark: Color(hex: "#F9FAFB"))
 
         /// Medium gray (#6B7280)
-        static let textSecondary = Color("TextSecondary")
+        static let textSecondary = Color(hex: "#6B7280")
 
         /// Light gray (#9CA3AF)
-        static let textTertiary = Color("TextTertiary")
+        static let textTertiary = Color(hex: "#9CA3AF")
 
         /// Subtle border (#E5E7EB light, #374151 dark)
-        static let border = Color("Border")
+        static let border = Color(light: Color(hex: "#E5E7EB"), dark: Color(hex: "#374151"))
 
         // MARK: Gradients
 
@@ -157,6 +157,44 @@ enum DesignSystem {
         static let xl: CGFloat = 24
     }
 
+    // MARK: - Common Sizes
+
+    enum Sizes {
+        /// Standard icon circle size
+        static let iconCircle: CGFloat = 40
+
+        /// Small icon circle size
+        static let iconCircleSmall: CGFloat = 36
+
+        /// Medium thumbnail size (food photos, etc)
+        static let thumbnail: CGFloat = 60
+
+        /// Large thumbnail size
+        static let thumbnailLarge: CGFloat = 80
+
+        /// Floating action button size
+        static let floatingButton: CGFloat = 60
+
+        /// Crown/rank badge size
+        static let rankBadge: CGFloat = 50
+    }
+
+    // MARK: - Font Sizes
+
+    enum FontSizes {
+        static let largeTitle: CGFloat = 34
+        static let title: CGFloat = 28
+        static let title2: CGFloat = 22
+        static let title3: CGFloat = 20
+        static let headline: CGFloat = 17
+        static let body: CGFloat = 17
+        static let callout: CGFloat = 16
+        static let subheadline: CGFloat = 15
+        static let footnote: CGFloat = 14
+        static let caption: CGFloat = 12
+        static let caption2: CGFloat = 10
+    }
+
     // MARK: - Shadows & Effects
 
     enum Shadows {
@@ -218,9 +256,6 @@ struct AppButton: View {
     var body: some View {
         Button(action: {
             if !isDisabled && !isLoading {
-                // Haptic feedback
-                let generator = UIImpactFeedbackGenerator(style: .medium)
-                generator.impactOccurred()
                 action()
             }
         }) {
@@ -252,6 +287,7 @@ struct AppButton: View {
             .opacity(isDisabled ? 0.5 : 1.0)
         }
         .buttonStyle(PlainButtonStyle())
+        .sensoryFeedback(.impact(weight: .medium, intensity: 0.7), trigger: isPressed)
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in isPressed = true }
@@ -345,6 +381,10 @@ struct StatCard: View {
         .padding(DesignSystem.Spacing.lg)
         .background(DesignSystem.Colors.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
+                .strokeBorder(DesignSystem.Colors.primary.opacity(0.25), lineWidth: 1.5)
+        )
         .shadow(
             color: DesignSystem.Shadows.card.color,
             radius: DesignSystem.Shadows.card.radius,
@@ -397,12 +437,15 @@ struct ProgressRing: View {
                     Text(centerText)
                         .font(.system(size: size * 0.22, weight: .bold))
                         .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else if showPercentage {
                     Text("\(Int(normalizedProgress * 100))%")
                         .font(.system(size: size * 0.22, weight: .bold))
                         .foregroundColor(DesignSystem.Colors.textPrimary)
                 }
             }
+            .frame(maxWidth: size - lineWidth * 2) // Constrain text width to ring interior
         }
     }
 }
@@ -516,6 +559,127 @@ struct EmptyStateView: View {
     }
 }
 
+// MARK: 6. AuthTextField
+
+/// Styled text field for authentication screens (login and sign-up).
+///
+/// Supports email and secure (password) variants with:
+/// - An inline error message beneath the field for per-field validation failures
+/// - An eye toggle button to reveal/hide password text
+/// - Keyboard return-key routing via `submitLabel` and `onSubmit`
+/// - Full VoiceOver support and Dynamic Type compatibility
+/// - Minimum 44×44 pt tap target on the reveal toggle
+struct AuthTextField: View {
+
+    // MARK: - Configuration
+
+    /// Visible label shown above the input field.
+    let label: String
+
+    /// Placeholder text shown when the field is empty.
+    let placeholder: String
+
+    /// Two-way binding to the text value (owned by AuthViewModel).
+    @Binding var text: String
+
+    /// When `true`, renders a `SecureField` with a reveal toggle.
+    var isSecure: Bool = false
+
+    /// Per-field validation error message. When non-nil, the field border turns
+    /// red and the message appears beneath the field.
+    var errorMessage: String? = nil
+
+    /// The submit/return key label shown on the software keyboard.
+    var submitLabel: SubmitLabel = .done
+
+    /// Called when the user taps the keyboard return/submit key.
+    /// Use this to route focus to the next field or trigger submission.
+    var onSubmit: (() -> Void)? = nil
+
+    // MARK: - Private State
+
+    /// Whether the secure field is currently showing plain text.
+    @State private var isRevealed: Bool = false
+
+    // MARK: - Body
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            // Field label
+            Text(label)
+                .font(.system(size: DesignSystem.FontSizes.subheadline, weight: .medium))
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+
+            // Input field + optional reveal toggle
+            ZStack(alignment: .trailing) {
+                Group {
+                    if isSecure && !isRevealed {
+                        SecureField(placeholder, text: $text)
+                    } else {
+                        TextField(placeholder, text: $text)
+                            .keyboardType(isSecure ? .default : .emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                }
+                .font(.system(size: DesignSystem.FontSizes.body, weight: .regular))
+                .foregroundColor(DesignSystem.Colors.textPrimary)
+                // Indent right edge when the reveal toggle is present to avoid overlap
+                .padding(.leading, DesignSystem.Spacing.md)
+                .padding(.trailing, isSecure ? 52 : DesignSystem.Spacing.md)
+                .padding(.vertical, DesignSystem.Spacing.md)
+                .frame(minHeight: 52)
+                .background(DesignSystem.Colors.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                .overlay(
+                    // Border turns red when a validation error is present
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                        .stroke(
+                            errorMessage != nil
+                                ? DesignSystem.Colors.danger
+                                : DesignSystem.Colors.border,
+                            lineWidth: errorMessage != nil ? 1.5 : 1
+                        )
+                )
+                .submitLabel(submitLabel)
+                .onSubmit { onSubmit?() }
+                .accessibilityLabel(label)
+
+                // Reveal / hide toggle (password fields only)
+                if isSecure {
+                    Button {
+                        isRevealed.toggle()
+                    } label: {
+                        Image(systemName: isRevealed ? "eye.slash.fill" : "eye.fill")
+                            .font(.system(size: 16, weight: .regular))
+                            .foregroundColor(DesignSystem.Colors.textTertiary)
+                            // 44×44 pt minimum tap target (HIG requirement)
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel(isRevealed ? "Hide password" : "Show password")
+                    .padding(.trailing, DesignSystem.Spacing.xs)
+                }
+            }
+
+            // Inline field-level error message
+            if let error = errorMessage {
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(DesignSystem.Colors.danger)
+
+                    Text(error)
+                        .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
+                        .foregroundColor(DesignSystem.Colors.danger)
+                }
+                // Announce the combined error message to VoiceOver
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(error)
+            }
+        }
+    }
+}
+
 // MARK: - Color Extension for Hex Support
 
 extension Color {
@@ -544,6 +708,28 @@ extension Color {
             blue: Double(b) / 255,
             opacity: Double(a) / 255
         )
+    }
+
+    /// Initialize Color with light and dark mode variants
+    /// - Parameters:
+    ///   - light: Color for light mode
+    ///   - dark: Color for dark mode
+    init(light: Color, dark: Color) {
+        self.init(UIColor(light: UIColor(light), dark: UIColor(dark)))
+    }
+}
+
+extension UIColor {
+    /// Initialize UIColor with light and dark mode variants
+    convenience init(light: UIColor, dark: UIColor) {
+        self.init { traitCollection in
+            switch traitCollection.userInterfaceStyle {
+            case .dark:
+                return dark
+            default:
+                return light
+            }
+        }
     }
 }
 

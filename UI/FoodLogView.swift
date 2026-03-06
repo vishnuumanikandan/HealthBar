@@ -6,13 +6,15 @@
 //
 
 import SwiftUI
+import SwiftData
 
 /// Main Food Log view showing today's nutrition progress and meal entries
 ///
 /// Features:
 /// - Progress rings for calories and macros
 /// - List of today's food entries
-/// - Swipe-to-delete functionality
+/// - Swipe-to-delete with 5-second undo
+/// - Swipe-to-edit functionality
 /// - Floating action button to add food
 /// - Empty state when no entries exist
 struct FoodLogView: View {
@@ -22,10 +24,16 @@ struct FoodLogView: View {
     /// The view model managing this view's state
     @State private var viewModel: FoodLogViewModel
 
+    /// Scene phase for handling app background/foreground
+    @Environment(\.scenePhase) private var scenePhase
+
+    /// Settings manager for advanced nutrition toggle
+    @State private var settings = SettingsManager.shared
+
     // MARK: - Initialization
 
     init(coordinator: AppCoordinator) {
-        self.viewModel = FoodLogViewModel(coordinator: coordinator)
+        self._viewModel = State(initialValue: FoodLogViewModel(coordinator: coordinator))
     }
 
     // MARK: - Body
@@ -90,13 +98,102 @@ struct FoodLogView: View {
                 }
             }
             .task {
-                // Load data when view appears
+                // Load all data when view appears
                 await viewModel.loadTodaysData()
+                await viewModel.loadRecentFoods()
+                await viewModel.loadFavorites()
             }
             .refreshable {
                 await viewModel.refreshData()
+                await viewModel.loadRecentFoods()
+                await viewModel.loadFavorites()
+            }
+            .overlay {
+                // Toast overlay for quick-log success
+                if viewModel.showToast, let message = viewModel.toastMessage {
+                    toastOverlay(message: message)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                // Undo toast at bottom (never overlaps XP toasts which are in upper half)
+                if viewModel.showUndoToast {
+                    UndoToast(
+                        message: viewModel.undoMessage,
+                        onUndo: {
+                            viewModel.undoDelete()
+                        }
+                    )
+                    .padding(.bottom, 100) // Above tab bar and FAB
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.showUndoToast)
+                }
+            }
+            .sheet(isPresented: $viewModel.showingEditSheet) {
+                if let entry = viewModel.editingEntry {
+                    EditMealView(
+                        entry: entry,
+                        onSave: { name, calories, protein, carbs, fat, toxinScore, photoData in
+                            Task {
+                                await viewModel.updateMeal(
+                                    entry,
+                                    name: name,
+                                    calories: calories,
+                                    protein: protein,
+                                    carbs: carbs,
+                                    fat: fat,
+                                    toxinScore: toxinScore,
+                                    photoData: photoData
+                                )
+                            }
+                        },
+                        onCancel: {
+                            viewModel.cancelEditing()
+                        }
+                    )
+                }
+            }
+            .onDisappear {
+                // Finalize any pending deletes when leaving the view
+                Task {
+                    await viewModel.finalizeAnyPendingDeletes()
+                }
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                // Finalize any pending deletes when app goes to background
+                if newPhase == .background {
+                    Task {
+                        await viewModel.finalizeAnyPendingDeletes()
+                    }
+                }
             }
         }
+    }
+
+    // MARK: - Toast Overlay
+
+    /// Toast notification that appears briefly after quick-log
+    private func toastOverlay(message: String) -> some View {
+        VStack {
+            Spacer()
+
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.white)
+
+                Text(message)
+                    .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            .padding(.horizontal, DesignSystem.Spacing.lg)
+            .padding(.vertical, DesignSystem.Spacing.md)
+            .background(DesignSystem.Colors.primary)
+            .clipShape(Capsule())
+            .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+            .padding(.bottom, 100) // Above FAB
+        }
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.showToast)
     }
 
     // MARK: - Subviews
@@ -112,17 +209,34 @@ struct FoodLogView: View {
         }
     }
 
-    /// Empty state when no food entries exist
+    /// Empty state when no food entries exist for today
     private var emptyStateView: some View {
-        EmptyStateView(
-            icon: "fork.knife",
-            title: "No meals logged yet!",
-            message: "Start tracking your meals to see your progress and earn XP.",
-            actionTitle: "Log First Meal",
-            action: {
-                viewModel.showingAddFood = true
+        ScrollView {
+            VStack(spacing: DesignSystem.Spacing.xl) {
+                // Show quick log sections even in empty state
+                if !viewModel.favoriteFoods.isEmpty {
+                    favoritesSection
+                }
+
+                if !viewModel.recentFoods.isEmpty {
+                    recentFoodsSection
+                }
+
+                // Empty state for today's meals
+                EmptyStateView(
+                    icon: "fork.knife",
+                    title: "No meals logged today!",
+                    message: viewModel.recentFoods.isEmpty
+                        ? "Start tracking your meals to see your progress and earn XP."
+                        : "Tap a recent food above to quick-log, or add a new meal.",
+                    actionTitle: "Log First Meal",
+                    action: {
+                        viewModel.showingAddFood = true
+                    }
+                )
             }
-        )
+            .padding(DesignSystem.Spacing.lg)
+        }
     }
 
     /// Main content with progress and food entries
@@ -132,12 +246,147 @@ struct FoodLogView: View {
                 // Progress section
                 progressSection
 
+                // Favorites section (horizontal scroll)
+                if !viewModel.favoriteFoods.isEmpty {
+                    favoritesSection
+                }
+
+                // Recent Foods section (horizontal scroll)
+                if !viewModel.recentFoods.isEmpty {
+                    recentFoodsSection
+                }
+
                 // Food entries list
                 foodEntriesSection
             }
             .padding(DesignSystem.Spacing.lg)
             .padding(.bottom, 80) // Space for floating button
         }
+    }
+
+    // MARK: - Favorites Section
+
+    /// Horizontal scrolling favorites section for quick re-logging
+    private var favoritesSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+            HStack {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.energy)
+
+                Text("Favorites")
+                    .font(.system(size: DesignSystem.FontSizes.title2, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DesignSystem.Spacing.md) {
+                    ForEach(viewModel.favoriteFoods, id: \.id) { entry in
+                        quickLogCard(entry: entry, showFavoriteButton: false)
+                    }
+                }
+                .padding(.horizontal, 2) // Prevent shadow clipping
+            }
+        }
+    }
+
+    // MARK: - Recent Foods Section
+
+    /// Horizontal scrolling recent foods section for quick re-logging
+    private var recentFoodsSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+            Text("Recent Foods")
+                .font(.system(size: DesignSystem.FontSizes.title2, weight: .semibold))
+                .foregroundColor(DesignSystem.Colors.textPrimary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DesignSystem.Spacing.md) {
+                    ForEach(viewModel.recentFoods, id: \.id) { entry in
+                        quickLogCard(entry: entry, showFavoriteButton: true)
+                    }
+                }
+                .padding(.horizontal, 2) // Prevent shadow clipping
+            }
+        }
+    }
+
+    /// Quick log card for horizontal scroll sections
+    private func quickLogCard(entry: FoodEntry, showFavoriteButton: Bool) -> some View {
+        Button {
+            Task {
+                await viewModel.quickLog(entry)
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                // Photo or placeholder
+                ZStack(alignment: .topTrailing) {
+                    if let photoData = entry.photoData,
+                       let uiImage = UIImage(data: photoData) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 80, height: 80)
+                            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                    } else {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
+                                .fill(DesignSystem.Colors.primary.opacity(0.1))
+                                .frame(width: 80, height: 80)
+
+                            Image(systemName: "fork.knife")
+                                .font(.system(size: 28, weight: .medium))
+                                .foregroundColor(DesignSystem.Colors.primary)
+                        }
+                    }
+
+                    // Favorite star button (only in Recent Foods section)
+                    if showFavoriteButton {
+                        Button {
+                            Task {
+                                await viewModel.toggleFavorite(entry)
+                            }
+                        } label: {
+                            Image(systemName: entry.isFavorite ? "star.fill" : "star")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(entry.isFavorite ? DesignSystem.Colors.energy : .white)
+                                .padding(6)
+                                .background(
+                                    Circle()
+                                        .fill(entry.isFavorite ? DesignSystem.Colors.energy.opacity(0.2) : Color.black.opacity(0.4))
+                                )
+                        }
+                        .offset(x: 4, y: -4)
+                    }
+                }
+
+                // Food name (truncated)
+                Text(entry.name)
+                    .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .lineLimit(1)
+                    .frame(width: 80, alignment: .leading)
+
+                // Calories
+                Text("\(entry.calories) cal")
+                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                // Relative time
+                Text(viewModel.relativeTimeString(from: entry.date))
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+            }
+            .padding(DesignSystem.Spacing.sm)
+            .background(DesignSystem.Colors.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+            .shadow(
+                color: DesignSystem.Shadows.card.color,
+                radius: DesignSystem.Shadows.card.radius / 2,
+                x: DesignSystem.Shadows.card.x,
+                y: DesignSystem.Shadows.card.y
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 
     /// Progress section showing calorie and macro rings
@@ -148,7 +397,7 @@ struct FoodLogView: View {
                 .foregroundColor(DesignSystem.Colors.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Calorie progress ring (large)
+            // Calorie progress ring (large) - centered properly
             VStack(spacing: DesignSystem.Spacing.sm) {
                 ProgressRing(
                     progress: viewModel.calorieProgress,
@@ -157,11 +406,13 @@ struct FoodLogView: View {
                     showPercentage: false,
                     centerText: viewModel.calorieText
                 )
+                .frame(width: 180, height: 180) // Explicit frame for proper centering
 
                 Text("Calories")
                     .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
             }
+            .frame(maxWidth: .infinity, alignment: .center) // Explicit center alignment
             .padding(.vertical, DesignSystem.Spacing.md)
 
             // Macro cards (protein, carbs, fat)
@@ -202,6 +453,11 @@ struct FoodLogView: View {
                     color: DesignSystem.Colors.warning,
                     progress: viewModel.fatProgress
                 )
+            }
+
+            // Advanced Nutrients Grid (only when toggle is enabled)
+            if settings.trackAdvancedNutrition {
+                AdvancedNutrientsGrid(entries: viewModel.todaysEntries, goal: viewModel.currentGoal)
             }
         }
         .padding(DesignSystem.Spacing.lg)
@@ -259,9 +515,15 @@ struct FoodLogView: View {
 
             // Food info
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                Text(entry.name)
-                    .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                // Name and meal type pill
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    Text(entry.name)
+                        .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .lineLimit(1)
+
+                    MealTypePill(mealType: entry.mealType)
+                }
 
                 Text("\(entry.calories) cal")
                     .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
@@ -278,6 +540,45 @@ struct FoodLogView: View {
             Text(timeString(from: entry.date))
                 .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
                 .foregroundColor(DesignSystem.Colors.textTertiary)
+
+            // Three-dot menu button
+            Menu {
+                // Favorite toggle
+                Button {
+                    Task {
+                        await viewModel.toggleFavorite(entry)
+                    }
+                } label: {
+                    Label(
+                        entry.isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                        systemImage: entry.isFavorite ? "star.slash" : "star"
+                    )
+                }
+
+                // Edit button
+                Button {
+                    viewModel.startEditing(entry)
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+
+                Divider()
+
+                // Delete button
+                Button(role: .destructive) {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        viewModel.deleteWithUndo(entry)
+                    }
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
         }
         .padding(DesignSystem.Spacing.md)
         .background(DesignSystem.Colors.cardBackground)
@@ -288,29 +589,6 @@ struct FoodLogView: View {
             x: DesignSystem.Shadows.card.x,
             y: DesignSystem.Shadows.card.y
         )
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
-                Task {
-                    // Provide haptic feedback
-                    #if os(iOS)
-                    let generator = UIImpactFeedbackGenerator(style: .medium)
-                    generator.impactOccurred()
-                    #endif
-
-                    await viewModel.deleteEntry(entry)
-
-                    // Provide success feedback after deletion
-                    #if os(iOS)
-                    let successGenerator = UINotificationFeedbackGenerator()
-                    successGenerator.notificationOccurred(.success)
-                    #endif
-                }
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
-        .opacity(viewModel.isDeleting(entry) ? 0.5 : 1.0)
-        .disabled(viewModel.isDeleting(entry))
     }
 
     /// Macro card component

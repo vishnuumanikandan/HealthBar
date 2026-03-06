@@ -37,6 +37,28 @@ final class DailyGoal {
     /// Lower targets encourage cleaner eating
     var purityTarget: Int
 
+    // MARK: - Advanced Nutrition Goals (Optional)
+    // These targets are only shown when "Track Advanced Nutrition" is enabled
+    // Uses inline defaults for SwiftData lightweight migration support
+
+    /// Target fiber intake in grams (minimum - user should aim to reach or exceed)
+    var fiberTarget: Double? = nil
+
+    /// Maximum sugar intake in grams (user should stay under)
+    var sugarTarget: Double? = nil
+
+    /// Maximum sodium intake in milligrams (user should stay under)
+    var sodiumTarget: Double? = nil
+
+    /// Maximum saturated fat intake in grams (user should stay under)
+    var saturatedFatTarget: Double? = nil
+
+    /// Maximum cholesterol intake in milligrams (user should stay under)
+    var cholesterolTarget: Double? = nil
+
+    /// Target potassium intake in milligrams (minimum - user should aim to reach)
+    var potassiumTarget: Double? = nil
+
     /// Initializes a new daily goal with nutritional targets
     /// - Parameters:
     ///   - id: Unique identifier (defaults to new UUID)
@@ -53,7 +75,14 @@ final class DailyGoal {
         proteinTarget: Double,
         carbTarget: Double,
         fatTarget: Double,
-        purityTarget: Int
+        purityTarget: Int,
+        // Advanced nutrition goals (optional)
+        fiberTarget: Double? = nil,
+        sugarTarget: Double? = nil,
+        sodiumTarget: Double? = nil,
+        saturatedFatTarget: Double? = nil,
+        cholesterolTarget: Double? = nil,
+        potassiumTarget: Double? = nil
     ) {
         self.id = id
         self.date = date
@@ -62,5 +91,12 @@ final class DailyGoal {
         self.carbTarget = carbTarget
         self.fatTarget = fatTarget
         self.purityTarget = purityTarget
+        // Advanced nutrition goals
+        self.fiberTarget = fiberTarget
+        self.sugarTarget = sugarTarget
+        self.sodiumTarget = sodiumTarget
+        self.saturatedFatTarget = saturatedFatTarget
+        self.cholesterolTarget = cholesterolTarget
+        self.potassiumTarget = potassiumTarget
     }
 }

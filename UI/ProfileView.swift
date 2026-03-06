@@ -13,7 +13,7 @@ import SwiftData
 /// Features:
 /// - User avatar (placeholder)
 /// - Current stats (XP, Level, Rank, Streaks)
-/// - Settings section with placeholder buttons
+/// - Settings section with navigation to goal editing
 struct ProfileView: View {
 
     // MARK: - Properties
@@ -21,10 +21,28 @@ struct ProfileView: View {
     /// The view model managing this view's state
     @State private var viewModel: ProfileViewModel
 
+    /// Coordinator for navigation
+    private let coordinator: AppCoordinator
+
+    /// Show daily goals sheet
+    @State private var showingDailyGoals = false
+
+    /// Show accessibility settings sheet
+    @State private var showingAccessibility = false
+
+    /// Settings manager for app-wide settings
+    @State private var settings = SettingsManager.shared
+
+    /// Callback that ends the auth session and returns to LoginView.
+    /// Provided by ContentView — ProfileView never references the auth service directly.
+    private let onLogout: () -> Void
+
     // MARK: - Initialization
 
-    init(coordinator: AppCoordinator) {
-        self.viewModel = ProfileViewModel(coordinator: coordinator)
+    init(coordinator: AppCoordinator, onLogout: @escaping () -> Void) {
+        self.coordinator = coordinator
+        self.onLogout = onLogout
+        self._viewModel = State(initialValue: ProfileViewModel(coordinator: coordinator))
     }
 
     // MARK: - Body
@@ -51,6 +69,20 @@ struct ProfileView: View {
             .task {
                 // Load data when view appears
                 await viewModel.loadUserData()
+            }
+            .sheet(isPresented: $showingDailyGoals) {
+                DailyGoalsView(coordinator: coordinator)
+            }
+            .sheet(isPresented: $showingAccessibility) {
+                AccessibilitySettingsView()
+            }
+            .onChange(of: showingDailyGoals) { _, isShowing in
+                // Refresh data when returning from goals screen
+                if !isShowing {
+                    Task {
+                        await viewModel.loadUserData()
+                    }
+                }
             }
         }
     }
@@ -223,13 +255,23 @@ struct ProfileView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(spacing: DesignSystem.Spacing.sm) {
-                // Daily Goals button (placeholder)
+                // Daily Goals button - navigates to goal editing
                 settingButton(
                     icon: "target",
                     title: "Daily Goals",
                     subtitle: "Customize your targets",
                     action: {
-                        // Placeholder - will navigate to goal settings later
+                        showingDailyGoals = true
+                    }
+                )
+
+                // Accessibility button - navigates to accessibility settings
+                settingButton(
+                    icon: "accessibility",
+                    title: "Accessibility",
+                    subtitle: "Display & notification preferences",
+                    action: {
+                        showingAccessibility = true
                     }
                 )
 
@@ -252,6 +294,15 @@ struct ProfileView: View {
                         // Placeholder - will navigate to about screen later
                     }
                 )
+
+                // Sign Out — destructive, styled in danger red
+                settingButton(
+                    icon: "rectangle.portrait.and.arrow.right",
+                    title: "Sign Out",
+                    subtitle: "Log out of your account",
+                    iconColor: DesignSystem.Colors.danger,
+                    action: onLogout
+                )
             }
         }
     }
@@ -261,6 +312,7 @@ struct ProfileView: View {
         icon: String,
         title: String,
         subtitle: String,
+        iconColor: Color = DesignSystem.Colors.primary,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -268,12 +320,12 @@ struct ProfileView: View {
                 // Icon
                 ZStack {
                     Circle()
-                        .fill(DesignSystem.Colors.primary.opacity(0.15))
+                        .fill(iconColor.opacity(0.15))
                         .frame(width: DesignSystem.Sizes.iconCircle, height: DesignSystem.Sizes.iconCircle)
 
                     Image(systemName: icon)
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.primary)
+                        .foregroundColor(iconColor)
                 }
 
                 // Text
@@ -338,5 +390,5 @@ struct ProfileView: View {
 
     let coordinator = AppCoordinator(modelContext: context)
 
-    return ProfileView(coordinator: coordinator)
+    return ProfileView(coordinator: coordinator, onLogout: {})
 }

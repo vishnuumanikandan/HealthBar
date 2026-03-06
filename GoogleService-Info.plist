@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>513228134028-ucsmastdtb93gdr6899bem4k0mpcg7ia.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.513228134028-ucsmastdtb93gdr6899bem4k0mpcg7ia</string>
+	<key>API_KEY</key>
+	<string>AIzaSyAKq-pQm1R6d2Dn7pqGorIjvHrevRiJTDA</string>
+	<key>GCM_SENDER_ID</key>
+	<string>513228134028</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.vishnu.myapp</string>
+	<key>PROJECT_ID</key>
+	<string>healthbar-e055c</string>
+	<key>STORAGE_BUCKET</key>
+	<string>healthbar-e055c.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:513228134028:ios:1c8ba5b7bed92eba7c4da9</string>
+</dict>
+</plist>
