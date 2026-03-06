@@ -24,6 +24,7 @@ final class SettingsManager {
 
     private enum Keys {
         static let trackAdvancedNutrition = "trackAdvancedNutrition"
+        static let dailyMoodCheckEnabled = "dailyMoodCheckEnabled"
     }
 
     // MARK: - Settings Properties
@@ -37,11 +38,27 @@ final class SettingsManager {
         }
     }
 
+    /// Whether to prompt user for daily mood check at 7pm
+    /// ON by default. When enabled, shows modal if app is active and mood not logged.
+    var dailyMoodCheckEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(dailyMoodCheckEnabled, forKey: Keys.dailyMoodCheckEnabled)
+        }
+    }
+
     // MARK: - Initialization
 
     private init() {
         // Load settings from UserDefaults
         self.trackAdvancedNutrition = UserDefaults.standard.bool(forKey: Keys.trackAdvancedNutrition)
+
+        // Default to true if never set before
+        if UserDefaults.standard.object(forKey: Keys.dailyMoodCheckEnabled) == nil {
+            UserDefaults.standard.set(true, forKey: Keys.dailyMoodCheckEnabled)
+            self.dailyMoodCheckEnabled = true
+        } else {
+            self.dailyMoodCheckEnabled = UserDefaults.standard.bool(forKey: Keys.dailyMoodCheckEnabled)
+        }
     }
 
     // MARK: - Methods
@@ -49,5 +66,6 @@ final class SettingsManager {
     /// Resets all settings to defaults
     func resetToDefaults() {
         trackAdvancedNutrition = false
+        dailyMoodCheckEnabled = true
     }
 }

@@ -38,6 +38,14 @@ final class DailyGoalsViewModel {
     var fatTargetString: String = "65"
     var purityTargetString: String = "50"
 
+    // Advanced Nutrition Goal Strings (optional)
+    var fiberTargetString: String = ""
+    var sugarTargetString: String = ""
+    var sodiumTargetString: String = ""
+    var saturatedFatTargetString: String = ""
+    var cholesterolTargetString: String = ""
+    var potassiumTargetString: String = ""
+
     // MARK: - Private Properties
 
     private let coordinator: AppCoordinator
@@ -83,6 +91,14 @@ final class DailyGoalsViewModel {
             fatTargetString = String(format: "%.0f", goal.fatTarget)
             purityTargetString = "\(goal.purityTarget)"
 
+            // Advanced nutrition goal strings (only if set)
+            fiberTargetString = goal.fiberTarget.map { String(format: "%.0f", $0) } ?? ""
+            sugarTargetString = goal.sugarTarget.map { String(format: "%.0f", $0) } ?? ""
+            sodiumTargetString = goal.sodiumTarget.map { String(format: "%.0f", $0) } ?? ""
+            saturatedFatTargetString = goal.saturatedFatTarget.map { String(format: "%.0f", $0) } ?? ""
+            cholesterolTargetString = goal.cholesterolTarget.map { String(format: "%.0f", $0) } ?? ""
+            potassiumTargetString = goal.potassiumTarget.map { String(format: "%.0f", $0) } ?? ""
+
         } catch {
             errorMessage = "Failed to load goals: \(error.localizedDescription)"
         }
@@ -110,12 +126,26 @@ final class DailyGoalsViewModel {
             let fat = Double(fatTargetString) ?? 65
             let purity = Int(purityTargetString) ?? 50
 
+            // Parse advanced nutrition goals (only if entered)
+            let fiberTarget = fiberTargetString.isEmpty ? nil : Double(fiberTargetString)
+            let sugarTarget = sugarTargetString.isEmpty ? nil : Double(sugarTargetString)
+            let sodiumTarget = sodiumTargetString.isEmpty ? nil : Double(sodiumTargetString)
+            let saturatedFatTarget = saturatedFatTargetString.isEmpty ? nil : Double(saturatedFatTargetString)
+            let cholesterolTarget = cholesterolTargetString.isEmpty ? nil : Double(cholesterolTargetString)
+            let potassiumTarget = potassiumTargetString.isEmpty ? nil : Double(potassiumTargetString)
+
             try await coordinator.updateDailyGoal(
                 calories: calories,
                 protein: protein,
                 carbs: carbs,
                 fat: fat,
-                purity: purity
+                purity: purity,
+                fiberTarget: fiberTarget,
+                sugarTarget: sugarTarget,
+                sodiumTarget: sodiumTarget,
+                saturatedFatTarget: saturatedFatTarget,
+                cholesterolTarget: cholesterolTarget,
+                potassiumTarget: potassiumTarget
             )
 
             // Success feedback

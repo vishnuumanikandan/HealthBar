@@ -59,7 +59,15 @@ final class AppCoordinator {
     ///   - toxinScore: Toxin score (0-100)
     ///   - photoData: Optional photo
     ///   - barcodeUPC: Optional barcode
+    ///   - fiber: Optional fiber in grams
+    ///   - sugar: Optional sugar in grams
+    ///   - sodium: Optional sodium in milligrams
+    ///   - saturatedFat: Optional saturated fat in grams
+    ///   - cholesterol: Optional cholesterol in milligrams
+    ///   - potassium: Optional potassium in milligrams
     /// - Returns: The created FoodEntry and any XP earned from quest completion
+    ///
+    /// Note: Meal type is auto-assigned based on current time (not editable by user)
     func addFoodEntry(
         name: String,
         calories: Int,
@@ -68,8 +76,17 @@ final class AppCoordinator {
         fat: Double,
         toxinScore: Int,
         photoData: Data? = nil,
-        barcodeUPC: String? = nil
+        barcodeUPC: String? = nil,
+        fiber: Double? = nil,
+        sugar: Double? = nil,
+        sodium: Double? = nil,
+        saturatedFat: Double? = nil,
+        cholesterol: Double? = nil,
+        potassium: Double? = nil
     ) async throws -> (entry: FoodEntry, xpEarned: Int) {
+        // Auto-assign meal type based on current time
+        let mealType = MealType.fromTime(Date())
+
         // Add the food entry
         let entry = try await dataManager.addFoodEntry(
             name: name,
@@ -79,7 +96,14 @@ final class AppCoordinator {
             fat: fat,
             toxinScore: toxinScore,
             photoData: photoData,
-            barcodeUPC: barcodeUPC
+            barcodeUPC: barcodeUPC,
+            mealType: mealType,
+            fiber: fiber,
+            sugar: sugar,
+            sodium: sodium,
+            saturatedFat: saturatedFat,
+            cholesterol: cholesterol,
+            potassium: potassium
         )
 
         // Check and update quest progress
@@ -172,19 +196,37 @@ final class AppCoordinator {
     ///   - carbs: New carb target
     ///   - fat: New fat target
     ///   - purity: New purity target
+    ///   - fiberTarget: Optional fiber target in grams
+    ///   - sugarTarget: Optional sugar limit in grams
+    ///   - sodiumTarget: Optional sodium limit in milligrams
+    ///   - saturatedFatTarget: Optional saturated fat limit in grams
+    ///   - cholesterolTarget: Optional cholesterol limit in milligrams
+    ///   - potassiumTarget: Optional potassium target in milligrams
     func updateDailyGoal(
         calories: Int,
         protein: Double,
         carbs: Double,
         fat: Double,
-        purity: Int
+        purity: Int,
+        fiberTarget: Double? = nil,
+        sugarTarget: Double? = nil,
+        sodiumTarget: Double? = nil,
+        saturatedFatTarget: Double? = nil,
+        cholesterolTarget: Double? = nil,
+        potassiumTarget: Double? = nil
     ) async throws {
         try await dataManager.updateDailyGoal(
             calories: calories,
             protein: protein,
             carbs: carbs,
             fat: fat,
-            purity: purity
+            purity: purity,
+            fiberTarget: fiberTarget,
+            sugarTarget: sugarTarget,
+            sodiumTarget: sodiumTarget,
+            saturatedFatTarget: saturatedFatTarget,
+            cholesterolTarget: cholesterolTarget,
+            potassiumTarget: potassiumTarget
         )
     }
 
@@ -298,6 +340,170 @@ final class AppCoordinator {
         }
     }
 
+    // MARK: - Streak Milestones
+
+    /// Checks if any streak milestones have been reached and returns the first unclaimed one
+    /// - Returns: The milestone that was claimed, or nil if none
+    func checkForStreakMilestone() async throws -> StreakMilestone? {
+        var progress = try await dataManager.getUserProgress()
+
+        // Check for milestone
+        if let milestone = gamificationManager.checkForMilestone(streak: progress.currentStreak, progress: &progress) {
+            // Save updated progress
+            try await dataManager.saveUserProgress()
+            return milestone
+        }
+
+        return nil
+    }
+
+    // MARK: - Personal Baselines
+
+    /// Gets the baseline for today's day of week
+    /// - Returns: PersonalBaseline for today's weekday, or nil if not enough data
+    func getTodaysBaseline() async throws -> PersonalBaseline? {
+        let dayOfWeek = Calendar.current.component(.weekday, from: Date())
+        return try await dataManager.getBaselineForDayOfWeek(dayOfWeek)
+    }
+
+    /// Updates personal baselines from historical data
+    ///
+    /// Should be called periodically (e.g., at app launch or end of day)
+    func updatePersonalBaselines() async throws {
+        try await dataManager.calculateAndUpdateBaselines()
+    }
+
+    /// Compares today's purity against the baseline
+    /// - Returns: Difference as a fraction (e.g., -0.15 means 15% better, +0.10 means 10% worse)
+    func getPurityVsBaseline() async throws -> Double? {
+        guard let baseline = try await getTodaysBaseline(),
+              baseline.sampleCount >= 1,
+              baseline.averagePurity > 0 else {
+            return nil
+        }
+
+        let entries = try await dataManager.fetchTodaysEntries()
+        let todaysPurity = entries.reduce(0) { $0 + $1.toxinScore }
+
+        // Calculate difference (positive = worse than baseline, negative = better)
+        let difference = (Double(todaysPurity) - baseline.averagePurity) / baseline.averagePurity
+        return difference
+    }
+
+    // MARK: - Mood Tracking
+
+    /// Logs the user's mood for today
+    /// - Parameter mood: The mood to log
+    /// - Returns: The created MoodEntry
+    @discardableResult
+    func logMood(_ mood: Mood) async throws -> MoodEntry {
+        return try await dataManager.addMoodEntry(mood: mood)
+    }
+
+    /// Checks if mood has already been logged today
+    /// - Returns: True if already logged
+    func checkIfMoodLoggedToday() async throws -> Bool {
+        return try await dataManager.hasMoodLoggedToday()
+    }
+
+    /// Gets today's mood entry if exists
+    /// - Returns: The MoodEntry or nil
+    func getTodaysMood() async throws -> MoodEntry? {
+        return try await dataManager.getTodaysMood()
+    }
+
+    // MARK: - Daily Insights
+
+    /// Gets daily insights data for the insights card
+    /// - Returns: DailyInsights with meal count, protein progress, and purity trend
+    func getDailyInsights() async throws -> DailyInsights {
+        let entries = try await dataManager.fetchTodaysEntries()
+        let goal = try await getCurrentGoal()
+
+        // Calculate meal count
+        let mealCount = entries.count
+
+        // Calculate protein progress
+        let totalProtein = entries.reduce(0.0) { $0 + $1.protein }
+        let proteinProgress = goal.proteinTarget > 0 ? totalProtein / goal.proteinTarget : 0
+        let proteinGoalHit = proteinProgress >= 1.0
+
+        // Get purity vs baseline
+        let purityVsBaseline = try await getPurityVsBaseline()
+
+        // Get day name
+        let dayFormatter = DateFormatter()
+        dayFormatter.dateFormat = "EEEE"
+        let dayName = dayFormatter.string(from: Date())
+
+        return DailyInsights(
+            mealCount: mealCount,
+            proteinGoalHit: proteinGoalHit,
+            proteinProgress: proteinProgress,
+            purityVsBaseline: purityVsBaseline,
+            dayName: dayName
+        )
+    }
+
+    // MARK: - Weekly Summary
+
+    /// Gets weekly summary data for the weekly view
+    /// - Returns: WeeklySummary with Mon-Sun data
+    func getWeeklySummary() async throws -> WeeklySummary {
+        let calendar = Calendar.current
+        let today = Date()
+
+        // Find the start of this week (Monday)
+        var startOfWeek = today
+        while calendar.component(.weekday, from: startOfWeek) != 2 { // 2 = Monday
+            startOfWeek = calendar.date(byAdding: .day, value: -1, to: startOfWeek)!
+        }
+        startOfWeek = calendar.startOfDay(for: startOfWeek)
+
+        // Get goal for reference
+        let goal = try await getCurrentGoal()
+
+        // Build day summaries for Mon-Sun
+        var daySummaries: [DaySummary] = []
+
+        for dayOffset in 0..<7 {
+            let date = calendar.date(byAdding: .day, value: dayOffset, to: startOfWeek)!
+
+            // Only fetch data for days up to and including today
+            if date <= today {
+                let entries = try await dataManager.fetchEntriesForDate(date)
+
+                let totalCalories = entries.reduce(0) { $0 + $1.calories }
+                let totalProtein = entries.reduce(0.0) { $0 + $1.protein }
+                let totalPurity = entries.reduce(0) { $0 + $1.toxinScore }
+
+                daySummaries.append(DaySummary(
+                    date: date,
+                    calories: totalCalories,
+                    protein: totalProtein,
+                    purityScore: totalPurity,
+                    mealCount: entries.count
+                ))
+            } else {
+                // Future day - no data
+                daySummaries.append(DaySummary(
+                    date: date,
+                    calories: 0,
+                    protein: 0,
+                    purityScore: 0,
+                    mealCount: 0
+                ))
+            }
+        }
+
+        return WeeklySummary(
+            days: daySummaries,
+            calorieGoal: goal.calorieTarget,
+            proteinGoal: goal.proteinTarget,
+            purityGoal: goal.purityTarget
+        )
+    }
+
     // MARK: - Historical Data
 
     /// Fetches food entries for a specific date
@@ -322,6 +528,77 @@ final class AppCoordinator {
     /// - Returns: UserProgress object
     func getUserProgress() async throws -> UserProgress {
         return try await dataManager.getUserProgress()
+    }
+
+    // MARK: - Recent Foods & Favorites
+
+    /// Gets recent unique foods for quick-log feature
+    ///
+    /// Returns one entry per unique FoodFingerprint, sorted by most recent.
+    ///
+    /// - Parameters:
+    ///   - limit: Maximum number of foods to return (default 15)
+    ///   - daysBack: Number of days to look back (default 30)
+    /// - Returns: Array of FoodEntry, one per unique food
+    func getRecentUniqueFoods(limit: Int = 15, daysBack: Int = 30) async throws -> [FoodEntry] {
+        return try await dataManager.getRecentUniqueFoods(limit: limit, daysBack: daysBack)
+    }
+
+    /// Gets all favorited foods for quick-log feature
+    ///
+    /// Returns one entry per unique favorited FoodFingerprint.
+    ///
+    /// - Returns: Array of favorited FoodEntry objects
+    func getFavoriteFoods() async throws -> [FoodEntry] {
+        return try await dataManager.getFavoriteFoods()
+    }
+
+    /// Toggles favorite status for a food (applies to ALL matching entries)
+    ///
+    /// When user favorites a food, all entries with the same fingerprint are marked as favorite.
+    /// This makes the FOOD favorite, not just one log instance.
+    ///
+    /// - Parameter entry: The food entry to toggle favorite status for
+    func toggleFavorite(_ entry: FoodEntry) async throws {
+        let fingerprint = FoodFingerprint(from: entry)
+        try await dataManager.toggleFavoriteForFingerprint(fingerprint)
+    }
+
+    /// Quick-logs a food by creating a copy with today's date
+    ///
+    /// Creates a new FoodEntry with all the same nutrition data but today's date.
+    /// Meal type is auto-assigned based on current time (not preserved from original).
+    /// Checks quest progress and awards XP as normal.
+    ///
+    /// - Parameter entry: The food entry to re-log
+    /// - Returns: The new entry and any XP earned
+    func quickLogFood(_ entry: FoodEntry) async throws -> (entry: FoodEntry, xpEarned: Int) {
+        // Auto-assign meal type based on current time
+        let mealType = MealType.fromTime(Date())
+
+        // Create a new entry with same nutrition data but today's date
+        let newEntry = FoodEntry(
+            name: entry.name,
+            date: Date(),
+            photoData: entry.photoData,
+            calories: entry.calories,
+            protein: entry.protein,
+            carbs: entry.carbs,
+            fat: entry.fat,
+            toxinScore: entry.toxinScore,
+            barcodeUPC: entry.barcodeUPC,
+            createdAt: Date(),
+            isFavorite: entry.isFavorite,
+            mealType: mealType
+        )
+
+        // Insert into database
+        try await dataManager.insertFoodEntry(newEntry)
+
+        // Check and update quest progress
+        let xpEarned = try await checkAndUpdateQuestProgress()
+
+        return (entry: newEntry, xpEarned: xpEarned)
     }
 }
 

@@ -18,7 +18,8 @@ final class HomeViewModel {
     // MARK: - Properties
 
     /// The app coordinator (handles all business logic)
-    private let coordinator: AppCoordinator
+    /// Exposed for use by Quick Scan flow
+    let coordinator: AppCoordinator
 
     // MARK: - UI State
 
@@ -30,6 +31,62 @@ final class HomeViewModel {
 
     /// Error message to display (nil if no error)
     var errorMessage: String?
+
+    /// Show quick scan sheet
+    var showQuickScan: Bool = false
+
+    // MARK: - Quest Animation State
+
+    /// Whether to show XP toast
+    var showXPToast: Bool = false
+
+    /// Total XP to show in toast
+    var xpToastAmount: Int = 0
+
+    /// Number of quests that completed simultaneously
+    var xpToastQuestCount: Int = 0
+
+    /// Whether all quests are complete
+    var allQuestsComplete: Bool = false
+
+    /// Total XP earned from quests today
+    var totalQuestXPEarnedToday: Int = 0
+
+    /// Track previous quest completion state for animations
+    private var previousQuestCompletionState: [UUID: Bool] = [:]
+
+    /// Quest rollback message (shown when quest becomes incomplete)
+    var questRollbackMessage: String?
+
+    /// Whether to show quest rollback toast
+    var showQuestRollbackToast: Bool = false
+
+    // MARK: - Streak Milestone State
+
+    /// Pending milestone to celebrate (set when milestone is reached)
+    var pendingMilestone: StreakMilestone?
+
+    /// Whether to show the milestone toast
+    var showMilestoneToast: Bool = false
+
+    // MARK: - Daily Insights State
+
+    /// Daily insights data for the insights card
+    var dailyInsights: DailyInsights?
+
+    /// Whether the insights card is dismissed for today
+    var insightsCardDismissedToday: Bool = false
+
+    // MARK: - Weekly Summary State
+
+    /// Selected view mode (Today or Week)
+    var selectedViewMode: HomeViewMode = .today
+
+    /// Weekly summary data
+    var weeklySummary: WeeklySummary?
+
+    /// Loading state for weekly summary
+    var isLoadingWeekly: Bool = false
 
     // MARK: - Computed Properties for UI
 
@@ -130,12 +187,18 @@ final class HomeViewModel {
     /// Loads today's summary data
     ///
     /// Call this when the view appears or needs to refresh.
+    @MainActor
     func loadData() async {
         isLoading = true
         errorMessage = nil
 
         do {
+            let oldQuests = summary?.quests
             summary = try await coordinator.getTodaysSummary()
+
+            // Check for quest completion changes and trigger animations
+            checkQuestCompletionChanges(oldQuests: oldQuests, newQuests: summary?.quests)
+
         } catch {
             errorMessage = "Failed to load data: \(error.localizedDescription)"
         }
@@ -146,6 +209,159 @@ final class HomeViewModel {
     /// Refreshes the data (for pull-to-refresh)
     func refresh() async {
         await loadData()
+
+        // Also refresh weekly summary if we're viewing the week tab
+        if selectedViewMode == .week {
+            await loadWeeklySummary()
+        }
+    }
+
+    /// Refreshes weekly data if currently viewing week mode
+    /// Call this after adding/editing/deleting food entries
+    @MainActor
+    func refreshWeeklyIfNeeded() async {
+        if selectedViewMode == .week || weeklySummary != nil {
+            await loadWeeklySummary()
+        }
+    }
+
+    /// Checks for quest completion changes and triggers animations
+    @MainActor
+    private func checkQuestCompletionChanges(oldQuests: [DailyQuest]?, newQuests: [DailyQuest]?) {
+        guard let newQuests = newQuests else { return }
+
+        var newlyCompletedQuests: [DailyQuest] = []
+        var rolledBackQuests: [DailyQuest] = []
+
+        for quest in newQuests {
+            let wasCompleted = previousQuestCompletionState[quest.id] ?? false
+            let isNowCompleted = quest.isCompleted
+
+            if !wasCompleted && isNowCompleted {
+                // Quest just completed
+                newlyCompletedQuests.append(quest)
+            } else if wasCompleted && !isNowCompleted {
+                // Quest rolled back (user deleted/edited meal)
+                rolledBackQuests.append(quest)
+            }
+
+            // Update tracking
+            previousQuestCompletionState[quest.id] = quest.isCompleted
+        }
+
+        // Handle newly completed quests
+        if !newlyCompletedQuests.isEmpty {
+            triggerQuestCompletionAnimation(quests: newlyCompletedQuests)
+        }
+
+        // Handle rolled back quests
+        if let firstRolledBack = rolledBackQuests.first {
+            triggerQuestRollbackAnimation(quest: firstRolledBack)
+        }
+
+        // Check if all quests are complete
+        let allComplete = newQuests.allSatisfy { $0.isCompleted }
+        if allComplete && !allQuestsComplete {
+            // Calculate total XP earned from quests
+            totalQuestXPEarnedToday = newQuests.reduce(0) { $0 + $1.xpReward }
+        }
+        allQuestsComplete = allComplete && !newQuests.isEmpty
+    }
+
+    /// Triggers the XP toast animation for completed quests
+    @MainActor
+    private func triggerQuestCompletionAnimation(quests: [DailyQuest]) {
+        // Calculate total XP from all newly completed quests
+        let totalXP = quests.reduce(0) { $0 + $1.xpReward }
+
+        // Set toast state
+        xpToastAmount = totalXP
+        xpToastQuestCount = quests.count
+
+        // Haptic feedback
+        #if os(iOS)
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+        #endif
+
+        // Show toast
+        showXPToast = true
+    }
+
+    /// Triggers the rollback animation when a quest becomes incomplete
+    @MainActor
+    private func triggerQuestRollbackAnimation(quest: DailyQuest) {
+        questRollbackMessage = "\(quest.title) no longer met"
+        showQuestRollbackToast = true
+
+        // Auto-dismiss after 2 seconds
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            await MainActor.run {
+                showQuestRollbackToast = false
+                questRollbackMessage = nil
+            }
+        }
+    }
+
+    /// Dismisses the XP toast
+    @MainActor
+    func dismissXPToast() {
+        showXPToast = false
+        xpToastAmount = 0
+        xpToastQuestCount = 0
+    }
+
+    /// Checks for streak milestones and shows celebration toast if one is reached
+    @MainActor
+    func checkForStreakMilestone() async {
+        do {
+            if let milestone = try await coordinator.checkForStreakMilestone() {
+                pendingMilestone = milestone
+                showMilestoneToast = true
+            }
+        } catch {
+            // Silently fail - milestone check is non-critical
+        }
+    }
+
+    /// Dismisses the milestone toast
+    @MainActor
+    func dismissMilestoneToast() {
+        showMilestoneToast = false
+        pendingMilestone = nil
+    }
+
+    /// Loads daily insights data
+    @MainActor
+    func loadDailyInsights() async {
+        do {
+            dailyInsights = try await coordinator.getDailyInsights()
+        } catch {
+            // Silently fail - insights are non-critical
+            dailyInsights = nil
+        }
+    }
+
+    /// Dismisses the insights card for today
+    @MainActor
+    func dismissInsightsCard() {
+        insightsCardDismissedToday = true
+    }
+
+    /// Loads weekly summary data
+    @MainActor
+    func loadWeeklySummary() async {
+        isLoadingWeekly = true
+
+        do {
+            weeklySummary = try await coordinator.getWeeklySummary()
+        } catch {
+            // Silently fail - weekly summary is non-critical
+            weeklySummary = nil
+        }
+
+        isLoadingWeekly = false
     }
 
     /// Adds a test food entry (for testing purposes)
@@ -171,4 +387,14 @@ final class HomeViewModel {
 
         isLoading = false
     }
+}
+
+// MARK: - Home View Mode
+
+/// View mode for the home screen
+enum HomeViewMode: String, CaseIterable, Identifiable {
+    case today = "Today"
+    case week = "Week"
+
+    var id: String { rawValue }
 }

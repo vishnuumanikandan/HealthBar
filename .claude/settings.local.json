@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(open:*)",
+      "Bash(xcrun xcodebuild:*)",
+      "Bash(swift build:*)",
+      "Bash(xcrun simctl shutdown:*)",
+      "Bash(xcrun simctl erase:*)",
+      "Bash(xcodebuild:*)"
+    ]
+  }
+}

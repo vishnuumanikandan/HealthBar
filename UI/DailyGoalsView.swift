@@ -21,6 +21,7 @@ struct DailyGoalsView: View {
 
     @State private var viewModel: DailyGoalsViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var settings = SettingsManager.shared
 
     // MARK: - Initialization
 
@@ -145,6 +146,11 @@ struct DailyGoalsView: View {
                     helperText: "Lower toxin score = cleaner eating (0-100)"
                 )
 
+                // Advanced Nutrition Goals (when enabled)
+                if settings.trackAdvancedNutrition {
+                    advancedNutritionGoalsSection
+                }
+
                 // Warning text
                 warningText
 
@@ -255,6 +261,156 @@ struct DailyGoalsView: View {
                 .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
                 .foregroundColor(DesignSystem.Colors.textTertiary)
                 .padding(.leading, DesignSystem.Spacing.xs)
+        }
+    }
+
+    /// Advanced nutrition goals section
+    private var advancedNutritionGoalsSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+            // Section header
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                Image(systemName: "chart.bar.doc.horizontal")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.secondary)
+
+                Text("Advanced Nutrition Goals")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                Spacer()
+            }
+            .padding(.top, DesignSystem.Spacing.sm)
+
+            Text("Optional targets for detailed tracking. Leave blank to skip.")
+                .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
+                .foregroundColor(DesignSystem.Colors.textTertiary)
+
+            // Fiber (minimum target)
+            optionalGoalInputField(
+                title: "Fiber Target",
+                icon: "leaf.fill",
+                iconColor: DesignSystem.Colors.primary,
+                placeholder: "25",
+                text: $viewModel.fiberTargetString,
+                unit: "g",
+                helperText: "Aim to reach or exceed (minimum)"
+            )
+
+            // Sugar (maximum target)
+            optionalGoalInputField(
+                title: "Sugar Limit",
+                icon: "cube.fill",
+                iconColor: DesignSystem.Colors.warning,
+                placeholder: "50",
+                text: $viewModel.sugarTargetString,
+                unit: "g",
+                helperText: "Try to stay under (maximum)"
+            )
+
+            // Sodium (maximum target)
+            optionalGoalInputField(
+                title: "Sodium Limit",
+                icon: "drop.fill",
+                iconColor: DesignSystem.Colors.secondary,
+                placeholder: "2300",
+                text: $viewModel.sodiumTargetString,
+                unit: "mg",
+                helperText: "Try to stay under (maximum)"
+            )
+
+            // Saturated Fat (maximum target)
+            optionalGoalInputField(
+                title: "Saturated Fat Limit",
+                icon: "heart.fill",
+                iconColor: DesignSystem.Colors.danger,
+                placeholder: "20",
+                text: $viewModel.saturatedFatTargetString,
+                unit: "g",
+                helperText: "Try to stay under (maximum)"
+            )
+
+            // Cholesterol (maximum target)
+            optionalGoalInputField(
+                title: "Cholesterol Limit",
+                icon: "heart.circle.fill",
+                iconColor: DesignSystem.Colors.energy,
+                placeholder: "300",
+                text: $viewModel.cholesterolTargetString,
+                unit: "mg",
+                helperText: "Try to stay under (maximum)"
+            )
+
+            // Potassium (minimum target)
+            optionalGoalInputField(
+                title: "Potassium Target",
+                icon: "bolt.fill",
+                iconColor: DesignSystem.Colors.growth,
+                placeholder: "4700",
+                text: $viewModel.potassiumTargetString,
+                unit: "mg",
+                helperText: "Aim to reach or exceed (minimum)"
+            )
+        }
+        .padding(DesignSystem.Spacing.md)
+        .background(DesignSystem.Colors.secondaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
+    }
+
+    /// Optional goal input field (smaller, for advanced nutrients)
+    private func optionalGoalInputField(
+        title: String,
+        icon: String,
+        iconColor: Color,
+        placeholder: String,
+        text: Binding<String>,
+        unit: String,
+        helperText: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            // Title row
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(iconColor)
+                    .frame(width: 20)
+
+                Text(title)
+                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                Spacer()
+
+                // Input field
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    TextField(placeholder, text: text)
+                        .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
+                        #if os(iOS)
+                        .keyboardType(.decimalPad)
+                        #endif
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 60)
+
+                    Text(unit)
+                        .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .frame(width: 25, alignment: .leading)
+                }
+                .padding(.horizontal, DesignSystem.Spacing.sm)
+                .padding(.vertical, DesignSystem.Spacing.xs)
+                .background(DesignSystem.Colors.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
+                        .strokeBorder(DesignSystem.Colors.border, lineWidth: 1)
+                )
+            }
+
+            // Helper text
+            Text(helperText)
+                .font(.system(size: 10, weight: .regular))
+                .foregroundColor(DesignSystem.Colors.textTertiary)
+                .padding(.leading, 28)
         }
     }
 

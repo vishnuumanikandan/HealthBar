@@ -6,6 +6,9 @@
 //
 
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Service for fetching nutrition data from Open Food Facts API
 ///
@@ -21,6 +24,12 @@ final class BarcodeService {
 
     /// URL session for network requests
     private let session: URLSession
+
+    /// Maximum image dimension (width or height)
+    private let maxImageDimension: CGFloat = 400
+
+    /// JPEG compression quality for product images
+    private let imageCompressionQuality: CGFloat = 0.6
 
     // MARK: - Initialization
 
@@ -82,16 +91,87 @@ final class BarcodeService {
             throw BarcodeError.productNotFound
         }
 
+        // Fetch product image if available
+        let photoData = await fetchProductImage(from: product.image_url)
+
         // Parse and return nutrition data
-        return parseNutrition(from: product)
+        return parseNutrition(from: product, photoData: photoData)
+    }
+
+    // MARK: - Image Fetching
+
+    /// Fetches and resizes product image from URL
+    /// - Parameter urlString: URL string for the product image
+    /// - Returns: Resized JPEG data, or nil if fetch fails
+    private func fetchProductImage(from urlString: String?) async -> Data? {
+        guard let urlString = urlString,
+              let url = URL(string: urlString) else {
+            return nil
+        }
+
+        do {
+            let (data, response) = try await session.data(from: url)
+
+            // Verify successful response
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                return nil
+            }
+
+            // Resize and compress image
+            return resizeAndCompressImage(data: data)
+        } catch {
+            print("Image fetch error: \(error)")
+            return nil
+        }
+    }
+
+    /// Resizes image to max dimension and compresses as JPEG
+    /// - Parameter data: Original image data
+    /// - Returns: Resized JPEG data, or nil if processing fails
+    private func resizeAndCompressImage(data: Data) -> Data? {
+        #if canImport(UIKit)
+        guard let originalImage = UIImage(data: data) else {
+            return nil
+        }
+
+        // Calculate new size maintaining aspect ratio
+        let originalSize = originalImage.size
+        var newSize = originalSize
+
+        if originalSize.width > maxImageDimension || originalSize.height > maxImageDimension {
+            let widthRatio = maxImageDimension / originalSize.width
+            let heightRatio = maxImageDimension / originalSize.height
+            let ratio = min(widthRatio, heightRatio)
+
+            newSize = CGSize(
+                width: originalSize.width * ratio,
+                height: originalSize.height * ratio
+            )
+        }
+
+        // Resize image
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        let resizedImage = renderer.image { _ in
+            originalImage.draw(in: CGRect(origin: .zero, size: newSize))
+        }
+
+        // Compress to JPEG
+        return resizedImage.jpegData(compressionQuality: imageCompressionQuality)
+        #else
+        // macOS fallback - return original data
+        return data
+        #endif
     }
 
     // MARK: - Private Methods
 
     /// Parses nutrition data from Open Food Facts product
-    /// - Parameter product: Open Food Facts product data
+    /// - Parameters:
+    ///   - product: Open Food Facts product data
+    ///   - photoData: Optional product image data
     /// - Returns: Simplified FoodNutrition object
-    private func parseNutrition(from product: OpenFoodFactsProduct) -> FoodNutrition {
+    private func parseNutrition(from product: OpenFoodFactsProduct, photoData: Data?) -> FoodNutrition {
         // Extract product name (with fallback)
         let name = product.product_name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Unknown Product"
 
@@ -110,6 +190,17 @@ final class BarcodeService {
         let carbs = nutriments?.carbohydrates_100g ?? nutriments?.carbohydrates ?? 0.0
         let fat = nutriments?.fat_100g ?? nutriments?.fat ?? 0.0
 
+        // Extract advanced nutrition (optional)
+        let fiber = nutriments?.fiber_100g
+        let sugar = nutriments?.sugars_100g
+
+        // Sodium is in grams in API, convert to milligrams
+        let sodium: Double? = nutriments?.sodium_100g.map { $0 * 1000 }
+
+        let saturatedFat = nutriments?.saturated_fat_100g
+        let cholesterol = nutriments?.cholesterol_100g
+        let potassium = nutriments?.potassium_100g
+
         // Calculate toxin score based on Nova group and nutrition grade
         let toxinScore = calculateToxinScore(
             novaGroup: product.nova_group,
@@ -125,7 +216,14 @@ final class BarcodeService {
             fat: fat,
             toxinScore: toxinScore,
             servingSize: servingSize,
-            brand: brand
+            brand: brand,
+            fiber: fiber,
+            sugar: sugar,
+            sodium: sodium,
+            saturatedFat: saturatedFat,
+            cholesterol: cholesterol,
+            potassium: potassium,
+            photoData: photoData
         )
     }
 

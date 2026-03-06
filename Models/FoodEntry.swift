@@ -48,6 +48,43 @@ final class FoodEntry {
     /// Timestamp when this entry was created (for sorting and audit purposes)
     var createdAt: Date
 
+    /// Whether this food is marked as a favorite for quick re-logging
+    /// When toggled, applies to ALL entries with matching FoodFingerprint
+    /// Uses inline default for SwiftData lightweight migration support
+    var isFavorite: Bool = false
+
+    /// Meal type (breakfast/lunch/dinner/snack) - auto-assigned based on time
+    /// Uses inline default for SwiftData lightweight migration support
+    var mealTypeRawValue: String = "uncategorized"
+
+    /// Computed property for type-safe meal type access
+    var mealType: MealType {
+        get { MealType(rawValue: mealTypeRawValue) ?? .uncategorized }
+        set { mealTypeRawValue = newValue.rawValue }
+    }
+
+    // MARK: - Advanced Nutrition (Optional)
+    // These fields are only shown when "Track Advanced Nutrition" is enabled in settings
+    // Uses inline defaults for SwiftData lightweight migration support
+
+    /// Fiber content in grams (optional)
+    var fiber: Double? = nil
+
+    /// Sugar content in grams (optional)
+    var sugar: Double? = nil
+
+    /// Sodium content in milligrams (optional)
+    var sodium: Double? = nil
+
+    /// Saturated fat content in grams (optional)
+    var saturatedFat: Double? = nil
+
+    /// Cholesterol content in milligrams (optional)
+    var cholesterol: Double? = nil
+
+    /// Potassium content in milligrams (optional)
+    var potassium: Double? = nil
+
     /// Initializes a new food entry with complete nutritional data
     /// - Parameters:
     ///   - id: Unique identifier (defaults to new UUID)
@@ -61,6 +98,8 @@ final class FoodEntry {
     ///   - toxinScore: Processed food score (0-100)
     ///   - barcodeUPC: Optional barcode identifier
     ///   - createdAt: Creation timestamp (defaults to now)
+    ///   - isFavorite: Whether this food is favorited (defaults to false)
+    ///   - mealType: Meal category (defaults to uncategorized, usually auto-assigned)
     init(
         id: UUID = UUID(),
         name: String,
@@ -72,7 +111,16 @@ final class FoodEntry {
         fat: Double,
         toxinScore: Int,
         barcodeUPC: String? = nil,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        isFavorite: Bool = false,
+        mealType: MealType = .uncategorized,
+        // Advanced nutrition (optional)
+        fiber: Double? = nil,
+        sugar: Double? = nil,
+        sodium: Double? = nil,
+        saturatedFat: Double? = nil,
+        cholesterol: Double? = nil,
+        potassium: Double? = nil
     ) {
         self.id = id
         self.name = name
@@ -85,5 +133,14 @@ final class FoodEntry {
         self.toxinScore = toxinScore
         self.barcodeUPC = barcodeUPC
         self.createdAt = createdAt
+        self.isFavorite = isFavorite
+        self.mealTypeRawValue = mealType.rawValue
+        // Advanced nutrition
+        self.fiber = fiber
+        self.sugar = sugar
+        self.sodium = sodium
+        self.saturatedFat = saturatedFat
+        self.cholesterol = cholesterol
+        self.potassium = potassium
     }
 }
