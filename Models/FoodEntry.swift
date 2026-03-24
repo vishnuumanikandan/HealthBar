@@ -48,6 +48,15 @@ final class FoodEntry {
     /// Timestamp when this entry was created (for sorting and audit purposes)
     var createdAt: Date
 
+    /// Scopes this record to an authenticated user.
+    /// Defaults to "legacy" so pre-migration records remain valid without crashing.
+    /// Legacy records are invisible to all real authenticated users — this is intentional.
+    ///
+    /// TODO: Replace currentUserEmail with a stable Firebase UID once Firebase is
+    /// integrated in Phase 3. Never persist this as a permanent identifier — always
+    /// read it live from AuthService at query time.
+    var userId: String = "legacy"
+
     /// Whether this food is marked as a favorite for quick re-logging
     /// When toggled, applies to ALL entries with matching FoodFingerprint
     /// Uses inline default for SwiftData lightweight migration support

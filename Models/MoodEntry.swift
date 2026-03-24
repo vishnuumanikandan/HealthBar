@@ -23,6 +23,15 @@ final class MoodEntry {
     /// The mood value stored as a string (for SwiftData compatibility)
     var moodRawValue: String
 
+    /// Scopes this record to an authenticated user.
+    /// Defaults to "legacy" so pre-migration records remain valid without crashing.
+    /// Legacy records are invisible to all real authenticated users — this is intentional.
+    ///
+    /// TODO: Replace currentUserEmail with a stable Firebase UID once Firebase is
+    /// integrated in Phase 3. Never persist this as a permanent identifier — always
+    /// read it live from AuthService at query time.
+    var userId: String = "legacy"
+
     /// When this entry was created
     var createdAt: Date
 

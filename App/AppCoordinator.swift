@@ -30,10 +30,15 @@ final class AppCoordinator {
 
     // MARK: - Initialization
 
-    /// Initializes the app coordinator with a SwiftData model context
-    /// - Parameter modelContext: SwiftData context for persistence
-    init(modelContext: ModelContext) {
-        self.dataManager = DataManager(modelContext: modelContext)
+    /// Initializes the app coordinator with a SwiftData model context and auth service.
+    /// - Parameters:
+    ///   - modelContext: SwiftData context for persistence
+    ///   - authService: The auth service DataManager reads the current userId from live.
+    ///                  Defaults to `LocalAuthService.shared` so all existing call sites
+    ///                  (e.g., `AppCoordinator(modelContext: ctx)` in ContentView) compile
+    ///                  unchanged — no View modifications are required.
+    init(modelContext: ModelContext, authService: any AuthService = LocalAuthService.shared) {
+        self.dataManager = DataManager(modelContext: modelContext, authService: authService)
         self.nutritionManager = NutritionManager()
         self.gamificationManager = GamificationManager()
     }
@@ -135,6 +140,11 @@ final class AppCoordinator {
     /// Gets a complete summary of today's nutrition and progress
     /// - Returns: TodaySummary object with all daily stats
     func getTodaysSummary() async throws -> TodaySummary {
+        // Ensure default UserProgress and DailyGoal exist for this user before reading.
+        // This is idempotent — a no-op for returning users and a no-op if not logged in.
+        // Bootstraps new users the first time they land on the Home tab after login.
+        try await dataManager.setupDefaultData()
+
         let entries = try await dataManager.fetchTodaysEntries()
         let goal = try await getCurrentGoal()
         let progress = try await dataManager.getUserProgress()

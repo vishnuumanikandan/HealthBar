@@ -13,6 +13,11 @@ import SwiftData
 /// This class is responsible solely for data access and storage.
 /// Business logic lives in NutritionManager and GamificationManager.
 /// ViewModels should interact with AppCoordinator, not directly with this class.
+///
+/// **User isolation:** Every fetch is scoped to `currentUserId`. If the user is
+/// not authenticated (currentUserId == nil), all fetches return empty immediately
+/// and all inserts throw `DataManagerError.notAuthenticated`. This prevents any
+/// cross-user data leakage regardless of how many AppCoordinator instances exist.
 @Observable
 final class DataManager {
 
@@ -20,27 +25,60 @@ final class DataManager {
 
     private let modelContext: ModelContext
 
+    // MARK: - Auth
+
+    /// The auth service used to determine the current user's identifier.
+    /// Injected at init so this class never references a concrete auth type.
+    private let authService: any AuthService
+
+    /// The identifier for the currently authenticated user.
+    ///
+    /// Read **live** from AuthService on every call — never cached locally.
+    /// Returns nil when no session is active, causing all queries to short-circuit
+    /// and return empty results, which prevents any stale or cross-user data.
+    ///
+    /// TODO: Replace `authService.currentUserEmail` with `authService.currentUserUID`
+    /// (a stable, opaque Firebase UID) when Firebase is integrated in Phase 3.
+    /// Using currentUserEmail as a temporary stable identifier during local-only
+    /// development. Do NOT treat this value as a permanent identifier — always read
+    /// it from AuthService at the time of use and never persist it independently.
+    private var currentUserId: String? {
+        authService.currentUserEmail  // TODO: swap for Firebase UID in Phase 3
+    }
+
     // MARK: - Initialization
 
-    /// Initializes the data manager with a SwiftData model context
-    /// - Parameter modelContext: The SwiftData context for persistence operations
-    init(modelContext: ModelContext) {
+    /// Initializes the data manager with a SwiftData model context and auth service.
+    /// - Parameters:
+    ///   - modelContext: The SwiftData context for persistence operations
+    ///   - authService: The auth service for reading the current userId live.
+    ///                  Defaults to `LocalAuthService.shared` so existing callers
+    ///                  (e.g., `AppCoordinator(modelContext:)`) compile unchanged.
+    init(modelContext: ModelContext, authService: any AuthService = LocalAuthService.shared) {
         self.modelContext = modelContext
+        self.authService = authService
     }
 
     // MARK: - Setup Methods
 
-    /// Creates default data for new users (DailyGoal and UserProgress)
+    /// Creates default data for a newly authenticated user (DailyGoal + UserProgress).
     ///
-    /// Call this once on first app launch to initialize the user's account.
-    /// Creates a default daily goal and initial user progress with 0 XP.
+    /// Safe to call repeatedly — it is a no-op if data already exists for this user,
+    /// and a no-op if no user is authenticated (currentUserId == nil).
+    /// Call this before loading any user-facing data after login.
     func setupDefaultData() async throws {
-        // Check if UserProgress already exists
-        let progressDescriptor = FetchDescriptor<UserProgress>()
+        // Guard: no setup runs without an authenticated user
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+
+        // Check if UserProgress already exists for this specific user
+        let progressDescriptor = FetchDescriptor<UserProgress>(
+            predicate: #Predicate { progress in
+                progress.userId == userId
+            }
+        )
         let existingProgress = try modelContext.fetch(progressDescriptor)
 
         if existingProgress.isEmpty {
-            // Create default user progress
             let progress = UserProgress(
                 totalXP: 0,
                 currentStreak: 0,
@@ -48,10 +86,12 @@ final class DataManager {
                 lastActiveDate: Date(),
                 rank: Rank.iron.rawValue
             )
+            // Stamp the current user's identifier — userId read live, not cached
+            progress.userId = userId  // TODO: replace with Firebase UID in Phase 3
             modelContext.insert(progress)
         }
 
-        // Create today's goal if it doesn't exist
+        // Create today's goal if it doesn't exist for this user
         let todaysGoal = try await getTodaysGoal()
         if todaysGoal == nil {
             let defaultGoal = DailyGoal(
@@ -62,6 +102,8 @@ final class DataManager {
                 fatTarget: 65.0,
                 purityTarget: 30
             )
+            // Stamp the current user's identifier
+            defaultGoal.userId = userId  // TODO: replace with Firebase UID in Phase 3
             modelContext.insert(defaultGoal)
         }
 
@@ -70,23 +112,7 @@ final class DataManager {
 
     // MARK: - Food Entry Methods
 
-    /// Adds a new food entry to the database
-    /// - Parameters:
-    ///   - name: Display name of the food
-    ///   - calories: Total calories
-    ///   - protein: Protein in grams
-    ///   - carbs: Carbohydrates in grams
-    ///   - fat: Fat in grams
-    ///   - toxinScore: Processed food score (0-100)
-    ///   - photoData: Optional meal photo
-    ///   - barcodeUPC: Optional barcode identifier
-    ///   - mealType: Meal category (breakfast/lunch/dinner/snack)
-    ///   - fiber: Optional fiber in grams
-    ///   - sugar: Optional sugar in grams
-    ///   - sodium: Optional sodium in milligrams
-    ///   - saturatedFat: Optional saturated fat in grams
-    ///   - cholesterol: Optional cholesterol in milligrams
-    ///   - potassium: Optional potassium in milligrams
+    /// Adds a new food entry to the database, scoped to the current user.
     /// - Returns: The newly created FoodEntry
     func addFoodEntry(
         name: String,
@@ -105,6 +131,11 @@ final class DataManager {
         cholesterol: Double? = nil,
         potassium: Double? = nil
     ) async throws -> FoodEntry {
+        // Guard: no insert runs without an authenticated user
+        guard let userId = currentUserId, !userId.isEmpty else {
+            throw DataManagerError.notAuthenticated
+        }
+
         let entry = FoodEntry(
             name: name,
             date: Date(),
@@ -124,6 +155,8 @@ final class DataManager {
             cholesterol: cholesterol,
             potassium: potassium
         )
+        // Stamp the current user's identifier on every new record
+        entry.userId = userId  // TODO: replace with Firebase UID in Phase 3
 
         modelContext.insert(entry)
         try modelContext.save()
@@ -131,29 +164,31 @@ final class DataManager {
         return entry
     }
 
-    /// Deletes a food entry from the database
-    /// - Parameter entry: The FoodEntry to delete
+    /// Deletes a food entry from the database.
     func deleteFoodEntry(_ entry: FoodEntry) async throws {
         modelContext.delete(entry)
         try modelContext.save()
     }
 
-    /// Updates an existing food entry
-    /// - Parameter entry: The modified FoodEntry (changes are tracked by SwiftData)
+    /// Updates an existing food entry (changes tracked by SwiftData).
     func updateFoodEntry(_ entry: FoodEntry) async throws {
         try modelContext.save()
     }
 
-    /// Fetches all food entries for today
-    /// - Returns: Array of FoodEntry objects logged today
+    /// Fetches all food entries for today, scoped to the current user.
     func fetchTodaysEntries() async throws -> [FoodEntry] {
+        // Guard: no query runs without an authenticated user
+        guard let userId = currentUserId, !userId.isEmpty else { return [] }
+
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: Date())
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
 
         let descriptor = FetchDescriptor<FoodEntry>(
             predicate: #Predicate { entry in
-                entry.date >= startOfDay && entry.date < endOfDay
+                entry.userId == userId
+                    && entry.date >= startOfDay
+                    && entry.date < endOfDay
             },
             sortBy: [SortDescriptor(\.date, order: .forward)]
         )
@@ -161,17 +196,19 @@ final class DataManager {
         return try modelContext.fetch(descriptor)
     }
 
-    /// Fetches all food entries for a specific date
-    /// - Parameter date: The date to fetch entries for
-    /// - Returns: Array of FoodEntry objects for that date
+    /// Fetches all food entries for a specific date, scoped to the current user.
     func fetchEntriesForDate(_ date: Date) async throws -> [FoodEntry] {
+        guard let userId = currentUserId, !userId.isEmpty else { return [] }
+
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
 
         let descriptor = FetchDescriptor<FoodEntry>(
             predicate: #Predicate { entry in
-                entry.date >= startOfDay && entry.date < endOfDay
+                entry.userId == userId
+                    && entry.date >= startOfDay
+                    && entry.date < endOfDay
             },
             sortBy: [SortDescriptor(\.date, order: .forward)]
         )
@@ -179,15 +216,15 @@ final class DataManager {
         return try modelContext.fetch(descriptor)
     }
 
-    /// Fetches all food entries within a date range
-    /// - Parameters:
-    ///   - start: Start date (inclusive)
-    ///   - end: End date (exclusive)
-    /// - Returns: Array of FoodEntry objects in the range
+    /// Fetches all food entries within a date range, scoped to the current user.
     func fetchEntriesForDateRange(start: Date, end: Date) async throws -> [FoodEntry] {
+        guard let userId = currentUserId, !userId.isEmpty else { return [] }
+
         let descriptor = FetchDescriptor<FoodEntry>(
             predicate: #Predicate { entry in
-                entry.date >= start && entry.date < end
+                entry.userId == userId
+                    && entry.date >= start
+                    && entry.date < end
             },
             sortBy: [SortDescriptor(\.date, order: .forward)]
         )
@@ -197,16 +234,19 @@ final class DataManager {
 
     // MARK: - Goal Methods
 
-    /// Gets today's daily goal (creates default if none exists)
-    /// - Returns: Today's DailyGoal or nil if none exists
+    /// Gets today's daily goal for the current user (nil if none exists).
     func getTodaysGoal() async throws -> DailyGoal? {
+        guard let userId = currentUserId, !userId.isEmpty else { return nil }
+
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: Date())
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
 
         var descriptor = FetchDescriptor<DailyGoal>(
             predicate: #Predicate { goal in
-                goal.date >= startOfDay && goal.date < endOfDay
+                goal.userId == userId
+                    && goal.date >= startOfDay
+                    && goal.date < endOfDay
             }
         )
         descriptor.fetchLimit = 1
@@ -215,19 +255,7 @@ final class DataManager {
         return goals.first
     }
 
-    /// Updates the daily goal for today
-    /// - Parameters:
-    ///   - calories: New calorie target
-    ///   - protein: New protein target
-    ///   - carbs: New carb target
-    ///   - fat: New fat target
-    ///   - purity: New purity target
-    ///   - fiberTarget: Optional fiber target in grams
-    ///   - sugarTarget: Optional sugar limit in grams
-    ///   - sodiumTarget: Optional sodium limit in milligrams
-    ///   - saturatedFatTarget: Optional saturated fat limit in grams
-    ///   - cholesterolTarget: Optional cholesterol limit in milligrams
-    ///   - potassiumTarget: Optional potassium target in milligrams
+    /// Updates the daily goal for today, scoped to the current user.
     func updateDailyGoal(
         calories: Int,
         protein: Double,
@@ -241,6 +269,8 @@ final class DataManager {
         cholesterolTarget: Double? = nil,
         potassiumTarget: Double? = nil
     ) async throws {
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+
         if let existingGoal = try await getTodaysGoal() {
             // Update existing goal
             existingGoal.calorieTarget = calories
@@ -256,7 +286,7 @@ final class DataManager {
             existingGoal.cholesterolTarget = cholesterolTarget
             existingGoal.potassiumTarget = potassiumTarget
         } else {
-            // Create new goal for today
+            // Create new goal for today and stamp with current user
             let newGoal = DailyGoal(
                 date: Date(),
                 calorieTarget: calories,
@@ -271,6 +301,7 @@ final class DataManager {
                 cholesterolTarget: cholesterolTarget,
                 potassiumTarget: potassiumTarget
             )
+            newGoal.userId = userId  // TODO: replace with Firebase UID in Phase 3
             modelContext.insert(newGoal)
         }
 
@@ -279,10 +310,17 @@ final class DataManager {
 
     // MARK: - Progress Methods
 
-    /// Fetches the singleton UserProgress object
-    /// - Returns: The user's progress data
+    /// Fetches the UserProgress for the current user. Throws if not found.
     func getUserProgress() async throws -> UserProgress {
-        let descriptor = FetchDescriptor<UserProgress>()
+        guard let userId = currentUserId, !userId.isEmpty else {
+            throw DataManagerError.notAuthenticated
+        }
+
+        let descriptor = FetchDescriptor<UserProgress>(
+            predicate: #Predicate { progress in
+                progress.userId == userId
+            }
+        )
         let progressArray = try modelContext.fetch(descriptor)
 
         guard let progress = progressArray.first else {
@@ -292,46 +330,55 @@ final class DataManager {
         return progress
     }
 
-    /// Updates user progress (saves changes tracked by SwiftData)
+    /// Saves in-progress changes to UserProgress.
     func saveUserProgress() async throws {
         try modelContext.save()
     }
 
     // MARK: - Quest Methods
 
-    /// Fetches today's daily quests
-    /// - Returns: Array of DailyQuest objects for today
+    /// Fetches today's daily quests for the current user.
     func getTodaysQuests() async throws -> [DailyQuest] {
+        guard let userId = currentUserId, !userId.isEmpty else { return [] }
+
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: Date())
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
 
         let descriptor = FetchDescriptor<DailyQuest>(
             predicate: #Predicate { quest in
-                quest.date >= startOfDay && quest.date < endOfDay
+                quest.userId == userId
+                    && quest.date >= startOfDay
+                    && quest.date < endOfDay
             }
         )
 
         return try modelContext.fetch(descriptor)
     }
 
-    /// Adds a new quest to the database
-    /// - Parameter quest: The DailyQuest to add
+    /// Inserts a new quest and stamps it with the current user's identifier.
     func addQuest(_ quest: DailyQuest) async throws {
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+
+        // Stamp the userId on the quest before inserting
+        quest.userId = userId  // TODO: replace with Firebase UID in Phase 3
         modelContext.insert(quest)
         try modelContext.save()
     }
 
-    /// Deletes all quests for a specific date
-    /// - Parameter date: The date to delete quests for
+    /// Deletes all quests for a specific date belonging to the current user.
     func deleteQuestsForDate(_ date: Date) async throws {
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
 
         let descriptor = FetchDescriptor<DailyQuest>(
             predicate: #Predicate { quest in
-                quest.date >= startOfDay && quest.date < endOfDay
+                quest.userId == userId
+                    && quest.date >= startOfDay
+                    && quest.date < endOfDay
             }
         )
 
@@ -343,30 +390,25 @@ final class DataManager {
         try modelContext.save()
     }
 
-    /// Saves changes to quests
+    /// Saves in-progress changes to quests.
     func saveQuests() async throws {
         try modelContext.save()
     }
 
     // MARK: - Recent Foods Methods
 
-    /// Fetches recent unique foods by fingerprint
+    /// Fetches recent unique foods by fingerprint, scoped to the current user.
     ///
     /// Groups entries by FoodFingerprint and returns the most recent instance of each unique food.
-    /// Useful for "Recent Foods" quick-log feature.
-    ///
-    /// - Parameters:
-    ///   - limit: Maximum number of unique foods to return (default 15)
-    ///   - daysBack: Number of days to look back (default 30)
-    /// - Returns: Array of FoodEntry objects, one per unique fingerprint, sorted by most recent
     func getRecentUniqueFoods(limit: Int = 15, daysBack: Int = 30) async throws -> [FoodEntry] {
+        guard let userId = currentUserId, !userId.isEmpty else { return [] }
+
         let calendar = Calendar.current
         let cutoffDate = calendar.date(byAdding: .day, value: -daysBack, to: Date())!
 
-        // Fetch all entries from the last N days, sorted by date descending
         let descriptor = FetchDescriptor<FoodEntry>(
             predicate: #Predicate { entry in
-                entry.date >= cutoffDate
+                entry.userId == userId && entry.date >= cutoffDate
             },
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
@@ -393,16 +435,13 @@ final class DataManager {
         return uniqueEntries
     }
 
-    /// Fetches all favorited foods (one per fingerprint)
-    ///
-    /// Returns the most recent instance of each unique favorited food.
-    ///
-    /// - Returns: Array of FoodEntry objects where isFavorite == true, one per fingerprint
+    /// Fetches all favorited foods (one per fingerprint), scoped to the current user.
     func getFavoriteFoods() async throws -> [FoodEntry] {
-        // Fetch all favorited entries, sorted by date descending
+        guard let userId = currentUserId, !userId.isEmpty else { return [] }
+
         let descriptor = FetchDescriptor<FoodEntry>(
             predicate: #Predicate { entry in
-                entry.isFavorite == true
+                entry.userId == userId && entry.isFavorite == true
             },
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
@@ -425,22 +464,21 @@ final class DataManager {
         return uniqueFavorites
     }
 
-    /// Toggles favorite status for ALL entries matching a fingerprint
-    ///
-    /// This makes the FOOD favorite, not just individual log instances.
-    /// When user favorites "Chicken Salad (450cal, 30g protein...)",
-    /// all entries with the same fingerprint become favorited.
-    ///
-    /// - Parameter fingerprint: The food fingerprint to toggle
+    /// Toggles favorite status for ALL entries matching a fingerprint, for the current user only.
     func toggleFavoriteForFingerprint(_ fingerprint: FoodFingerprint) async throws {
-        // Fetch all entries (we need to check fingerprints manually)
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+
+        // Fetch only this user's entries (fingerprint matching is done in-memory)
         let descriptor = FetchDescriptor<FoodEntry>(
+            predicate: #Predicate { entry in
+                entry.userId == userId
+            },
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
 
         let allEntries = try modelContext.fetch(descriptor)
 
-        // Find first entry with matching fingerprint to determine current state
+        // Find first matching fingerprint to determine current favorite state
         var newFavoriteState = true
         for entry in allEntries {
             if FoodFingerprint(from: entry) == fingerprint {
@@ -449,7 +487,7 @@ final class DataManager {
             }
         }
 
-        // Update all entries with matching fingerprint
+        // Apply new state to all entries with matching fingerprint
         for entry in allEntries {
             if FoodFingerprint(from: entry) == fingerprint {
                 entry.isFavorite = newFavoriteState
@@ -459,75 +497,78 @@ final class DataManager {
         try modelContext.save()
     }
 
-    /// Adds a food entry directly (used for quick-log)
-    ///
-    /// - Parameter entry: The FoodEntry to insert
+    /// Inserts a pre-built FoodEntry and stamps it with the current user's identifier.
+    /// Used for quick-log where the entry is constructed externally (AppCoordinator).
     func insertFoodEntry(_ entry: FoodEntry) async throws {
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+
+        // Stamp the userId — overrides whatever default was set at build time
+        entry.userId = userId  // TODO: replace with Firebase UID in Phase 3
         modelContext.insert(entry)
         try modelContext.save()
     }
 
     // MARK: - Personal Baseline Methods
 
-    /// Gets the baseline for a specific day of week
-    /// - Parameter dayOfWeek: Day of week (1 = Sunday, 7 = Saturday)
-    /// - Returns: The PersonalBaseline or nil if not found
+    /// Gets the baseline for a specific day of week for the current user.
     func getBaselineForDayOfWeek(_ dayOfWeek: Int) async throws -> PersonalBaseline? {
+        guard let userId = currentUserId, !userId.isEmpty else { return nil }
+
         let descriptor = FetchDescriptor<PersonalBaseline>(
             predicate: #Predicate { baseline in
-                baseline.dayOfWeek == dayOfWeek
+                baseline.userId == userId && baseline.dayOfWeek == dayOfWeek
             }
         )
 
         return try modelContext.fetch(descriptor).first
     }
 
-    /// Gets all personal baselines
-    /// - Returns: Array of all PersonalBaseline objects (up to 7)
+    /// Gets all personal baselines for the current user.
     func getAllBaselines() async throws -> [PersonalBaseline] {
+        guard let userId = currentUserId, !userId.isEmpty else { return [] }
+
         let descriptor = FetchDescriptor<PersonalBaseline>(
+            predicate: #Predicate { baseline in
+                baseline.userId == userId
+            },
             sortBy: [SortDescriptor(\.dayOfWeek, order: .forward)]
         )
 
         return try modelContext.fetch(descriptor)
     }
 
-    /// Updates or creates a baseline for a day of week
-    /// - Parameters:
-    ///   - dayOfWeek: Day of week (1-7)
-    ///   - calories: Today's total calories
-    ///   - purity: Today's total purity score
+    /// Updates or creates a baseline for a day of week, scoped to the current user.
     func updateBaseline(dayOfWeek: Int, calories: Double, purity: Double) async throws {
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+
         if let existing = try await getBaselineForDayOfWeek(dayOfWeek) {
             // Update existing baseline
             existing.updateWithNewData(calories: calories, purity: purity)
         } else {
-            // Create new baseline
+            // Create new baseline and stamp with current user
             let baseline = PersonalBaseline(
                 dayOfWeek: dayOfWeek,
                 averageCalories: calories,
                 averagePurity: purity,
                 sampleCount: 1
             )
+            baseline.userId = userId  // TODO: replace with Firebase UID in Phase 3
             modelContext.insert(baseline)
         }
 
         try modelContext.save()
     }
 
-    /// Calculates and updates baselines from historical data (rolling 4-week)
-    ///
-    /// Call this periodically (e.g., at end of day) to keep baselines updated.
+    /// Recalculates baselines from 4 weeks of historical data for the current user.
     func calculateAndUpdateBaselines() async throws {
         let calendar = Calendar.current
         let today = Date()
 
-        // Get entries from the past 4 weeks
         guard let fourWeeksAgo = calendar.date(byAdding: .day, value: -28, to: today) else { return }
 
+        // fetchEntriesForDateRange is already userId-scoped
         let entries = try await fetchEntriesForDateRange(start: fourWeeksAgo, end: today)
 
-        // Group entries by day of week
         var entriesByDayOfWeek: [Int: [(calories: Int, purity: Int)]] = [:]
 
         for entry in entries {
@@ -538,11 +579,9 @@ final class DataManager {
             entriesByDayOfWeek[dayOfWeek]?.append((calories: entry.calories, purity: entry.toxinScore))
         }
 
-        // Calculate averages and update baselines
         for dayOfWeek in 1...7 {
             guard let dayEntries = entriesByDayOfWeek[dayOfWeek], !dayEntries.isEmpty else { continue }
 
-            // Group by actual date to get daily totals (not per-entry)
             let totalCalories = dayEntries.reduce(0) { $0 + $1.calories }
             let totalPurity = dayEntries.reduce(0) { $0 + $1.purity }
             let entryCount = dayEntries.count
@@ -550,56 +589,61 @@ final class DataManager {
             let avgCalories = Double(totalCalories) / Double(entryCount)
             let avgPurity = Double(totalPurity) / Double(entryCount)
 
+            // updateBaseline is already userId-scoped
             try await updateBaseline(dayOfWeek: dayOfWeek, calories: avgCalories, purity: avgPurity)
         }
     }
 
     // MARK: - Mood Entry Methods
 
-    /// Adds a new mood entry for today
-    /// - Parameter mood: The user's mood
-    /// - Returns: The created MoodEntry
+    /// Adds a new mood entry for today, scoped to the current user.
     func addMoodEntry(mood: Mood) async throws -> MoodEntry {
+        guard let userId = currentUserId, !userId.isEmpty else {
+            throw DataManagerError.notAuthenticated
+        }
+
         let entry = MoodEntry(mood: mood)
+        // Stamp the current user's identifier on the new record
+        entry.userId = userId  // TODO: replace with Firebase UID in Phase 3
         modelContext.insert(entry)
         try modelContext.save()
         return entry
     }
 
-    /// Gets today's mood entry if one exists
-    /// - Returns: The MoodEntry for today, or nil if not logged yet
+    /// Gets today's mood entry for the current user, or nil if not logged yet.
     func getTodaysMood() async throws -> MoodEntry? {
+        guard let userId = currentUserId, !userId.isEmpty else { return nil }
+
         let calendar = Calendar.current
         let startOfToday = calendar.startOfDay(for: Date())
 
         let descriptor = FetchDescriptor<MoodEntry>(
             predicate: #Predicate { entry in
-                entry.date == startOfToday
+                entry.userId == userId && entry.date == startOfToday
             }
         )
 
         return try modelContext.fetch(descriptor).first
     }
 
-    /// Checks if mood has been logged today
-    /// - Returns: True if mood already logged for today
+    /// Checks if mood has been logged today for the current user.
     func hasMoodLoggedToday() async throws -> Bool {
         return try await getTodaysMood() != nil
     }
 
-    /// Gets mood entries for a date range
-    /// - Parameters:
-    ///   - start: Start date
-    ///   - end: End date
-    /// - Returns: Array of MoodEntry objects
+    /// Gets mood entries for a date range, scoped to the current user.
     func getMoodEntriesForDateRange(start: Date, end: Date) async throws -> [MoodEntry] {
+        guard let userId = currentUserId, !userId.isEmpty else { return [] }
+
         let calendar = Calendar.current
         let startOfRange = calendar.startOfDay(for: start)
         let endOfRange = calendar.startOfDay(for: end)
 
         let descriptor = FetchDescriptor<MoodEntry>(
             predicate: #Predicate { entry in
-                entry.date >= startOfRange && entry.date <= endOfRange
+                entry.userId == userId
+                    && entry.date >= startOfRange
+                    && entry.date <= endOfRange
             },
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
@@ -615,6 +659,7 @@ enum DataManagerError: LocalizedError {
     case userProgressNotFound
     case invalidDate
     case saveFailure
+    case notAuthenticated
 
     var errorDescription: String? {
         switch self {
@@ -624,6 +669,8 @@ enum DataManagerError: LocalizedError {
             return "The provided date is invalid."
         case .saveFailure:
             return "Failed to save data to the database."
+        case .notAuthenticated:
+            return "No authenticated user. Please log in before accessing data."
         }
     }
 }

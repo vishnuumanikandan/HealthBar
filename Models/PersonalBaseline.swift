@@ -29,6 +29,15 @@ final class PersonalBaseline {
     /// Number of weeks included in the rolling average (max 4)
     var sampleCount: Int
 
+    /// Scopes this record to an authenticated user.
+    /// Defaults to "legacy" so pre-migration records remain valid without crashing.
+    /// Legacy records are invisible to all real authenticated users — this is intentional.
+    ///
+    /// TODO: Replace currentUserEmail with a stable Firebase UID once Firebase is
+    /// integrated in Phase 3. Never persist this as a permanent identifier — always
+    /// read it live from AuthService at query time.
+    var userId: String = "legacy"
+
     /// Last time this baseline was updated
     var lastUpdated: Date
 

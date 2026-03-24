@@ -94,6 +94,16 @@ final class AuthViewModel {
     ///
     /// On success: `authService.isLoggedIn` flips to `true`, triggering
     /// ContentView to switch from the auth flow to the main TabView.
+    ///
+    /// **userId propagation:** Once `authService.login` succeeds,
+    /// `authService.currentUserEmail` is immediately set to the authenticated
+    /// user's email. DataManager reads this value **live** via its `currentUserId`
+    /// computed property — no explicit "pass userId" call is needed here.
+    /// All subsequent DataManager queries are automatically scoped to this user.
+    ///
+    /// TODO: When Firebase is integrated in Phase 3, `currentUserEmail` will be
+    /// replaced by a stable Firebase UID (`currentUserUID`). No changes to this
+    /// method will be required — only AuthService and DataManager need updating.
     func login() async {
         clearErrors()
         guard validateLoginFields() else { return }
@@ -106,6 +116,8 @@ final class AuthViewModel {
                 email: email.trimmingCharacters(in: .whitespaces),
                 password: password
             )
+            // userId is now live in authService.currentUserEmail.
+            // DataManager picks it up automatically on the next data access.
         } catch let error as AuthError {
             authError = error.errorDescription
         } catch {
@@ -117,6 +129,10 @@ final class AuthViewModel {
     ///
     /// On success: the service starts a session, `isLoggedIn` flips to `true`,
     /// and ContentView transitions to the main TabView automatically.
+    ///
+    /// **userId propagation:** Identical to `login()` — once `authService.signUp`
+    /// succeeds, `authService.currentUserEmail` is set and DataManager immediately
+    /// scopes all subsequent queries to the newly created user.
     func signUp() async {
         clearErrors()
         guard validateSignUpFields() else { return }
@@ -129,6 +145,8 @@ final class AuthViewModel {
                 email: email.trimmingCharacters(in: .whitespaces),
                 password: password
             )
+            // userId is now live in authService.currentUserEmail.
+            // DataManager picks it up automatically on the next data access.
         } catch let error as AuthError {
             authError = error.errorDescription
         } catch {
@@ -141,8 +159,16 @@ final class AuthViewModel {
     /// Called from ProfileView via an injected `onLogout` closure.
     /// The auth service flips `isLoggedIn` to false, and ContentView
     /// automatically returns to the LoginView.
+    ///
+    /// **userId propagation:** `authService.logout()` clears `currentUserEmail`
+    /// to nil. DataManager's `currentUserId` computed property reads this live,
+    /// so all subsequent queries immediately return empty — no stale user data
+    /// is accessible after logout. SwiftData records are NOT deleted; they simply
+    /// become inaccessible until that user authenticates again.
     func logout() {
         authService.logout()
+        // userId is now nil in authService.currentUserEmail.
+        // DataManager will return empty results for all subsequent queries.
         clearFields()
     }
 
