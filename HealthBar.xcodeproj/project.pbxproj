@@ -82,6 +82,7 @@
 		BE47B6832F6D16A0007F48F5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = BE47B6812F6D16A0007F48F5 /* GoogleService-Info.plist */; };
 		BE47B6842F6D16A0007F48F5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = BE47B6812F6D16A0007F48F5 /* GoogleService-Info.plist */; };
 		BE77873E2F70E62E00666EE3 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE77873D2F70E62E00666EE3 /* ProfileView.swift */; };
+		BE7787962F72699800666EE3 /* FirebaseAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7787952F72699800666EE3 /* FirebaseAuthService.swift */; };
 		CC110AB12F300000000000B1 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110AA12F300000000000B1 /* AuthService.swift */; };
 		CC110AB22F300000000000B2 /* LocalAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110AA22F300000000000B2 /* LocalAuthService.swift */; };
 		CC110AB32F300000000000B3 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110AA32F300000000000B3 /* AuthViewModel.swift */; };
@@ -159,6 +160,7 @@
 		1146B3032F247FA7004767C9 /* CameraPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPickerView.swift; sourceTree = "<group>"; };
 		BE47B6812F6D16A0007F48F5 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		BE77873D2F70E62E00666EE3 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		BE7787952F72699800666EE3 /* FirebaseAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseAuthService.swift; sourceTree = "<group>"; };
 		CC110AA12F300000000000B1 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		CC110AA22F300000000000B2 /* LocalAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAuthService.swift; sourceTree = "<group>"; };
 		CC110AA32F300000000000B3 /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
@@ -396,6 +398,7 @@
 		CC110AA02F300000000000B0 /* Auth */ = {
 			isa = PBXGroup;
 			children = (
+				BE7787952F72699800666EE3 /* FirebaseAuthService.swift */,
 				CC110AA12F300000000000B1 /* AuthService.swift */,
 				CC110AA22F300000000000B2 /* LocalAuthService.swift */,
 				CC110AA32F300000000000B3 /* AuthViewModel.swift */,
@@ -598,6 +601,7 @@
 				1111E13C2F285EBA006EF76F /* DailyGoalsView.swift in Sources */,
 				1111E18D2F29B129006EF76F /* PurityScoreInfoSheet.swift in Sources */,
 				1111E1A62F32E09E006EF76F /* MealType.swift in Sources */,
+				BE7787962F72699800666EE3 /* FirebaseAuthService.swift in Sources */,
 				1111E0C62F24891F006EF76F /* OpenFoodFactsModels.swift in Sources */,
 				1111E1A42F32E083006EF76F /* Mood.swift in Sources */,
 				1111E1AE2F32E129006EF76F /* DailyInsightsCard.swift in Sources */,

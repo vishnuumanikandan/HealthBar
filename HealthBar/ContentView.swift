@@ -16,9 +16,9 @@ import SwiftData
 /// is `false`, the auth flow (LoginView → SignUpView via NavigationStack) is
 /// shown instead. The switch is automatic — no imperative navigation needed.
 ///
-/// The `AuthViewModel` and `LocalAuthService` instances are created once here
+/// The `AuthViewModel` and `FirebaseAuthService` instances are created once here
 /// and live for the app session. ProfileView receives an `onLogout` closure so
-/// it can trigger logout without depending on `LocalAuthService` directly.
+/// it can trigger logout without depending on `FirebaseAuthService` directly.
 struct ContentView: View {
 
     // MARK: - Environment
@@ -29,7 +29,7 @@ struct ContentView: View {
 
     /// Observable auth service singleton. Accessing `authService.isLoggedIn`
     /// in `body` causes SwiftUI to re-render when the value changes.
-    @State private var authService = LocalAuthService.shared
+    @State private var authService = FirebaseAuthService.shared
 
     /// Shared ViewModel for the entire auth flow (LoginView + SignUpView).
     /// Created with the auth service so Views never touch the concrete type.
@@ -46,7 +46,7 @@ struct ContentView: View {
         // AuthViewModel is initialized here so the same instance is shared
         // across LoginView and SignUpView (email typed on one carries to the other).
         self._authViewModel = State(
-            initialValue: AuthViewModel(authService: LocalAuthService.shared)
+            initialValue: AuthViewModel(authService: FirebaseAuthService.shared)
         )
     }
 
@@ -88,7 +88,8 @@ struct ContentView: View {
         TabView(selection: $selectedTab) {
             // Home Tab
             HomeView(
-                coordinator: AppCoordinator(modelContext: modelContext),
+                // Firebase UID now flows through as userId — no longer an email address
+                coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
                 selectedTab: $selectedTab
             )
             .tabItem {
@@ -97,16 +98,16 @@ struct ContentView: View {
             .tag(0)
 
             // Food Log Tab
-            FoodLogView(coordinator: AppCoordinator(modelContext: modelContext))
+            FoodLogView(coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared))
                 .tabItem {
                     Label("Food", systemImage: "fork.knife")
                 }
                 .tag(1)
 
             // Profile Tab — receives logout closure so it can end the session
-            // without referencing LocalAuthService directly.
+            // without referencing FirebaseAuthService directly.
             ProfileView(
-                coordinator: AppCoordinator(modelContext: modelContext),
+                coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
                 onLogout: { authViewModel.logout() }
             )
             .tabItem {
