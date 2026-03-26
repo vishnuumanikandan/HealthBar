@@ -48,6 +48,9 @@ struct AddFoodFormView: View {
                     // Header
                     headerSection
 
+                    // Meal type picker
+                    mealTypePickerSection
+
                     // Photo capture section
                     photoCaptureSection
 
@@ -357,6 +360,43 @@ struct AddFoodFormView: View {
                 .multilineTextAlignment(.center)
         }
         .padding(.bottom, DesignSystem.Spacing.md)
+    }
+
+    /// Meal type picker — horizontal pill row bound to viewModel.formMealType
+    private var mealTypePickerSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            Text("Meal Type")
+                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    ForEach(MealType.allCases, id: \.self) { type in
+                        Button {
+                            viewModel.formMealType = type
+                        } label: {
+                            HStack(spacing: DesignSystem.Spacing.xs) {
+                                Image(systemName: type.icon)
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text(type.displayName)
+                                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
+                            }
+                            .foregroundColor(viewModel.formMealType == type ? .white : type.color)
+                            .padding(.horizontal, DesignSystem.Spacing.md)
+                            .padding(.vertical, DesignSystem.Spacing.sm)
+                            .background(
+                                viewModel.formMealType == type
+                                    ? type.color
+                                    : type.color.opacity(0.15)
+                            )
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+        }
     }
 
     /// Generic input section with optional error message

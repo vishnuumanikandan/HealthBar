@@ -94,6 +94,16 @@ final class FoodEntry {
     /// Potassium content in milligrams (optional)
     var potassium: Double? = nil
 
+    // MARK: - Meal Bundle (for logging saved meal templates)
+
+    /// Shared UUID string across all FoodEntries logged from the same SavedMeal in one session.
+    /// nil for individually-logged foods.
+    var mealBundleId: String? = nil
+
+    /// Display name of the SavedMeal this entry belongs to.
+    /// nil for individually-logged foods.
+    var mealBundleName: String? = nil
+
     /// Initializes a new food entry with complete nutritional data
     /// - Parameters:
     ///   - id: Unique identifier (defaults to new UUID)

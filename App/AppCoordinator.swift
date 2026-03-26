@@ -80,17 +80,21 @@ final class AppCoordinator {
         carbs: Double,
         fat: Double,
         toxinScore: Int,
+        date: Date = Date(),
         photoData: Data? = nil,
         barcodeUPC: String? = nil,
+        mealType: MealType? = nil,
         fiber: Double? = nil,
         sugar: Double? = nil,
         sodium: Double? = nil,
         saturatedFat: Double? = nil,
         cholesterol: Double? = nil,
-        potassium: Double? = nil
+        potassium: Double? = nil,
+        mealBundleId: String? = nil,
+        mealBundleName: String? = nil
     ) async throws -> (entry: FoodEntry, xpEarned: Int) {
-        // Auto-assign meal type based on current time
-        let mealType = MealType.fromTime(Date())
+        // Use caller-provided meal type if given, otherwise auto-assign from the entry's date
+        let resolvedMealType = mealType ?? MealType.fromTime(date)
 
         // Add the food entry
         let entry = try await dataManager.addFoodEntry(
@@ -100,15 +104,18 @@ final class AppCoordinator {
             carbs: carbs,
             fat: fat,
             toxinScore: toxinScore,
+            date: date,
             photoData: photoData,
             barcodeUPC: barcodeUPC,
-            mealType: mealType,
+            mealType: resolvedMealType,
             fiber: fiber,
             sugar: sugar,
             sodium: sodium,
             saturatedFat: saturatedFat,
             cholesterol: cholesterol,
-            potassium: potassium
+            potassium: potassium,
+            mealBundleId: mealBundleId,
+            mealBundleName: mealBundleName
         )
 
         // Check and update quest progress
@@ -574,6 +581,113 @@ final class AppCoordinator {
         try await dataManager.toggleFavoriteForFingerprint(fingerprint)
     }
 
+    // MARK: - CustomFood
+
+    func getCustomFoods() async throws -> [CustomFood] {
+        return try await dataManager.getCustomFoods()
+    }
+
+    func addCustomFood(_ food: CustomFood) async throws {
+        try await dataManager.addCustomFood(food)
+    }
+
+    func updateCustomFood(_ food: CustomFood) async throws {
+        try await dataManager.updateCustomFood(food)
+    }
+
+    func deleteCustomFood(_ food: CustomFood) async throws {
+        try await dataManager.deleteCustomFood(food)
+    }
+
+    // MARK: - SavedMeal
+
+    func getSavedMeals() async throws -> [SavedMeal] {
+        return try await dataManager.getSavedMeals()
+    }
+
+    func addSavedMeal(_ meal: SavedMeal) async throws {
+        try await dataManager.addSavedMeal(meal)
+    }
+
+    func updateSavedMeal(_ meal: SavedMeal) async throws {
+        try await dataManager.updateSavedMeal(meal)
+    }
+
+    func deleteSavedMeal(_ meal: SavedMeal) async throws {
+        try await dataManager.deleteSavedMeal(meal)
+    }
+
+    /// Logs all components of a saved meal as a grouped bundle of FoodEntries.
+    /// All entries share the same mealBundleId so they display as one row in the log.
+    /// Returns total XP earned from quest completions.
+    @discardableResult
+    func logSavedMeal(
+        _ meal: SavedMeal,
+        date: Date = Date(),
+        mealType: MealType? = nil
+    ) async throws -> Int {
+        let resolvedMealType = mealType ?? MealType.fromTime(date)
+        let bundleId = UUID().uuidString  // shared across all components
+        for component in meal.components {
+            _ = try await addFoodEntry(
+                name: component.foodName,
+                calories: component.calories,
+                protein: component.protein,
+                carbs: component.carbs,
+                fat: component.fat,
+                toxinScore: 0,
+                date: date,
+                mealType: resolvedMealType,
+                mealBundleId: bundleId,
+                mealBundleName: meal.name
+            )
+        }
+        return try await checkAndUpdateQuestProgress()
+    }
+
+    // MARK: - SavedRecipe
+
+    func getSavedRecipes() async throws -> [SavedRecipe] {
+        return try await dataManager.getSavedRecipes()
+    }
+
+    func addSavedRecipe(_ recipe: SavedRecipe) async throws {
+        try await dataManager.addSavedRecipe(recipe)
+    }
+
+    func updateSavedRecipe(_ recipe: SavedRecipe) async throws {
+        try await dataManager.updateSavedRecipe(recipe)
+    }
+
+    func deleteSavedRecipe(_ recipe: SavedRecipe) async throws {
+        try await dataManager.deleteSavedRecipe(recipe)
+    }
+
+    /// Saves a recipe's per-serving nutrition as a new CustomFood in My Foods.
+    @discardableResult
+    func saveRecipeAsFood(_ recipe: SavedRecipe) async throws -> CustomFood {
+        let food = CustomFood(
+            name: recipe.name,
+            calories: recipe.perServingCalories,
+            protein: recipe.perServingProtein,
+            carbs: recipe.perServingCarbs,
+            fat: recipe.perServingFat,
+            servingSizeName: "1 serving",
+            servingSizeAmount: 1.0,
+            servingUnit: "serving"
+        )
+        try await dataManager.addCustomFood(food)
+        return food
+    }
+
+    // MARK: - MealType Update (for drag-and-drop)
+
+    /// Updates the meal type of an existing food entry.
+    func updateMealType(of entry: FoodEntry, to mealType: MealType) async throws {
+        entry.mealType = mealType
+        try await dataManager.updateFoodEntry(entry)
+    }
+
     /// Quick-logs a food by creating a copy with today's date
     ///
     /// Creates a new FoodEntry with all the same nutrition data but today's date.
@@ -582,14 +696,18 @@ final class AppCoordinator {
     ///
     /// - Parameter entry: The food entry to re-log
     /// - Returns: The new entry and any XP earned
-    func quickLogFood(_ entry: FoodEntry) async throws -> (entry: FoodEntry, xpEarned: Int) {
-        // Auto-assign meal type based on current time
-        let mealType = MealType.fromTime(Date())
+    func quickLogFood(
+        _ entry: FoodEntry,
+        date: Date = Date(),
+        mealType: MealType? = nil
+    ) async throws -> (entry: FoodEntry, xpEarned: Int) {
+        let resolvedDate = date
+        let resolvedMealType = mealType ?? MealType.fromTime(resolvedDate)
 
-        // Create a new entry with same nutrition data but today's date
+        // Create a new entry with same nutrition data but the specified date
         let newEntry = FoodEntry(
             name: entry.name,
-            date: Date(),
+            date: resolvedDate,
             photoData: entry.photoData,
             calories: entry.calories,
             protein: entry.protein,
@@ -599,7 +717,7 @@ final class AppCoordinator {
             barcodeUPC: entry.barcodeUPC,
             createdAt: Date(),
             isFavorite: entry.isFavorite,
-            mealType: mealType
+            mealType: resolvedMealType
         )
 
         // Insert into database

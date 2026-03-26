@@ -18,8 +18,9 @@ final class FoodLogViewModel {
 
     // MARK: - Properties
 
-    /// Reference to the app coordinator for data operations
-    private let coordinator: AppCoordinator
+    /// Reference to the app coordinator for data operations.
+    /// Internal so FoodDatabaseViewModel can share the same coordinator.
+    let coordinator: AppCoordinator
 
     /// Barcode service for nutrition lookup
     private let barcodeService: BarcodeService
@@ -49,31 +50,31 @@ final class FoodLogViewModel {
     /// Whether toast is currently visible
     var showToast: Bool = false
 
-    // MARK: - Computed Totals (Raw Data Only)
+    // MARK: - Computed Totals (always reflects selected date via displayedEntries)
 
-    /// Total calories consumed today
+    /// Total calories for the currently viewed date
     var totalCalories: Int {
-        todaysSummary?.totalCalories ?? 0
+        displayedEntries.reduce(0) { $0 + $1.calories }
     }
 
-    /// Total protein consumed today (in grams)
+    /// Total protein for the currently viewed date (in grams)
     var totalProtein: Double {
-        todaysSummary?.totalProtein ?? 0.0
+        displayedEntries.reduce(0.0) { $0 + $1.protein }
     }
 
-    /// Total carbs consumed today (in grams)
+    /// Total carbs for the currently viewed date (in grams)
     var totalCarbs: Double {
-        todaysSummary?.totalCarbs ?? 0.0
+        displayedEntries.reduce(0.0) { $0 + $1.carbs }
     }
 
-    /// Total fat consumed today (in grams)
+    /// Total fat for the currently viewed date (in grams)
     var totalFat: Double {
-        todaysSummary?.totalFat ?? 0.0
+        displayedEntries.reduce(0.0) { $0 + $1.fat }
     }
 
-    /// Total toxin score for today
+    /// Total toxin score for the currently viewed date
     var totalToxinScore: Int {
-        todaysSummary?.totalToxinScore ?? 0
+        displayedEntries.reduce(0) { $0 + $1.toxinScore }
     }
 
     // MARK: - Progress Calculations
@@ -104,11 +105,38 @@ final class FoodLogViewModel {
 
     /// Formatted calorie text for center of ring
     var calorieText: String {
-        guard let goal = currentGoal else {
-            return "\(totalCalories)"
-        }
-        return "\(totalCalories)\n/ \(goal.calorieTarget)"
+        "\(totalCalories)"
     }
+
+    // MARK: - Date Navigation State
+
+    /// The date currently being viewed (start of day)
+    var selectedDate: Date = Calendar.current.startOfDay(for: Date())
+
+    /// Entries displayed for the currently viewed date
+    var displayedEntries: [FoodEntry] = []
+
+    /// Loading state for non-today date entries
+    var isLoadingDateEntries: Bool = false
+
+    // MARK: - Meal Section & Sheet Chain State
+
+    /// The meal type context when opening the add food flow from a section
+    var pendingMealType: MealType = .uncategorized
+
+    /// Controls visibility of the 3-choice AddFoodChoiceSheet
+    var showingAddFoodChoice: Bool = false
+
+    /// Controls visibility of the Food Database full-screen sheet
+    var showingFoodDatabase: Bool = false
+
+    /// Bridge flag: when true, FoodLogView opens AddFoodFormView after a sheet dismiss animation
+    var shouldOpenAddFoodForm: Bool = false
+
+    // MARK: - Form Meal Type
+
+    /// The meal type used when submitting the add food form
+    var formMealType: MealType = .uncategorized
 
     // MARK: - UI State
 
@@ -117,6 +145,9 @@ final class FoodLogViewModel {
 
     /// Controls visibility of add food sheet
     var showingAddFood: Bool = false
+
+    /// When true, the next addFoodEntry call also persists the food to My Foods (CustomFood)
+    var pendingSaveToMyFoods: Bool = false
 
     /// Error message to display
     var errorMessage: String?
@@ -275,6 +306,11 @@ final class FoodLogViewModel {
             todaysEntries = summary.entries
             currentGoal = summary.goal
 
+            // Keep displayedEntries in sync when viewing today
+            if isViewingToday {
+                displayedEntries = todaysEntries
+            }
+
             isLoading = false
         } catch {
             errorMessage = "Failed to load data: \(error.localizedDescription)"
@@ -331,8 +367,10 @@ final class FoodLogViewModel {
                 carbs: carbs,
                 fat: fat,
                 toxinScore: toxinScore,
+                date: selectedDate,
                 photoData: photoData,
                 barcodeUPC: barcodeUPC,
+                mealType: formMealType,
                 fiber: fiber,
                 sugar: sugar,
                 sodium: sodium,
@@ -345,8 +383,44 @@ final class FoodLogViewModel {
             lastAddedFoodName = name
             lastEarnedXP = result.xpEarned
 
-            // Reload data to get updated summary
+            // Persist to My Foods when coming from MyFoods "Add New Food" button
+            if pendingSaveToMyFoods {
+                pendingSaveToMyFoods = false
+                let customFood = CustomFood(
+                    name: name,
+                    calories: calories,
+                    protein: protein,
+                    carbs: carbs,
+                    fat: fat,
+                    toxinScore: toxinScore,
+                    fiber: fiber,
+                    sugar: sugar,
+                    sodium: sodium
+                )
+                try? await coordinator.addCustomFood(customFood)
+            }
+
+            // Persist barcode-scanned foods to My Foods automatically
+            if let _ = barcodeUPC {
+                let customFood = CustomFood(
+                    name: name,
+                    calories: calories,
+                    protein: protein,
+                    carbs: carbs,
+                    fat: fat,
+                    toxinScore: toxinScore,
+                    fiber: fiber,
+                    sugar: sugar,
+                    sodium: sodium
+                )
+                try? await coordinator.addCustomFood(customFood)
+            }
+
+            // Reload data — always refresh today's summary; if viewing another date also reload those entries
             await loadTodaysData()
+            if !isViewingToday {
+                await loadEntriesForSelectedDate()
+            }
 
             // Show success message
             showSuccessMessage = true
@@ -402,8 +476,9 @@ final class FoodLogViewModel {
             }
         }
 
-        // Remove from UI list immediately
+        // Remove from UI lists immediately
         todaysEntries.removeAll { $0.id == entry.id }
+        displayedEntries.removeAll { $0.id == entry.id }
 
         // Store for potential undo
         recentlyDeleted = entry
@@ -475,6 +550,8 @@ final class FoodLogViewModel {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 todaysEntries.append(entry)
                 todaysEntries.sort { $0.date > $1.date }
+                displayedEntries.append(entry)
+                displayedEntries.sort { $0.date > $1.date }
             }
 
             // Success feedback
@@ -636,6 +713,97 @@ final class FoodLogViewModel {
         todaysEntries.isEmpty
     }
 
+    // MARK: - Date Navigation Computed Properties
+
+    /// Whether the selected date is today
+    var isViewingToday: Bool {
+        Calendar.current.isDateInToday(selectedDate)
+    }
+
+    /// Whether the selected date is in the future
+    var isViewingFuture: Bool {
+        selectedDate > Calendar.current.startOfDay(for: Date())
+    }
+
+    /// Whether the user can navigate back (limit: 7 days)
+    var canNavigateBack: Bool {
+        let limit = Calendar.current.date(byAdding: .day, value: -7, to: Calendar.current.startOfDay(for: Date()))!
+        return selectedDate > limit
+    }
+
+    /// Whether the user can navigate forward (limit: 4 days ahead)
+    var canNavigateForward: Bool {
+        let limit = Calendar.current.date(byAdding: .day, value: 4, to: Calendar.current.startOfDay(for: Date()))!
+        return selectedDate < limit
+    }
+
+    /// Display label for the date navigator: "Today", "Yesterday", or "Mon, Feb 10"
+    var selectedDateDisplayLabel: String {
+        let cal = Calendar.current
+        if cal.isDateInToday(selectedDate) { return "Today" }
+        if cal.isDateInYesterday(selectedDate) { return "Yesterday" }
+        let f = DateFormatter()
+        f.dateFormat = "EEE, MMM d"
+        return f.string(from: selectedDate)
+    }
+
+    /// Entries for a specific MealType within the currently displayed date
+    func entries(for mealType: MealType) -> [FoodEntry] {
+        displayedEntries.filter { $0.mealType == mealType }
+    }
+
+    /// Unique manually-entered foods (no barcode) for the Food Database My Foods tab
+    var myFoods: [FoodEntry] {
+        recentFoods.filter { $0.barcodeUPC == nil || $0.barcodeUPC!.isEmpty }
+    }
+
+    // MARK: - Date Navigation Methods
+
+    /// Navigates to the previous day (up to 7 days back)
+    func navigateToPreviousDay() {
+        guard canNavigateBack else { return }
+        selectedDate = Calendar.current.date(byAdding: .day, value: -1, to: selectedDate)!
+        Task { await loadEntriesForSelectedDate() }
+    }
+
+    /// Navigates to the next day (up to 4 days ahead)
+    func navigateToNextDay() {
+        guard canNavigateForward else { return }
+        selectedDate = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate)!
+        Task { await loadEntriesForSelectedDate() }
+    }
+
+    /// Loads entries for the currently selected date.
+    /// If today: syncs from todaysEntries. Otherwise fetches from coordinator.
+    func loadEntriesForSelectedDate() async {
+        if isViewingToday {
+            displayedEntries = todaysEntries
+            return
+        }
+        if isViewingFuture {
+            displayedEntries = []
+            return
+        }
+        isLoadingDateEntries = true
+        displayedEntries = (try? await coordinator.getEntriesForDate(selectedDate)) ?? []
+        isLoadingDateEntries = false
+    }
+
+    /// Opens the 3-choice AddFood sheet pre-configured for a meal section
+    func openAddFoodChoice(for mealType: MealType) {
+        pendingMealType = mealType
+        formMealType = mealType
+        showingAddFoodChoice = true
+    }
+
+    /// Opens AddFoodFormView after a 400ms delay (allows sheet dismiss animation to complete)
+    func openAddFoodFormAfterDelay() {
+        Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            shouldOpenAddFoodForm = true
+        }
+    }
+
     // MARK: - Form Management
 
     /// Resets all form fields to their default values
@@ -646,6 +814,7 @@ final class FoodLogViewModel {
         formCarbs = ""
         formFat = ""
         formToxinScore = 30.0
+        formMealType = .uncategorized
         formValidationErrors = [:]
         isSubmittingForm = false
 
@@ -1099,7 +1268,7 @@ final class FoodLogViewModel {
         }
 
         do {
-            let result = try await coordinator.quickLogFood(entry)
+            let result = try await coordinator.quickLogFood(entry, mealType: .uncategorized)
 
             // Haptic feedback
             #if os(iOS)
@@ -1156,6 +1325,61 @@ final class FoodLogViewModel {
         }
     }
 
+    /// Quick-logs a food entry to a specific date and meal type (used by Food Database)
+    func quickLog(_ entry: FoodEntry, date: Date, mealType: MealType) async {
+        // Finalize any pending undo first
+        if let pending = recentlyDeleted {
+            deletionTask?.cancel()
+            if !isQuickLogUndo {
+                await permanentlyDelete(pending)
+            }
+            recentlyDeleted = nil
+            deletionTask = nil
+        }
+
+        do {
+            let result = try await coordinator.quickLogFood(entry, date: date, mealType: mealType)
+
+            #if os(iOS)
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+            #endif
+
+            recentlyDeleted = result.entry
+            isQuickLogUndo = true
+            undoMessage = "\(entry.name) logged"
+            showUndoToast = true
+
+            // Reload to reflect the new entry
+            await loadTodaysData()
+            if !isViewingToday {
+                await loadEntriesForSelectedDate()
+            }
+
+            if result.xpEarned > 0 { lastEarnedXP = result.xpEarned }
+
+            deletionTask = Task {
+                do {
+                    try await Task.sleep(for: .seconds(5))
+                    if !Task.isCancelled {
+                        await MainActor.run {
+                            showUndoToast = false
+                            recentlyDeleted = nil
+                            deletionTask = nil
+                            isQuickLogUndo = false
+                        }
+                    }
+                } catch {}
+            }
+        } catch {
+            #if os(iOS)
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.error)
+            #endif
+            showToastMessage("Couldn't log — try again")
+        }
+    }
+
     /// Toggles favorite status for a food
     ///
     /// Applies to ALL entries with matching fingerprint.
@@ -1188,11 +1412,48 @@ final class FoodLogViewModel {
         entry.isFavorite
     }
 
+    // MARK: - Bundle Operations
+
+    /// Deletes all food entries belonging to the given bundle.
+    func deleteBundle(bundleId: String) async {
+        let bundleEntries = displayedEntries.filter { $0.mealBundleId == bundleId }
+        for entry in bundleEntries {
+            try? await coordinator.deleteFoodEntry(entry)
+        }
+        await loadTodaysData()
+        if !isViewingToday {
+            await loadEntriesForSelectedDate()
+        }
+        #if os(iOS)
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+        #endif
+    }
+
+    // MARK: - Drag and Drop
+
+    /// Reassigns a food entry to a new meal type (used for drag-and-drop).
+    func updateMealType(of entry: FoodEntry, to mealType: MealType) async {
+        do {
+            try await coordinator.updateMealType(of: entry, to: mealType)
+            await loadTodaysData()
+            if !isViewingToday {
+                await loadEntriesForSelectedDate()
+            }
+            #if os(iOS)
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+            #endif
+        } catch {
+            showToastMessage("Couldn't move item")
+        }
+    }
+
     // MARK: - Toast Management
 
     /// Shows a toast message that auto-dismisses after 1.5 seconds
     /// - Parameter message: The message to display
-    private func showToastMessage(_ message: String) {
+    func showToastMessage(_ message: String) {
         toastMessage = message
         showToast = true
 

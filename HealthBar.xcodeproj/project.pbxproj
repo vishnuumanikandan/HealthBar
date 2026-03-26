@@ -83,11 +83,33 @@
 		BE47B6842F6D16A0007F48F5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = BE47B6812F6D16A0007F48F5 /* GoogleService-Info.plist */; };
 		BE77873E2F70E62E00666EE3 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE77873D2F70E62E00666EE3 /* ProfileView.swift */; };
 		BE7787962F72699800666EE3 /* FirebaseAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7787952F72699800666EE3 /* FirebaseAuthService.swift */; };
+		BEF969042F77A7E900FB0F83 /* FoodDatabaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF969032F77A7E900FB0F83 /* FoodDatabaseView.swift */; };
+		BEF969062F77A7F200FB0F83 /* BarcodeOptionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF969052F77A7F200FB0F83 /* BarcodeOptionsView.swift */; };
+		BEF969082F77A7F900FB0F83 /* AddFoodChoiceSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF969072F77A7F900FB0F83 /* AddFoodChoiceSheet.swift */; };
+		BEF969882F7B489800FB0F83 /* RecipeBuilderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF969872F7B489800FB0F83 /* RecipeBuilderView.swift */; };
+		BEF9698A2F7B48A300FB0F83 /* MealBuilderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF969892F7B48A300FB0F83 /* MealBuilderView.swift */; };
+		BEF9698C2F7B48AB00FB0F83 /* MiniFoodPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF9698B2F7B48AB00FB0F83 /* MiniFoodPickerView.swift */; };
+		BEF9698E2F7B48B500FB0F83 /* AddCustomFoodView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF9698D2F7B48B500FB0F83 /* AddCustomFoodView.swift */; };
+		BEF969902F7B48BF00FB0F83 /* ServingSizePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF9698F2F7B48BF00FB0F83 /* ServingSizePickerSheet.swift */; };
+		BEF969922F7B48C800FB0F83 /* FoodDatabaseViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF969912F7B48C800FB0F83 /* FoodDatabaseViewModel.swift */; };
+		BEF969942F7B493300FB0F83 /* FoodDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF969932F7B493300FB0F83 /* FoodDatabase.swift */; };
+		BEF969962F7B497100FB0F83 /* SavedRecipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF969952F7B497100FB0F83 /* SavedRecipe.swift */; };
+		BEF969982F7B497900FB0F83 /* SavedMeal.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF969972F7B497900FB0F83 /* SavedMeal.swift */; };
+		BEF9699A2F7B498200FB0F83 /* CustomFood.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF969992F7B498200FB0F83 /* CustomFood.swift */; };
 		CC110AB12F300000000000B1 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110AA12F300000000000B1 /* AuthService.swift */; };
 		CC110AB22F300000000000B2 /* LocalAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110AA22F300000000000B2 /* LocalAuthService.swift */; };
 		CC110AB32F300000000000B3 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110AA32F300000000000B3 /* AuthViewModel.swift */; };
 		CC110AB42F300000000000B4 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110AA42F300000000000B4 /* LoginView.swift */; };
 		CC110AB52F300000000000B5 /* SignUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110AA52F300000000000B5 /* SignUpView.swift */; };
+		CC220AB12F400000000000C1 /* FirestoreService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC220AA12F400000000000C1 /* FirestoreService.swift */; };
+		CC220AB22F400000000000C2 /* FoodEntryDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC220AA22F400000000000C2 /* FoodEntryDTO.swift */; };
+		CC220AB32F400000000000C3 /* FirestoreServiceImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC220AA32F400000000000C3 /* FirestoreServiceImpl.swift */; };
+		CC220AB42F400000000000C4 /* DailyGoalDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC220AA42F400000000000C4 /* DailyGoalDTO.swift */; };
+		CC220AB52F400000000000C5 /* PersonalBaselineDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC220AA52F400000000000C5 /* PersonalBaselineDTO.swift */; };
+		CC220AB62F400000000000C6 /* FoodFingerprintDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC220AA62F400000000000C6 /* FoodFingerprintDTO.swift */; };
+		CC220AB72F400000000000C7 /* MoodEntryDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC220AA72F400000000000C7 /* MoodEntryDTO.swift */; };
+		CC220AB82F400000000000C8 /* UserProgressDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC220AA82F400000000000C8 /* UserProgressDTO.swift */; };
+		CC220AB92F400000000000C9 /* DailyQuestDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC220AA92F400000000000C9 /* DailyQuestDTO.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -161,11 +183,33 @@
 		BE47B6812F6D16A0007F48F5 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		BE77873D2F70E62E00666EE3 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		BE7787952F72699800666EE3 /* FirebaseAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseAuthService.swift; sourceTree = "<group>"; };
+		BEF969032F77A7E900FB0F83 /* FoodDatabaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodDatabaseView.swift; sourceTree = "<group>"; };
+		BEF969052F77A7F200FB0F83 /* BarcodeOptionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeOptionsView.swift; sourceTree = "<group>"; };
+		BEF969072F77A7F900FB0F83 /* AddFoodChoiceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddFoodChoiceSheet.swift; sourceTree = "<group>"; };
+		BEF969872F7B489800FB0F83 /* RecipeBuilderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeBuilderView.swift; sourceTree = "<group>"; };
+		BEF969892F7B48A300FB0F83 /* MealBuilderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealBuilderView.swift; sourceTree = "<group>"; };
+		BEF9698B2F7B48AB00FB0F83 /* MiniFoodPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniFoodPickerView.swift; sourceTree = "<group>"; };
+		BEF9698D2F7B48B500FB0F83 /* AddCustomFoodView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddCustomFoodView.swift; sourceTree = "<group>"; };
+		BEF9698F2F7B48BF00FB0F83 /* ServingSizePickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServingSizePickerSheet.swift; sourceTree = "<group>"; };
+		BEF969912F7B48C800FB0F83 /* FoodDatabaseViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodDatabaseViewModel.swift; sourceTree = "<group>"; };
+		BEF969932F7B493300FB0F83 /* FoodDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodDatabase.swift; sourceTree = "<group>"; };
+		BEF969952F7B497100FB0F83 /* SavedRecipe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedRecipe.swift; sourceTree = "<group>"; };
+		BEF969972F7B497900FB0F83 /* SavedMeal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedMeal.swift; sourceTree = "<group>"; };
+		BEF969992F7B498200FB0F83 /* CustomFood.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomFood.swift; sourceTree = "<group>"; };
 		CC110AA12F300000000000B1 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		CC110AA22F300000000000B2 /* LocalAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAuthService.swift; sourceTree = "<group>"; };
 		CC110AA32F300000000000B3 /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
 		CC110AA42F300000000000B4 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		CC110AA52F300000000000B5 /* SignUpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignUpView.swift; sourceTree = "<group>"; };
+		CC220AA12F400000000000C1 /* FirestoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreService.swift; sourceTree = "<group>"; };
+		CC220AA22F400000000000C2 /* FoodEntryDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodEntryDTO.swift; sourceTree = "<group>"; };
+		CC220AA32F400000000000C3 /* FirestoreServiceImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreServiceImpl.swift; sourceTree = "<group>"; };
+		CC220AA42F400000000000C4 /* DailyGoalDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyGoalDTO.swift; sourceTree = "<group>"; };
+		CC220AA52F400000000000C5 /* PersonalBaselineDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalBaselineDTO.swift; sourceTree = "<group>"; };
+		CC220AA62F400000000000C6 /* FoodFingerprintDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodFingerprintDTO.swift; sourceTree = "<group>"; };
+		CC220AA72F400000000000C7 /* MoodEntryDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoodEntryDTO.swift; sourceTree = "<group>"; };
+		CC220AA82F400000000000C8 /* UserProgressDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProgressDTO.swift; sourceTree = "<group>"; };
+		CC220AA92F400000000000C9 /* DailyQuestDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyQuestDTO.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -251,6 +295,7 @@
 				BE47B6812F6D16A0007F48F5 /* GoogleService-Info.plist */,
 				1111E0C12F24815D006EF76F /* --Info.plist */,
 				CC110AA02F300000000000B0 /* Auth */,
+				CC220AA02F400000000000C0 /* Firestore */,
 				1111E1A92F32E0E6006EF76F /* Notifications */,
 				1146B2672F1F3813004767C9 /* App */,
 				1146B2662F1F37D8004767C9 /* Models */,
@@ -289,6 +334,15 @@
 		1146B2612F1F37BD004767C9 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				BEF969912F7B48C800FB0F83 /* FoodDatabaseViewModel.swift */,
+				BEF9698F2F7B48BF00FB0F83 /* ServingSizePickerSheet.swift */,
+				BEF9698D2F7B48B500FB0F83 /* AddCustomFoodView.swift */,
+				BEF9698B2F7B48AB00FB0F83 /* MiniFoodPickerView.swift */,
+				BEF969892F7B48A300FB0F83 /* MealBuilderView.swift */,
+				BEF969872F7B489800FB0F83 /* RecipeBuilderView.swift */,
+				BEF969072F77A7F900FB0F83 /* AddFoodChoiceSheet.swift */,
+				BEF969052F77A7F200FB0F83 /* BarcodeOptionsView.swift */,
+				BEF969032F77A7E900FB0F83 /* FoodDatabaseView.swift */,
 				BE77873D2F70E62E00666EE3 /* ProfileView.swift */,
 				1111E1B12F32E13B006EF76F /* AccessibilitySettingsView.swift */,
 				1111E1AF2F32E133006EF76F /* MoodCheckView.swift */,
@@ -337,6 +391,7 @@
 		1146B2652F1F37CE004767C9 /* Nutrition */ = {
 			isa = PBXGroup;
 			children = (
+				BEF969932F7B493300FB0F83 /* FoodDatabase.swift */,
 				1111E0C72F248958006EF76F /* BarcodeService.swift */,
 				1146B2EA2F2343FF004767C9 /* NutritionManager.swift */,
 			);
@@ -346,6 +401,9 @@
 		1146B2662F1F37D8004767C9 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				BEF969992F7B498200FB0F83 /* CustomFood.swift */,
+				BEF969972F7B497900FB0F83 /* SavedMeal.swift */,
+				BEF969952F7B497100FB0F83 /* SavedRecipe.swift */,
 				1111E1A52F32E09E006EF76F /* MealType.swift */,
 				1111E1A32F32E083006EF76F /* Mood.swift */,
 				1111E1A12F32E079006EF76F /* PersonalBaseline.swift */,
@@ -406,6 +464,22 @@
 				CC110AA52F300000000000B5 /* SignUpView.swift */,
 			);
 			path = Auth;
+			sourceTree = "<group>";
+		};
+		CC220AA02F400000000000C0 /* Firestore */ = {
+			isa = PBXGroup;
+			children = (
+				CC220AA12F400000000000C1 /* FirestoreService.swift */,
+				CC220AA22F400000000000C2 /* FoodEntryDTO.swift */,
+				CC220AA32F400000000000C3 /* FirestoreServiceImpl.swift */,
+				CC220AA42F400000000000C4 /* DailyGoalDTO.swift */,
+				CC220AA52F400000000000C5 /* PersonalBaselineDTO.swift */,
+				CC220AA62F400000000000C6 /* FoodFingerprintDTO.swift */,
+				CC220AA72F400000000000C7 /* MoodEntryDTO.swift */,
+				CC220AA82F400000000000C8 /* UserProgressDTO.swift */,
+				CC220AA92F400000000000C9 /* DailyQuestDTO.swift */,
+			);
+			path = Firestore;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -594,6 +668,7 @@
 				1146B2952F1F4C40004767C9 /* DailyGoal.swift in Sources */,
 				1111E1982F32DFEE006EF76F /* StreakMilestoneToast.swift in Sources */,
 				1146B26C2F1F493D004767C9 /* DesignSystem.swift in Sources */,
+				BEF9698E2F7B48B500FB0F83 /* AddCustomFoodView.swift in Sources */,
 				1111E19E2F32E064006EF76F /* StreakMilestone.swift in Sources */,
 				BE77873E2F70E62E00666EE3 /* ProfileView.swift in Sources */,
 				1146B2A42F1F4D66004767C9 /* Date+Helpers.swift in Sources */,
@@ -614,6 +689,7 @@
 				1146B2E02F2341D1004767C9 /* AddFoodViewModel.swift in Sources */,
 				1111E13A2F285E98006EF76F /* EditMealView.swift in Sources */,
 				1146B3002F247828004767C9 /* ProfileViewModel.swift in Sources */,
+				BEF9698A2F7B48A300FB0F83 /* MealBuilderView.swift in Sources */,
 				1111E1AA2F32E0FC006EF76F /* NotificationManager.swift in Sources */,
 				1111E1892F29B0EE006EF76F /* SettingsManager.swift in Sources */,
 				1111E1A22F32E079006EF76F /* PersonalBaseline.swift in Sources */,
@@ -622,21 +698,41 @@
 				1111E1002F25ED65006EF76F /* FoodFingerprint.swift in Sources */,
 				1146B2EF2F234414004767C9 /* DataManager.swift in Sources */,
 				1111E13E2F285ECD006EF76F /* DailyGoalsViewModel.swift in Sources */,
+				BEF969922F7B48C800FB0F83 /* FoodDatabaseViewModel.swift in Sources */,
 				1146B2A52F1F4D66004767C9 /* XP+Helpers.swift in Sources */,
 				1146B2CD2F233F96004767C9 /* UserProgress.swift in Sources */,
+				BEF969982F7B497900FB0F83 /* SavedMeal.swift in Sources */,
 				1111E1462F285F22006EF76F /* XPToast.swift in Sources */,
 				1111E1962F32DFE5006EF76F /* MealTypePill.swift in Sources */,
 				1146B2F02F234452004767C9 /* HomeView.swift in Sources */,
+				BEF969082F77A7F900FB0F83 /* AddFoodChoiceSheet.swift in Sources */,
 				1146B2F42F234473004767C9 /* FoodLogView.swift in Sources */,
+				BEF969062F77A7F200FB0F83 /* BarcodeOptionsView.swift in Sources */,
 				1111E18B2F29B117006EF76F /* AdvancedNutrientCard.swift in Sources */,
+				BEF969882F7B489800FB0F83 /* RecipeBuilderView.swift in Sources */,
 				1146B2CE2F233F96004767C9 /* FoodEntry.swift in Sources */,
+				BEF9699A2F7B498200FB0F83 /* CustomFood.swift in Sources */,
 				1146B2CF2F233F96004767C9 /* Rank.swift in Sources */,
 				1111E1442F285F10006EF76F /* UndoToast.swift in Sources */,
 				CC110AB12F300000000000B1 /* AuthService.swift in Sources */,
+				BEF9698C2F7B48AB00FB0F83 /* MiniFoodPickerView.swift in Sources */,
+				BEF969902F7B48BF00FB0F83 /* ServingSizePickerSheet.swift in Sources */,
 				CC110AB22F300000000000B2 /* LocalAuthService.swift in Sources */,
 				CC110AB32F300000000000B3 /* AuthViewModel.swift in Sources */,
 				CC110AB42F300000000000B4 /* LoginView.swift in Sources */,
 				CC110AB52F300000000000B5 /* SignUpView.swift in Sources */,
+				CC220AB12F400000000000C1 /* FirestoreService.swift in Sources */,
+				CC220AB22F400000000000C2 /* FoodEntryDTO.swift in Sources */,
+				CC220AB32F400000000000C3 /* FirestoreServiceImpl.swift in Sources */,
+				CC220AB42F400000000000C4 /* DailyGoalDTO.swift in Sources */,
+				CC220AB52F400000000000C5 /* PersonalBaselineDTO.swift in Sources */,
+				BEF969962F7B497100FB0F83 /* SavedRecipe.swift in Sources */,
+				CC220AB62F400000000000C6 /* FoodFingerprintDTO.swift in Sources */,
+				CC220AB72F400000000000C7 /* MoodEntryDTO.swift in Sources */,
+				CC220AB82F400000000000C8 /* UserProgressDTO.swift in Sources */,
+				CC220AB92F400000000000C9 /* DailyQuestDTO.swift in Sources */,
+				BEF969042F77A7E900FB0F83 /* FoodDatabaseView.swift in Sources */,
+				BEF969942F7B493300FB0F83 /* FoodDatabase.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

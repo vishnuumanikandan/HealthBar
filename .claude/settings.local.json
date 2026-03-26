@@ -6,7 +6,8 @@
       "Bash(swift build:*)",
       "Bash(xcrun simctl shutdown:*)",
       "Bash(xcrun simctl erase:*)",
-      "Bash(xcodebuild:*)"
+      "Bash(xcodebuild:*)",
+      "Bash(awk 'NR>=263,NR<=420' /Users/vishnumanikandan/Desktop/repos/HealthBar/HealthBar.xcodeproj/project.pbxproj)"
     ]
   }
 }
