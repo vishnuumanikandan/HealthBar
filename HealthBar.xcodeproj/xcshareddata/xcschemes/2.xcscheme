@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "2620"
+   LastUpgradeVersion = "2640"
    version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "1146B2312F1606E2004767C9"
-               BuildableName = "HealthBar.app"
+               BuildableName = "HealthBar1.app"
                BlueprintName = "HealthBar"
                ReferencedContainer = "container:HealthBar.xcodeproj">
             </BuildableReference>
@@ -69,7 +69,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "1146B2312F1606E2004767C9"
-            BuildableName = "HealthBar.app"
+            BuildableName = "HealthBar1.app"
             BlueprintName = "HealthBar"
             ReferencedContainer = "container:HealthBar.xcodeproj">
          </BuildableReference>
@@ -86,7 +86,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "1146B2312F1606E2004767C9"
-            BuildableName = "HealthBar.app"
+            BuildableName = "HealthBar1.app"
             BlueprintName = "HealthBar"
             ReferencedContainer = "container:HealthBar.xcodeproj">
          </BuildableReference>

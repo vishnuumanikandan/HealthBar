@@ -342,7 +342,8 @@ private struct IngredientQuantitySheet: View {
                         calories: s.calories,
                         protein: s.protein,
                         carbs: s.carbs,
-                        fat: s.fat
+                        fat: s.fat,
+                        toxinScore: food.toxinScore
                     )
                     onConfirm(component)
                     dismiss()

@@ -29,6 +29,8 @@ struct SavedMealComponent: Codable, Identifiable, Hashable {
     var carbs: Double
     /// Fat in grams at this quantity
     var fat: Double
+    /// Purity/toxin score (0–100, lower = cleaner). Sourced from the food's toxinScore at time of addition.
+    var toxinScore: Int
 
     init(
         foodName: String,
@@ -37,7 +39,8 @@ struct SavedMealComponent: Codable, Identifiable, Hashable {
         calories: Int,
         protein: Double,
         carbs: Double,
-        fat: Double
+        fat: Double,
+        toxinScore: Int = 0
     ) {
         self.id = UUID()
         self.foodName = foodName
@@ -47,6 +50,7 @@ struct SavedMealComponent: Codable, Identifiable, Hashable {
         self.protein = protein
         self.carbs = carbs
         self.fat = fat
+        self.toxinScore = toxinScore
     }
 }
 

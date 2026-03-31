@@ -34,6 +34,10 @@ final class SavedRecipe {
     /// Optional recipe photo (lightweight migration inline default)
     var photoData: Data? = nil
 
+    /// Calorie-weighted average purity score of all ingredients (0–100, lower = cleaner).
+    /// Calculated and stored when the recipe is saved.
+    var purityScore: Int = 0
+
     var createdAt: Date
 
     // MARK: - Computed Nutrition

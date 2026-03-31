@@ -118,6 +118,60 @@ protocol FirestoreService {
     /// Same idempotency and MainActor guarantees as listenForFoodEntries.
     func listenForDailyQuests(userId: String, onUpdate: @escaping ([DailyQuestDTO]) -> Void)
 
+    // MARK: - UserProfile (Phase 4)
+
+    /// Uploads (creates or overwrites) the single UserProfile document for a user. Idempotent.
+    /// Firestore path: users/{userId}/profile/userProfile (fixed document ID "userProfile").
+    func uploadUserProfile(_ profile: UserProfileDTO, userId: String) async throws
+
+    /// One-time fetch of the UserProfile document. Returns nil if no document exists yet.
+    func fetchUserProfile(userId: String) async throws -> UserProfileDTO?
+
+    // MARK: - CustomFood (Phase 5)
+
+    /// Uploads (creates or overwrites) a custom food in Firestore. Idempotent.
+    func uploadCustomFood(_ food: CustomFoodDTO) async throws
+
+    /// Permanently deletes a custom food document from Firestore.
+    func deleteCustomFood(id: String, userId: String) async throws
+
+    /// One-time fetch of all custom foods for a user. Used for initial sync on login.
+    func fetchCustomFoods(userId: String) async throws -> [CustomFoodDTO]
+
+    /// Starts a real-time listener for a user's custom foods collection.
+    /// Same idempotency and MainActor guarantees as listenForFoodEntries.
+    func listenForCustomFoods(userId: String, onUpdate: @escaping ([CustomFoodDTO]) -> Void)
+
+    // MARK: - SavedMeal (Phase 5)
+
+    /// Uploads (creates or overwrites) a saved meal in Firestore. Idempotent.
+    func uploadSavedMeal(_ meal: SavedMealDTO) async throws
+
+    /// Permanently deletes a saved meal document from Firestore.
+    func deleteSavedMeal(id: String, userId: String) async throws
+
+    /// One-time fetch of all saved meals for a user. Used for initial sync on login.
+    func fetchSavedMeals(userId: String) async throws -> [SavedMealDTO]
+
+    /// Starts a real-time listener for a user's saved meals collection.
+    /// Same idempotency and MainActor guarantees as listenForFoodEntries.
+    func listenForSavedMeals(userId: String, onUpdate: @escaping ([SavedMealDTO]) -> Void)
+
+    // MARK: - SavedRecipe (Phase 5)
+
+    /// Uploads (creates or overwrites) a saved recipe in Firestore. Idempotent.
+    func uploadSavedRecipe(_ recipe: SavedRecipeDTO) async throws
+
+    /// Permanently deletes a saved recipe document from Firestore.
+    func deleteSavedRecipe(id: String, userId: String) async throws
+
+    /// One-time fetch of all saved recipes for a user. Used for initial sync on login.
+    func fetchSavedRecipes(userId: String) async throws -> [SavedRecipeDTO]
+
+    /// Starts a real-time listener for a user's saved recipes collection.
+    /// Same idempotency and MainActor guarantees as listenForFoodEntries.
+    func listenForSavedRecipes(userId: String, onUpdate: @escaping ([SavedRecipeDTO]) -> Void)
+
     // MARK: - Lifecycle
 
     /// Stops every active listener across all models and clears the sync user.

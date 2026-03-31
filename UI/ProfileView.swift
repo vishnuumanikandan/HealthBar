@@ -30,6 +30,9 @@ struct ProfileView: View {
     /// Show accessibility settings sheet
     @State private var showingAccessibility = false
 
+    /// Show onboarding / health profile editor
+    @State private var showingOnboarding = false
+
     /// Settings manager for app-wide settings
     @State private var settings = SettingsManager.shared
 
@@ -75,6 +78,18 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showingAccessibility) {
                 AccessibilitySettingsView()
+            }
+            .fullScreenCover(isPresented: $showingOnboarding) {
+                OnboardingView(
+                    coordinator: coordinator,
+                    authService: FirebaseAuthService.shared,
+                    existingProfile: viewModel.existingProfile
+                )
+            }
+            .onChange(of: showingOnboarding) { _, isShowing in
+                if !isShowing {
+                    Task { await viewModel.loadUserData() }
+                }
             }
             .onChange(of: showingDailyGoals) { _, isShowing in
                 // Refresh data when returning from goals screen
@@ -273,6 +288,15 @@ struct ProfileView: View {
                     action: {
                         showingAccessibility = true
                     }
+                )
+
+                // Edit Health Profile — opens onboarding in edit mode
+                settingButton(
+                    icon: "person.crop.circle.badge.checkmark",
+                    title: "Edit Health Profile",
+                    subtitle: "Update your goals and preferences",
+                    iconColor: DesignSystem.Colors.primary,
+                    action: { showingOnboarding = true }
                 )
 
                 // Account button (placeholder)

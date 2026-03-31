@@ -1,0 +1,16 @@
+# Config files containing secrets
+HealthBar/Config.plist
+
+# Xcode
+*.xcuserstate
+xcuserdata/
+*.xccheckout
+*.moved-aside
+DerivedData/
+*.xcscmblueprint
+
+# macOS
+.DS_Store
+
+# SPM
+.build/

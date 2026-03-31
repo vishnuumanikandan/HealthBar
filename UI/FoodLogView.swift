@@ -155,6 +155,9 @@ struct FoodLogView: View {
                 if newPhase == .background {
                     Task { await viewModel.finalizeAnyPendingDeletes() }
                 }
+                if newPhase == .active {
+                    Task { await viewModel.loadRecentFoods() }
+                }
             }
         }
     }
@@ -651,6 +654,7 @@ struct FoodLogView: View {
                         )
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .padding(.bottom, DesignSystem.Spacing.lg) // space for page dots
 
                 // Page 2: Additional nutrients detail
@@ -664,6 +668,7 @@ struct FoodLogView: View {
                 AdvancedNutrientsGrid(entries: viewModel.displayedEntries, goal: viewModel.currentGoal)
             }
         }
+        .frame(maxWidth: .infinity)
         .padding(DesignSystem.Spacing.lg)
         .background(DesignSystem.Colors.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))

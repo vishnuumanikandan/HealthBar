@@ -7,7 +7,9 @@
       "Bash(xcrun simctl shutdown:*)",
       "Bash(xcrun simctl erase:*)",
       "Bash(xcodebuild:*)",
-      "Bash(awk 'NR>=263,NR<=420' /Users/vishnumanikandan/Desktop/repos/HealthBar/HealthBar.xcodeproj/project.pbxproj)"
+      "Bash(awk 'NR>=263,NR<=420' /Users/vishnumanikandan/Desktop/repos/HealthBar/HealthBar.xcodeproj/project.pbxproj)",
+      "Bash(cat \"/Users/vishnumanikandan/Downloads/AppIcons \\(1\\)/Assets.xcassets/AppIcon.appiconset/Contents.json\")",
+      "Bash(python3 -c \":*)"
     ]
   }
 }

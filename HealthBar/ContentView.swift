@@ -37,8 +37,16 @@ struct ContentView: View {
 
     // MARK: - Tab State
 
-    /// Currently selected tab (0 = Home, 1 = Food, 2 = Profile).
+    /// Currently selected tab (0 = Home, 1 = Food, 2 = Tools, 3 = Profile).
     @State private var selectedTab: Int = 0
+
+    /// Shared state for the Tools tab (carries TDEE from Calculator 1 → Calculator 8).
+    @State private var toolsViewModel = ToolsViewModel()
+
+    // MARK: - Onboarding State
+
+    /// True when the current user has no completed UserProfile. Triggers fullScreenCover.
+    @State private var showOnboarding: Bool = false
 
     // MARK: - Initialization
 
@@ -104,6 +112,13 @@ struct ContentView: View {
                 }
                 .tag(1)
 
+            // Tools Tab — fitness calculators (no data persistence needed)
+            ToolsView(toolsViewModel: toolsViewModel)
+                .tabItem {
+                    Label("Tools", systemImage: "wrench.and.screwdriver.fill")
+                }
+                .tag(2)
+
             // Profile Tab — receives logout closure so it can end the session
             // without referencing FirebaseAuthService directly.
             ProfileView(
@@ -113,9 +128,34 @@ struct ContentView: View {
             .tabItem {
                 Label("Profile", systemImage: "person.fill")
             }
-            .tag(2)
+            .tag(3)
         }
         .tint(DesignSystem.Colors.primary)
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView(
+                coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
+                authService: authService
+            )
+        }
+        .task(id: authService.isLoggedIn) {
+            guard authService.isLoggedIn else {
+                showOnboarding = false
+                return
+            }
+            let coordinator = AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared)
+
+            // If no local profile exists, try restoring from Firestore first (blocking).
+            // If local profile exists, sync Firestore in the background — don't block UI.
+            let localProfile = try? await coordinator.getUserProfile()
+            if localProfile == nil {
+                try? await coordinator.syncUserProfileFromFirestore()
+            } else {
+                Task { try? await coordinator.syncUserProfileFromFirestore() }
+            }
+
+            let completed = await coordinator.checkOnboardingCompleted()
+            showOnboarding = !completed
+        }
     }
 }
 

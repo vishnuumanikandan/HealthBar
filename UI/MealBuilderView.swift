@@ -47,6 +47,19 @@ struct MealBuilderView: View {
     private var totalCarbs: Double { components.reduce(0.0) { $0 + $1.carbs } }
     private var totalFat: Double { components.reduce(0.0) { $0 + $1.fat } }
 
+    /// Calorie-weighted average purity score across all components (0–100, lower = cleaner).
+    private var mealPurityScore: Int {
+        guard totalCalories > 0 else { return 0 }
+        let weighted = components.reduce(0.0) { $0 + Double($1.calories) * Double($1.toxinScore) }
+        return Int(weighted / Double(totalCalories))
+    }
+
+    private var purityColor: Color {
+        mealPurityScore < 30 ? DesignSystem.Colors.primary
+            : mealPurityScore < 60 ? DesignSystem.Colors.energy
+            : DesignSystem.Colors.danger
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -277,6 +290,26 @@ struct MealBuilderView: View {
                 macroChip(value: String(format: "%.0fg", totalCarbs), label: "Carbs", color: .orange)
                 macroChip(value: String(format: "%.0fg", totalFat), label: "Fat", color: .purple)
             }
+
+            // Purity score row
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Meal Purity Score")
+                        .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                    Text("Calorie-weighted average")
+                        .font(.system(size: DesignSystem.FontSizes.caption))
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                }
+                Spacer()
+                Text("\(mealPurityScore)")
+                    .font(.system(size: DesignSystem.FontSizes.title2, weight: .bold))
+                    .foregroundColor(purityColor)
+                Text("/ 100")
+                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+            }
+            .padding(.top, DesignSystem.Spacing.xs)
         }
     }
 

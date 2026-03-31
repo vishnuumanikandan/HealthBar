@@ -635,7 +635,7 @@ final class AppCoordinator {
                 protein: component.protein,
                 carbs: component.carbs,
                 fat: component.fat,
-                toxinScore: 0,
+                toxinScore: component.toxinScore,
                 date: date,
                 mealType: resolvedMealType,
                 mealBundleId: bundleId,
@@ -674,7 +674,8 @@ final class AppCoordinator {
             fat: recipe.perServingFat,
             servingSizeName: "1 serving",
             servingSizeAmount: 1.0,
-            servingUnit: "serving"
+            servingUnit: "serving",
+            toxinScore: recipe.purityScore
         )
         try await dataManager.addCustomFood(food)
         return food
@@ -696,6 +697,55 @@ final class AppCoordinator {
     ///
     /// - Parameter entry: The food entry to re-log
     /// - Returns: The new entry and any XP earned
+    // MARK: - UserProfile / Onboarding
+
+    /// Fetches the UserProfile for the current user, or nil if none exists.
+    func getUserProfile() async throws -> UserProfile? {
+        return try await dataManager.getUserProfile()
+    }
+
+    /// Returns true if the current user has a completed UserProfile.
+    /// Returns false on any error or if no profile exists.
+    func checkOnboardingCompleted() async -> Bool {
+        do {
+            let profile = try await dataManager.getUserProfile()
+            return profile?.setupCompleted == true
+        } catch {
+            return false
+        }
+    }
+
+    /// Fetches the UserProfile from Firestore and overwrites local if different.
+    func syncUserProfileFromFirestore() async throws {
+        try await dataManager.syncUserProfileFromFirestore()
+    }
+
+    /// Completes the onboarding flow: saves the UserProfile and overwrites DailyGoal targets.
+    ///
+    /// - Parameters:
+    ///   - profile: UserProfile with all fields populated. setupCompleted is set to true here.
+    ///   - calories: AI/formula calorie target (overwrites DailyGoal completely).
+    ///   - protein: Protein target in grams.
+    ///   - carbs: Carbohydrate target in grams.
+    ///   - fat: Fat target in grams.
+    func completeOnboarding(
+        profile: UserProfile,
+        calories: Int,
+        protein: Int,
+        carbs: Int,
+        fat: Int
+    ) async throws {
+        profile.setupCompleted = true
+        profile.updatedAt = Date()
+        try await dataManager.upsertUserProfile(profile)
+        try await dataManager.updateDailyGoalTargets(
+            calories: calories,
+            protein: protein,
+            carbs: carbs,
+            fat: fat
+        )
+    }
+
     func quickLogFood(
         _ entry: FoodEntry,
         date: Date = Date(),

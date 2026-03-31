@@ -97,6 +97,9 @@ final class DataManager {
             FirestoreServiceImpl.shared.pendingMoodEntryIds.removeAll()
             FirestoreServiceImpl.shared.pendingProgressIds.removeAll()
             FirestoreServiceImpl.shared.pendingQuestIds.removeAll()
+            FirestoreServiceImpl.shared.pendingCustomFoodIds.removeAll()
+            FirestoreServiceImpl.shared.pendingSavedMealIds.removeAll()
+            FirestoreServiceImpl.shared.pendingSavedRecipeIds.removeAll()
             return
         }
 
@@ -112,7 +115,6 @@ final class DataManager {
         )
         let existingProgress = try modelContext.fetch(progressDescriptor)
 
-        var newDefaultProgress: UserProgress? = nil
         if existingProgress.isEmpty {
             let progress = UserProgress(
                 totalXP: 0,
@@ -122,9 +124,14 @@ final class DataManager {
                 rank: Rank.iron.rawValue
             )
             // Stamp the current user's identifier — userId read live, not cached
-            progress.userId = userId  // TODO: replace with Firebase UID in Phase 3
+            progress.userId = userId
             modelContext.insert(progress)
-            newDefaultProgress = progress
+            // NOTE: Do NOT upload to Firestore here.
+            // The initial sync in startFirestoreSync will fetch Firestore first.
+            // If a document already exists (returning user / reinstall), the merge
+            // rules in applyUserProgressUpdate will restore real XP/streaks.
+            // If no document exists (genuinely new user), uploadLocalProgressToFirestore
+            // handles the first upload. Uploading 0 XP here would overwrite real data.
         }
 
         // Create today's goal if it doesn't exist for this user
@@ -140,22 +147,12 @@ final class DataManager {
                 purityTarget: 30
             )
             // Stamp the current user's identifier
-            defaultGoal.userId = userId  // TODO: replace with Firebase UID in Phase 3
+            defaultGoal.userId = userId
             modelContext.insert(defaultGoal)
             newDefaultGoal = defaultGoal
         }
 
         try modelContext.save()
-
-        // Firestore sync: upload the newly created default UserProgress (if any).
-        // Pending ID removed in applyUserProgressUpdate when listener confirms the write.
-        if let progress = newDefaultProgress {
-            let dto = UserProgressDTO(from: progress)
-            FirestoreServiceImpl.shared.pendingProgressIds.insert(dto.id)
-            Task {
-                try? await firestoreService.uploadUserProgress(dto)
-            }
-        }
 
         // Firestore sync: upload the newly created default goal (if any).
         // Pending ID removed in applyDailyGoalUpdates when listener confirms the write.
@@ -213,6 +210,18 @@ final class DataManager {
 
         firestoreService.listenForDailyQuests(userId: userId) { [weak self] dtos in
             Task { [weak self] in try? await self?.applyDailyQuestUpdates(dtos, userId: userId) }
+        }
+
+        firestoreService.listenForCustomFoods(userId: userId) { [weak self] dtos in
+            Task { [weak self] in try? await self?.applyCustomFoodUpdates(dtos, userId: userId) }
+        }
+
+        firestoreService.listenForSavedMeals(userId: userId) { [weak self] dtos in
+            Task { [weak self] in try? await self?.applySavedMealUpdates(dtos, userId: userId) }
+        }
+
+        firestoreService.listenForSavedRecipes(userId: userId) { [weak self] dtos in
+            Task { [weak self] in try? await self?.applySavedRecipeUpdates(dtos, userId: userId) }
         }
 
         // MARK: One-time initial sync per model (runs once at login)
@@ -279,20 +288,65 @@ final class DataManager {
             }
 
             // --- UserProgress ---
-            // Single-document model. Apply remote → local (merge rules apply).
-            // No "local-only upload" here: setupDefaultData handles new-user upload,
-            // and saveUserProgress handles all subsequent writes.
+            // Fetch Firestore FIRST to decide direction — never blindly upload on reinstall.
+            // If a document exists → merge it locally (restores real XP/streaks after reinstall).
+            // If no document exists → genuinely new user → upload the local default 0 XP doc.
+            // This prevents the bug where reinstall uploads 0 XP before seeing existing data.
             let remoteProgressDTO = try? await firestoreService.fetchUserProgress(userId: userId)
-            try? await applyUserProgressUpdate(remoteProgressDTO, userId: userId)
+            if let remoteProgressDTO = remoteProgressDTO {
+                try? await applyUserProgressUpdate(remoteProgressDTO, userId: userId)
+            } else {
+                // No Firestore document at all — new user. Upload the locally created default.
+                await uploadLocalProgressToFirestore(userId: userId)
+            }
 
             // --- DailyQuest ---
             if let remotequestDTOs = try? await firestoreService.fetchDailyQuests(userId: userId) {
                 let remoteIds = Set(remotequestDTOs.map { $0.id })
                 try? await applyDailyQuestUpdates(remotequestDTOs, userId: userId)
-                // Upload any quests that exist locally but not in Firestore (e.g. generated offline).
+                // Upload local quests that don't exist in Firestore by UUID.
+                // Guard: only upload if Firestore has NO quest for the same day + questType.
+                // Prevents re-uploading freshly generated quests when Firestore already has
+                // that type for today (stale ones from a previous install).
                 let localQuests = (try? await fetchAllQuestsForSync(userId: userId)) ?? []
                 for quest in localQuests where !remoteIds.contains(quest.id.uuidString) {
-                    try? await firestoreService.uploadDailyQuest(DailyQuestDTO(from: quest))
+                    let hasMatchInFirestore = remotequestDTOs.contains {
+                        Calendar.current.isDate($0.questDate, inSameDayAs: quest.date)
+                            && $0.questType == quest.questType
+                    }
+                    if !hasMatchInFirestore {
+                        try? await firestoreService.uploadDailyQuest(DailyQuestDTO(from: quest))
+                    }
+                }
+            }
+
+            // --- CustomFood ---
+            if let remoteCustomFoodDTOs = try? await firestoreService.fetchCustomFoods(userId: userId) {
+                let remoteIds = Set(remoteCustomFoodDTOs.map { $0.id })
+                try? await applyCustomFoodUpdates(remoteCustomFoodDTOs, userId: userId)
+                let localFoods = (try? await fetchAllCustomFoodsForSync(userId: userId)) ?? []
+                for food in localFoods where !remoteIds.contains(food.id.uuidString) {
+                    try? await firestoreService.uploadCustomFood(CustomFoodDTO(from: food))
+                }
+            }
+
+            // --- SavedMeal ---
+            if let remoteSavedMealDTOs = try? await firestoreService.fetchSavedMeals(userId: userId) {
+                let remoteIds = Set(remoteSavedMealDTOs.map { $0.id })
+                try? await applySavedMealUpdates(remoteSavedMealDTOs, userId: userId)
+                let localMeals = (try? await fetchAllSavedMealsForSync(userId: userId)) ?? []
+                for meal in localMeals where !remoteIds.contains(meal.id.uuidString) {
+                    try? await firestoreService.uploadSavedMeal(SavedMealDTO(from: meal))
+                }
+            }
+
+            // --- SavedRecipe ---
+            if let remoteSavedRecipeDTOs = try? await firestoreService.fetchSavedRecipes(userId: userId) {
+                let remoteIds = Set(remoteSavedRecipeDTOs.map { $0.id })
+                try? await applySavedRecipeUpdates(remoteSavedRecipeDTOs, userId: userId)
+                let localRecipes = (try? await fetchAllSavedRecipesForSync(userId: userId)) ?? []
+                for recipe in localRecipes where !remoteIds.contains(recipe.id.uuidString) {
+                    try? await firestoreService.uploadSavedRecipe(SavedRecipeDTO(from: recipe))
                 }
             }
         }
@@ -549,6 +603,18 @@ final class DataManager {
         return try modelContext.fetch(descriptor)
     }
 
+    /// Uploads the current local UserProgress to Firestore.
+    /// Called only when Firestore has no existing progress document (genuinely new user).
+    /// @MainActor required for modelContext access.
+    @MainActor
+    private func uploadLocalProgressToFirestore(userId: String) async {
+        let descriptor = FetchDescriptor<UserProgress>(
+            predicate: #Predicate { p in p.userId == userId }
+        )
+        guard let progress = (try? modelContext.fetch(descriptor))?.first else { return }
+        Task { try? await firestoreService.uploadUserProgress(UserProgressDTO(from: progress)) }
+    }
+
     // MARK: - Firestore Apply: UserProgress
 
     /// Applies an incoming Firestore UserProgress snapshot to local SwiftData using merge rules.
@@ -671,9 +737,41 @@ final class DataManager {
                     }
                 }
             } else {
-                // Quest exists in Firestore but not locally → insert
+                // Quest exists in Firestore but not locally by UUID.
+                // Guard against stale quests from previous installs: skip the insert if a
+                // local quest already exists for the same day + questType. Local data
+                // (freshly generated this install) takes priority for that slot.
+                let alreadyHasSlot = localQuests.contains {
+                    Calendar.current.isDate($0.date, inSameDayAs: dto.questDate)
+                        && $0.questType == dto.questType
+                }
+                guard !alreadyHasSlot else { continue }
                 let quest = dto.toDailyQuest(userId: userId)
                 modelContext.insert(quest)
+                didChange = true
+            }
+        }
+
+        // MARK: Dedup cleanup — remove local duplicates accumulated from multiple reinstalls.
+        // For each (day, questType) slot, keep the best copy and delete the rest.
+        // Priority: quest that exists in Firestore > completed quest > first in list.
+        let remoteUUIDs = Set(dtos.map { $0.id })
+        var slotMap: [String: [DailyQuest]] = [:]
+        for quest in localQuests {
+            let dayStart = Calendar.current.startOfDay(for: quest.date)
+            let key = "\(dayStart.timeIntervalSince1970)-\(quest.questType)"
+            slotMap[key, default: []].append(quest)
+        }
+        for (_, duplicates) in slotMap where duplicates.count > 1 {
+            let sorted = duplicates.sorted {
+                let aInFirestore = remoteUUIDs.contains($0.id.uuidString)
+                let bInFirestore = remoteUUIDs.contains($1.id.uuidString)
+                if aInFirestore != bInFirestore { return aInFirestore }
+                if $0.isCompleted != $1.isCompleted { return $0.isCompleted }
+                return true
+            }
+            for duplicate in sorted.dropFirst() {
+                modelContext.delete(duplicate)
                 didChange = true
             }
         }
@@ -687,6 +785,153 @@ final class DataManager {
         let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
         let descriptor = FetchDescriptor<DailyQuest>(
             predicate: #Predicate { quest in quest.userId == userId && quest.date >= cutoff }
+        )
+        return try modelContext.fetch(descriptor)
+    }
+
+    // MARK: - Firestore Apply: CustomFood
+
+    /// Diffs incoming Firestore CustomFood records against local SwiftData and applies updates.
+    /// Receive-only — never uploads. Same conflict rules as applyFirestoreUpdates (FoodEntry).
+    @MainActor
+    private func applyCustomFoodUpdates(_ dtos: [CustomFoodDTO], userId: String) async throws {
+        let descriptor = FetchDescriptor<CustomFood>(
+            predicate: #Predicate { food in food.userId == userId }
+        )
+        let localFoods = try modelContext.fetch(descriptor)
+        var localById: [String: CustomFood] = [:]
+        for food in localFoods { localById[food.id.uuidString] = food }
+
+        var didChange = false
+
+        for dto in dtos {
+            if let local = localById[dto.id] {
+                let isPending = FirestoreServiceImpl.shared.pendingCustomFoodIds.contains(dto.id)
+                if isPending {
+                    if !dto.differsFrom(local) {
+                        FirestoreServiceImpl.shared.pendingCustomFoodIds.remove(dto.id)
+                    }
+                } else if dto.differsFrom(local) {
+                    local.name = dto.name
+                    local.calories = dto.calories
+                    local.protein = dto.protein
+                    local.carbs = dto.carbs
+                    local.fat = dto.fat
+                    local.servingSizeName = dto.servingSizeName
+                    local.servingSizeAmount = dto.servingSizeAmount
+                    local.servingUnit = dto.servingUnit
+                    local.toxinScore = dto.toxinScore
+                    local.fiber = dto.fiber
+                    local.sugar = dto.sugar
+                    local.sodium = dto.sodium
+                    didChange = true
+                }
+            } else {
+                let food = dto.toCustomFood(userId: userId)
+                modelContext.insert(food)
+                didChange = true
+            }
+        }
+
+        if didChange { try modelContext.save() }
+    }
+
+    /// Fetches all CustomFoods for a user with no filter.
+    private func fetchAllCustomFoodsForSync(userId: String) async throws -> [CustomFood] {
+        let descriptor = FetchDescriptor<CustomFood>(
+            predicate: #Predicate { food in food.userId == userId }
+        )
+        return try modelContext.fetch(descriptor)
+    }
+
+    // MARK: - Firestore Apply: SavedMeal
+
+    /// Diffs incoming Firestore SavedMeal records against local SwiftData and applies updates.
+    /// Receive-only — never uploads.
+    @MainActor
+    private func applySavedMealUpdates(_ dtos: [SavedMealDTO], userId: String) async throws {
+        let descriptor = FetchDescriptor<SavedMeal>(
+            predicate: #Predicate { meal in meal.userId == userId }
+        )
+        let localMeals = try modelContext.fetch(descriptor)
+        var localById: [String: SavedMeal] = [:]
+        for meal in localMeals { localById[meal.id.uuidString] = meal }
+
+        var didChange = false
+
+        for dto in dtos {
+            if let local = localById[dto.id] {
+                let isPending = FirestoreServiceImpl.shared.pendingSavedMealIds.contains(dto.id)
+                if isPending {
+                    if !dto.differsFrom(local) {
+                        FirestoreServiceImpl.shared.pendingSavedMealIds.remove(dto.id)
+                    }
+                } else if dto.differsFrom(local) {
+                    local.name = dto.name
+                    local.componentsData = dto.componentsJSON.data(using: .utf8) ?? Data()
+                    didChange = true
+                }
+            } else {
+                let meal = dto.toSavedMeal(userId: userId)
+                modelContext.insert(meal)
+                didChange = true
+            }
+        }
+
+        if didChange { try modelContext.save() }
+    }
+
+    /// Fetches all SavedMeals for a user with no filter.
+    private func fetchAllSavedMealsForSync(userId: String) async throws -> [SavedMeal] {
+        let descriptor = FetchDescriptor<SavedMeal>(
+            predicate: #Predicate { meal in meal.userId == userId }
+        )
+        return try modelContext.fetch(descriptor)
+    }
+
+    // MARK: - Firestore Apply: SavedRecipe
+
+    /// Diffs incoming Firestore SavedRecipe records against local SwiftData and applies updates.
+    /// Receive-only — never uploads.
+    @MainActor
+    private func applySavedRecipeUpdates(_ dtos: [SavedRecipeDTO], userId: String) async throws {
+        let descriptor = FetchDescriptor<SavedRecipe>(
+            predicate: #Predicate { recipe in recipe.userId == userId }
+        )
+        let localRecipes = try modelContext.fetch(descriptor)
+        var localById: [String: SavedRecipe] = [:]
+        for recipe in localRecipes { localById[recipe.id.uuidString] = recipe }
+
+        var didChange = false
+
+        for dto in dtos {
+            if let local = localById[dto.id] {
+                let isPending = FirestoreServiceImpl.shared.pendingSavedRecipeIds.contains(dto.id)
+                if isPending {
+                    if !dto.differsFrom(local) {
+                        FirestoreServiceImpl.shared.pendingSavedRecipeIds.remove(dto.id)
+                    }
+                } else if dto.differsFrom(local) {
+                    local.name = dto.name
+                    local.yield = dto.yield
+                    local.ingredientsData = dto.ingredientsJSON.data(using: .utf8) ?? Data()
+                    local.purityScore = dto.purityScore
+                    didChange = true
+                }
+            } else {
+                let recipe = dto.toSavedRecipe(userId: userId)
+                modelContext.insert(recipe)
+                didChange = true
+            }
+        }
+
+        if didChange { try modelContext.save() }
+    }
+
+    /// Fetches all SavedRecipes for a user with no filter.
+    private func fetchAllSavedRecipesForSync(userId: String) async throws -> [SavedRecipe] {
+        let descriptor = FetchDescriptor<SavedRecipe>(
+            predicate: #Predicate { recipe in recipe.userId == userId }
         )
         return try modelContext.fetch(descriptor)
     }
@@ -1395,17 +1640,38 @@ final class DataManager {
         food.userId = userId
         modelContext.insert(food)
         try modelContext.save()
+
+        // Firestore sync: upload after local write succeeds.
+        let dto = CustomFoodDTO(from: food)
+        FirestoreServiceImpl.shared.pendingCustomFoodIds.insert(dto.id)
+        Task {
+            try? await firestoreService.uploadCustomFood(dto)
+        }
     }
 
     /// Saves changes to an existing CustomFood
     func updateCustomFood(_ food: CustomFood) async throws {
         try modelContext.save()
+
+        // Firestore sync: re-upload the food with its updated fields.
+        let dto = CustomFoodDTO(from: food)
+        Task {
+            try? await firestoreService.uploadCustomFood(dto)
+        }
     }
 
     /// Deletes a CustomFood from the store
     func deleteCustomFood(_ food: CustomFood) async throws {
+        let foodId = food.id.uuidString
+        let userId = food.userId
+
         modelContext.delete(food)
         try modelContext.save()
+
+        // Firestore sync: remove the document after local delete succeeds.
+        Task {
+            try? await firestoreService.deleteCustomFood(id: foodId, userId: userId)
+        }
     }
 
     // MARK: - SavedMeal Methods
@@ -1428,17 +1694,38 @@ final class DataManager {
         meal.userId = userId
         modelContext.insert(meal)
         try modelContext.save()
+
+        // Firestore sync: upload after local write succeeds.
+        let dto = SavedMealDTO(from: meal)
+        FirestoreServiceImpl.shared.pendingSavedMealIds.insert(dto.id)
+        Task {
+            try? await firestoreService.uploadSavedMeal(dto)
+        }
     }
 
     /// Saves changes to an existing SavedMeal
     func updateSavedMeal(_ meal: SavedMeal) async throws {
         try modelContext.save()
+
+        // Firestore sync: re-upload the meal with its updated fields.
+        let dto = SavedMealDTO(from: meal)
+        Task {
+            try? await firestoreService.uploadSavedMeal(dto)
+        }
     }
 
     /// Deletes a SavedMeal from the store
     func deleteSavedMeal(_ meal: SavedMeal) async throws {
+        let mealId = meal.id.uuidString
+        let userId = meal.userId
+
         modelContext.delete(meal)
         try modelContext.save()
+
+        // Firestore sync: remove the document after local delete succeeds.
+        Task {
+            try? await firestoreService.deleteSavedMeal(id: mealId, userId: userId)
+        }
     }
 
     // MARK: - SavedRecipe Methods
@@ -1461,16 +1748,186 @@ final class DataManager {
         recipe.userId = userId
         modelContext.insert(recipe)
         try modelContext.save()
+
+        // Firestore sync: upload after local write succeeds.
+        let dto = SavedRecipeDTO(from: recipe)
+        FirestoreServiceImpl.shared.pendingSavedRecipeIds.insert(dto.id)
+        Task {
+            try? await firestoreService.uploadSavedRecipe(dto)
+        }
     }
 
     /// Saves changes to an existing SavedRecipe
     func updateSavedRecipe(_ recipe: SavedRecipe) async throws {
         try modelContext.save()
+
+        // Firestore sync: re-upload the recipe with its updated fields.
+        let dto = SavedRecipeDTO(from: recipe)
+        Task {
+            try? await firestoreService.uploadSavedRecipe(dto)
+        }
     }
 
     /// Deletes a SavedRecipe from the store
     func deleteSavedRecipe(_ recipe: SavedRecipe) async throws {
+        let recipeId = recipe.id.uuidString
+        let userId = recipe.userId
+
         modelContext.delete(recipe)
+        try modelContext.save()
+
+        // Firestore sync: remove the document after local delete succeeds.
+        Task {
+            try? await firestoreService.deleteSavedRecipe(id: recipeId, userId: userId)
+        }
+    }
+
+    // MARK: - UserProfile Methods
+
+    /// Fetches the UserProfile for the current user.
+    ///
+    /// Returns the most recently updated profile if duplicates exist (and deletes them).
+    /// Returns nil if no profile exists or no user is authenticated.
+    func getUserProfile() async throws -> UserProfile? {
+        guard let userId = currentUserId, !userId.isEmpty else { return nil }
+
+        let descriptor = FetchDescriptor<UserProfile>(
+            predicate: #Predicate { profile in profile.userId == userId },
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        let profiles = try modelContext.fetch(descriptor)
+
+        // Clean up duplicates: keep the most recently updated, delete the rest
+        if profiles.count > 1 {
+            for duplicate in profiles.dropFirst() {
+                modelContext.delete(duplicate)
+            }
+            try modelContext.save()
+        }
+
+        return profiles.first
+    }
+
+    /// Upserts a UserProfile for the current user.
+    ///
+    /// If a profile already exists, updates it in-place (preserving the SwiftData object identity).
+    /// If no profile exists, inserts the provided profile.
+    /// Always stamps userId and saves context. Syncs to Firestore after local save.
+    func upsertUserProfile(_ profile: UserProfile) async throws {
+        guard let userId = currentUserId, !userId.isEmpty else {
+            throw DataManagerError.notAuthenticated
+        }
+
+        let existing = try await getUserProfile()
+
+        if let existing = existing {
+            // Update in-place — preserve the existing SwiftData object
+            existing.sex = profile.sex
+            existing.age = profile.age
+            existing.weightKg = profile.weightKg
+            existing.heightCm = profile.heightCm
+            existing.goalWeightKg = profile.goalWeightKg
+            existing.weeklyPaceLbs = profile.weeklyPaceLbs
+            existing.activityLevel = profile.activityLevel
+            existing.dietStyle = profile.dietStyle
+            existing.mealsPerDay = profile.mealsPerDay
+            existing.allergies = profile.allergies
+            existing.sleepQuality = profile.sleepQuality
+            existing.stressLevel = profile.stressLevel
+            existing.aiTip = profile.aiTip
+            existing.setupCompleted = profile.setupCompleted
+            existing.updatedAt = profile.updatedAt
+        } else {
+            profile.userId = userId
+            modelContext.insert(profile)
+        }
+
+        try modelContext.save()
+
+        // Firestore sync: full document replace (source of truth)
+        let profileToSync = existing ?? profile
+        let dto = UserProfileDTO(from: profileToSync)
+        Task {
+            try? await firestoreService.uploadUserProfile(dto, userId: userId)
+        }
+    }
+
+    /// Updates today's DailyGoal calorie + macro targets, overwriting completely (no merge).
+    ///
+    /// Gets or creates today's goal, then overwrites the four main macro targets.
+    /// Other goal fields (purity, advanced nutrition) are left unchanged.
+    func updateDailyGoalTargets(calories: Int, protein: Int, carbs: Int, fat: Int) async throws {
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+
+        if let existing = try await getTodaysGoal() {
+            existing.calorieTarget = calories
+            existing.proteinTarget = Double(protein)
+            existing.carbTarget = Double(carbs)
+            existing.fatTarget = Double(fat)
+            try modelContext.save()
+
+            // Firestore sync
+            let dto = DailyGoalDTO(from: existing)
+            FirestoreServiceImpl.shared.pendingDailyGoalIds.insert(dto.id)
+            Task {
+                try? await firestoreService.uploadDailyGoal(dto)
+            }
+        } else {
+            // No goal exists yet — create one with sensible purity default
+            let goal = DailyGoal(
+                date: Date(),
+                calorieTarget: calories,
+                proteinTarget: Double(protein),
+                carbTarget: Double(carbs),
+                fatTarget: Double(fat),
+                purityTarget: 30
+            )
+            goal.userId = userId
+            modelContext.insert(goal)
+            try modelContext.save()
+
+            let dto = DailyGoalDTO(from: goal)
+            FirestoreServiceImpl.shared.pendingDailyGoalIds.insert(dto.id)
+            Task {
+                try? await firestoreService.uploadDailyGoal(dto)
+            }
+        }
+    }
+
+    /// Syncs the UserProfile from Firestore, overwriting local if different.
+    ///
+    /// If Firestore has no record → no-op.
+    /// If local exists and matches → no-op.
+    /// If local doesn't exist or differs → upsert from Firestore DTO.
+    func syncUserProfileFromFirestore() async throws {
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+
+        guard let dto = try await firestoreService.fetchUserProfile(userId: userId) else { return }
+
+        let local = try await getUserProfile()
+        if let local = local, !dto.differsFrom(local) { return }
+
+        // Build a profile from the remote DTO and upsert locally (skip remote re-upload)
+        let remoteProfile = dto.toUserProfile(userId: userId)
+        if let existing = local {
+            existing.sex = remoteProfile.sex
+            existing.age = remoteProfile.age
+            existing.weightKg = remoteProfile.weightKg
+            existing.heightCm = remoteProfile.heightCm
+            existing.goalWeightKg = remoteProfile.goalWeightKg
+            existing.weeklyPaceLbs = remoteProfile.weeklyPaceLbs
+            existing.activityLevel = remoteProfile.activityLevel
+            existing.dietStyle = remoteProfile.dietStyle
+            existing.mealsPerDay = remoteProfile.mealsPerDay
+            existing.allergies = remoteProfile.allergies
+            existing.sleepQuality = remoteProfile.sleepQuality
+            existing.stressLevel = remoteProfile.stressLevel
+            existing.aiTip = remoteProfile.aiTip
+            existing.setupCompleted = remoteProfile.setupCompleted
+            existing.updatedAt = remoteProfile.updatedAt
+        } else {
+            modelContext.insert(remoteProfile)
+        }
         try modelContext.save()
     }
 }

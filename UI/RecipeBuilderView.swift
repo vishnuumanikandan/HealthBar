@@ -37,6 +37,17 @@ struct RecipeBuilderView: View {
     @State private var selectedPhoto: UIImage? = nil
     @State private var showingPhotoPicker: Bool = false
 
+    // Custom ingredient inline form state
+    @State private var showingCustomIngredientForm: Bool = false
+    @State private var customName: String = ""
+    @State private var customCalories: String = ""
+    @State private var customProtein: String = ""
+    @State private var customCarbs: String = ""
+    @State private var customFat: String = ""
+    @State private var customServingSize: String = ""
+    @State private var saveToMyFoods: Bool = false
+    @State private var customFormError: String? = nil
+
     // MARK: - Computed
 
     private var isNew: Bool { existingRecipe == nil }
@@ -58,6 +69,19 @@ struct RecipeBuilderView: View {
     private var perServingProtein: Double { yieldValue > 0 ? totalProtein / Double(yieldValue) : 0 }
     private var perServingCarbs: Double { yieldValue > 0 ? totalCarbs / Double(yieldValue) : 0 }
     private var perServingFat: Double { yieldValue > 0 ? totalFat / Double(yieldValue) : 0 }
+
+    /// Calorie-weighted average purity score across all ingredients (0–100, lower = cleaner).
+    private var recipePurityScore: Int {
+        guard totalCalories > 0 else { return 0 }
+        let weighted = ingredients.reduce(0.0) { $0 + Double($1.calories) * Double($1.toxinScore) }
+        return Int(weighted / Double(totalCalories))
+    }
+
+    private var purityColor: Color {
+        recipePurityScore < 30 ? DesignSystem.Colors.primary
+            : recipePurityScore < 60 ? DesignSystem.Colors.energy
+            : DesignSystem.Colors.danger
+    }
 
     // MARK: - Body
 
@@ -300,27 +324,210 @@ struct RecipeBuilderView: View {
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
     }
 
-    // MARK: - Add Ingredient Button
+    // MARK: - Add Ingredient Controls
 
     private var addIngredientButton: some View {
-        Button {
-            showingFoodPicker = true
-        } label: {
+        VStack(spacing: DesignSystem.Spacing.sm) {
+            // Two-button row
             HStack(spacing: DesignSystem.Spacing.sm) {
-                Image(systemName: "plus")
-                    .font(.system(size: 15, weight: .semibold))
-                Text("Add Ingredient")
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
+                Button {
+                    withAnimation(.spring(response: 0.3)) { showingCustomIngredientForm = false }
+                    showingFoodPicker = true
+                } label: {
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Search Foods")
+                            .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
+                    }
+                    .foregroundColor(DesignSystem.Colors.growth)
+                    .frame(maxWidth: .infinity)
+                    .padding(DesignSystem.Spacing.md)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                            .stroke(DesignSystem.Colors.growth, lineWidth: 1.5)
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Button {
+                    withAnimation(.spring(response: 0.3)) {
+                        showingCustomIngredientForm.toggle()
+                        if !showingCustomIngredientForm { resetCustomForm() }
+                    }
+                } label: {
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        Image(systemName: showingCustomIngredientForm ? "xmark" : "plus.circle")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text(showingCustomIngredientForm ? "Cancel" : "Create Custom")
+                            .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
+                    }
+                    .foregroundColor(showingCustomIngredientForm ? DesignSystem.Colors.textSecondary : Color(.systemIndigo))
+                    .frame(maxWidth: .infinity)
+                    .padding(DesignSystem.Spacing.md)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                            .stroke(showingCustomIngredientForm ? DesignSystem.Colors.border : Color(.systemIndigo), lineWidth: 1.5)
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
             }
-            .foregroundColor(DesignSystem.Colors.growth)
-            .frame(maxWidth: .infinity)
-            .padding(DesignSystem.Spacing.md)
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                    .stroke(DesignSystem.Colors.growth, lineWidth: 1.5)
-            )
+
+            // Inline custom ingredient form
+            if showingCustomIngredientForm {
+                customIngredientForm
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
-        .buttonStyle(PlainButtonStyle())
+    }
+
+    private var customIngredientForm: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+            Text("New Custom Ingredient")
+                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+
+            // Name field
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                Text("Ingredient Name")
+                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                TextField("e.g. Almond Milk", text: $customName)
+                    .font(.system(size: DesignSystem.FontSizes.callout))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .padding(DesignSystem.Spacing.md)
+                    .background(DesignSystem.Colors.secondaryBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+            }
+
+            // Macro grid: 2×2
+            VStack(spacing: DesignSystem.Spacing.sm) {
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    customNumberField(label: "Calories", placeholder: "0", text: $customCalories)
+                    customNumberField(label: "Protein (g)", placeholder: "0", text: $customProtein)
+                }
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    customNumberField(label: "Carbs (g)", placeholder: "0", text: $customCarbs)
+                    customNumberField(label: "Fat (g)", placeholder: "0", text: $customFat)
+                }
+            }
+
+            // Serving size
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                Text("Serving Size")
+                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                TextField("e.g. 1 cup, 100g, 1 scoop", text: $customServingSize)
+                    .font(.system(size: DesignSystem.FontSizes.callout))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .padding(DesignSystem.Spacing.md)
+                    .background(DesignSystem.Colors.secondaryBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+            }
+
+            // Save to My Foods toggle
+            Toggle(isOn: $saveToMyFoods) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Save to My Foods too?")
+                        .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                    Text("Adds it permanently to your food library")
+                        .font(.system(size: DesignSystem.FontSizes.caption))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+            }
+            .tint(DesignSystem.Colors.primary)
+
+            // Error
+            if let error = customFormError {
+                Text(error)
+                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.danger)
+            }
+
+            AppButton(title: "Add to Recipe", style: .primary) {
+                addCustomIngredient()
+            }
+        }
+        .padding(DesignSystem.Spacing.md)
+        .background(DesignSystem.Colors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                .stroke(Color(.systemIndigo).opacity(0.25), lineWidth: 1)
+        )
+    }
+
+    private func customNumberField(label: String, placeholder: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            Text(label)
+                .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
+                .foregroundColor(DesignSystem.Colors.textTertiary)
+            TextField(placeholder, text: text)
+                .keyboardType(.decimalPad)
+                .font(.system(size: DesignSystem.FontSizes.callout))
+                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .padding(DesignSystem.Spacing.md)
+                .background(DesignSystem.Colors.secondaryBackground)
+                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func addCustomIngredient() {
+        let name = customName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else {
+            customFormError = "Ingredient name is required"
+            return
+        }
+        guard let cal = Int(customCalories.replacingOccurrences(of: ",", with: ".")),
+              cal >= 0 else {
+            customFormError = "Enter a valid calorie value"
+            return
+        }
+        customFormError = nil
+
+        let protein = Double(customProtein.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let carbs = Double(customCarbs.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let fat = Double(customFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let servingLabel = customServingSize.trimmingCharacters(in: .whitespaces)
+
+        let component = SavedMealComponent(
+            foodName: name,
+            quantity: 1,
+            servingUnit: servingLabel.isEmpty ? "serving" : servingLabel,
+            calories: cal,
+            protein: protein,
+            carbs: carbs,
+            fat: fat,
+            toxinScore: 0
+        )
+        withAnimation(.spring(response: 0.3)) { ingredients.append(component) }
+
+        if saveToMyFoods {
+            let customFood = CustomFood(
+                name: name,
+                calories: cal,
+                protein: protein,
+                carbs: carbs,
+                fat: fat,
+                servingSizeName: servingLabel.isEmpty ? "1 serving" : servingLabel,
+                servingSizeAmount: 1.0,
+                servingUnit: servingLabel.isEmpty ? "serving" : servingLabel
+            )
+            Task { await dbViewModel.saveCustomFood(customFood, isNew: true) }
+        }
+
+        withAnimation(.spring(response: 0.3)) {
+            showingCustomIngredientForm = false
+            resetCustomForm()
+        }
+    }
+
+    private func resetCustomForm() {
+        customName = ""; customCalories = ""; customProtein = ""
+        customCarbs = ""; customFat = ""; customServingSize = ""
+        saveToMyFoods = false; customFormError = nil
     }
 
     // MARK: - Nutrition Panel
@@ -362,6 +569,27 @@ struct RecipeBuilderView: View {
                     macroCell(label: "Carbs", value: "\(Int(perServingCarbs))g", color: .orange)
                     macroCell(label: "Fat", value: "\(Int(perServingFat))g", color: .purple)
                 }
+            }
+
+            Divider().background(DesignSystem.Colors.border)
+
+            // Purity score
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Recipe Purity Score")
+                        .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                    Text("Calorie-weighted average across all ingredients")
+                        .font(.system(size: DesignSystem.FontSizes.caption))
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                }
+                Spacer()
+                Text("\(recipePurityScore)")
+                    .font(.system(size: DesignSystem.FontSizes.title2, weight: .bold))
+                    .foregroundColor(purityColor)
+                Text("/ 100")
+                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
             }
         }
         .padding(DesignSystem.Spacing.md)
@@ -445,6 +673,7 @@ struct RecipeBuilderView: View {
         recipe.yield = max(1, yieldValue)
         recipe.ingredients = ingredients
         recipe.photoData = recipePhotoData
+        recipe.purityScore = recipePurityScore
 
         onSave(recipe, isNew)
         isSaving = false
@@ -460,6 +689,7 @@ struct RecipeBuilderView: View {
         recipe.yield = max(1, yieldValue)
         recipe.ingredients = ingredients
         recipe.photoData = recipePhotoData
+        recipe.purityScore = recipePurityScore
 
         onSaveAsFood(recipe)
         // Also persist the recipe itself

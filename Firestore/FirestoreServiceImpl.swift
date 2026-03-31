@@ -62,6 +62,9 @@ final class FirestoreServiceImpl: FirestoreService {
     private var moodEntriesListener: ListenerRegistration?
     private var userProgressListener: ListenerRegistration?
     private var dailyQuestsListener: ListenerRegistration?
+    private var customFoodsListener: ListenerRegistration?
+    private var savedMealsListener: ListenerRegistration?
+    private var savedRecipesListener: ListenerRegistration?
 
     // MARK: - Pending Upload Sets (one per model, shared across all DataManager instances)
 
@@ -87,6 +90,15 @@ final class FirestoreServiceImpl: FirestoreService {
 
     /// DailyQuest IDs written locally but not yet confirmed by the Firestore listener.
     var pendingQuestIds: Set<String> = []
+
+    /// CustomFood IDs written locally but not yet confirmed by the Firestore listener.
+    var pendingCustomFoodIds: Set<String> = []
+
+    /// SavedMeal IDs written locally but not yet confirmed by the Firestore listener.
+    var pendingSavedMealIds: Set<String> = []
+
+    /// SavedRecipe IDs written locally but not yet confirmed by the Firestore listener.
+    var pendingSavedRecipeIds: Set<String> = []
 
     // MARK: - Init
 
@@ -126,6 +138,18 @@ final class FirestoreServiceImpl: FirestoreService {
 
     private func dailyQuestsCollection(for userId: String) -> CollectionReference {
         db.collection("users").document(userId).collection("dailyQuests")
+    }
+
+    private func customFoodsCollection(for userId: String) -> CollectionReference {
+        db.collection("users").document(userId).collection("customFoods")
+    }
+
+    private func savedMealsCollection(for userId: String) -> CollectionReference {
+        db.collection("users").document(userId).collection("savedMeals")
+    }
+
+    private func savedRecipesCollection(for userId: String) -> CollectionReference {
+        db.collection("users").document(userId).collection("savedRecipes")
     }
 
     // MARK: - Shared Listener Setup
@@ -345,6 +369,106 @@ final class FirestoreServiceImpl: FirestoreService {
             }
     }
 
+    // MARK: - FirestoreService: UserProfile
+
+    /// Fixed single-document reference for a user's UserProfile.
+    /// The document ID is always "userProfile" — one document per user, always upserted.
+    private func userProfileDocument(for userId: String) -> DocumentReference {
+        db.collection("users").document(userId).collection("profile").document("userProfile")
+    }
+
+    func uploadUserProfile(_ profile: UserProfileDTO, userId: String) async throws {
+        // Uses the provided userId directly (not currentSyncUserId) because
+        // UserProfile uploads happen during onboarding before listeners are active.
+        try userProfileDocument(for: userId).setData(from: profile)
+    }
+
+    func fetchUserProfile(userId: String) async throws -> UserProfileDTO? {
+        let snapshot = try await userProfileDocument(for: userId).getDocument()
+        return try? snapshot.data(as: UserProfileDTO.self)
+    }
+
+    // MARK: - FirestoreService: CustomFood
+
+    func uploadCustomFood(_ food: CustomFoodDTO) async throws {
+        guard let userId = currentSyncUserId else { return }
+        try customFoodsCollection(for: userId).document(food.id).setData(from: food)
+    }
+
+    func deleteCustomFood(id: String, userId: String) async throws {
+        try await deleteDocument(ref: customFoodsCollection(for: userId).document(id))
+    }
+
+    func fetchCustomFoods(userId: String) async throws -> [CustomFoodDTO] {
+        let snapshot = try await customFoodsCollection(for: userId).getDocuments()
+        return snapshot.documents.compactMap { try? $0.data(as: CustomFoodDTO.self) }
+    }
+
+    func listenForCustomFoods(userId: String, onUpdate: @escaping ([CustomFoodDTO]) -> Void) {
+        guard shouldRegisterListener(userId: userId, existingHandle: customFoodsListener) else { return }
+        customFoodsListener?.remove()
+        customFoodsListener = customFoodsCollection(for: userId)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard self != nil, let snapshot, error == nil else { return }
+                let dtos = snapshot.documents.compactMap { try? $0.data(as: CustomFoodDTO.self) }
+                Task { @MainActor in onUpdate(dtos) }
+            }
+    }
+
+    // MARK: - FirestoreService: SavedMeal
+
+    func uploadSavedMeal(_ meal: SavedMealDTO) async throws {
+        guard let userId = currentSyncUserId else { return }
+        try savedMealsCollection(for: userId).document(meal.id).setData(from: meal)
+    }
+
+    func deleteSavedMeal(id: String, userId: String) async throws {
+        try await deleteDocument(ref: savedMealsCollection(for: userId).document(id))
+    }
+
+    func fetchSavedMeals(userId: String) async throws -> [SavedMealDTO] {
+        let snapshot = try await savedMealsCollection(for: userId).getDocuments()
+        return snapshot.documents.compactMap { try? $0.data(as: SavedMealDTO.self) }
+    }
+
+    func listenForSavedMeals(userId: String, onUpdate: @escaping ([SavedMealDTO]) -> Void) {
+        guard shouldRegisterListener(userId: userId, existingHandle: savedMealsListener) else { return }
+        savedMealsListener?.remove()
+        savedMealsListener = savedMealsCollection(for: userId)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard self != nil, let snapshot, error == nil else { return }
+                let dtos = snapshot.documents.compactMap { try? $0.data(as: SavedMealDTO.self) }
+                Task { @MainActor in onUpdate(dtos) }
+            }
+    }
+
+    // MARK: - FirestoreService: SavedRecipe
+
+    func uploadSavedRecipe(_ recipe: SavedRecipeDTO) async throws {
+        guard let userId = currentSyncUserId else { return }
+        try savedRecipesCollection(for: userId).document(recipe.id).setData(from: recipe)
+    }
+
+    func deleteSavedRecipe(id: String, userId: String) async throws {
+        try await deleteDocument(ref: savedRecipesCollection(for: userId).document(id))
+    }
+
+    func fetchSavedRecipes(userId: String) async throws -> [SavedRecipeDTO] {
+        let snapshot = try await savedRecipesCollection(for: userId).getDocuments()
+        return snapshot.documents.compactMap { try? $0.data(as: SavedRecipeDTO.self) }
+    }
+
+    func listenForSavedRecipes(userId: String, onUpdate: @escaping ([SavedRecipeDTO]) -> Void) {
+        guard shouldRegisterListener(userId: userId, existingHandle: savedRecipesListener) else { return }
+        savedRecipesListener?.remove()
+        savedRecipesListener = savedRecipesCollection(for: userId)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard self != nil, let snapshot, error == nil else { return }
+                let dtos = snapshot.documents.compactMap { try? $0.data(as: SavedRecipeDTO.self) }
+                Task { @MainActor in onUpdate(dtos) }
+            }
+    }
+
     // MARK: - Lifecycle
 
     /// Stops all active listeners across every model, clears all handles and the sync user.
@@ -358,6 +482,9 @@ final class FirestoreServiceImpl: FirestoreService {
         moodEntriesListener?.remove()
         userProgressListener?.remove()
         dailyQuestsListener?.remove()
+        customFoodsListener?.remove()
+        savedMealsListener?.remove()
+        savedRecipesListener?.remove()
 
         foodEntriesListener = nil
         dailyGoalsListener = nil
@@ -366,6 +493,9 @@ final class FirestoreServiceImpl: FirestoreService {
         moodEntriesListener = nil
         userProgressListener = nil
         dailyQuestsListener = nil
+        customFoodsListener = nil
+        savedMealsListener = nil
+        savedRecipesListener = nil
 
         currentSyncUserId = nil
     }

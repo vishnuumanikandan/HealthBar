@@ -62,6 +62,15 @@ final class FirebaseAuthService: AuthService {
     // MARK: - Initialization
 
     private init() {
+        // Detect fresh install: UserDefaults is cleared on uninstall but the
+        // Firebase auth token lives in the Keychain and survives reinstalls.
+        // Sign out on first launch so a reinstalled app always shows login.
+        let launchedKey = "hb_hasLaunchedBefore"
+        if !UserDefaults.standard.bool(forKey: launchedKey) {
+            try? Auth.auth().signOut()
+            UserDefaults.standard.set(true, forKey: launchedKey)
+        }
+
         // Seed initial state from any persisted Firebase session so the UI
         // starts in the correct state before the listener fires.
         let current = Auth.auth().currentUser

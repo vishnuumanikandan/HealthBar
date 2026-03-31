@@ -648,7 +648,16 @@ private struct SavedMealRow: View {
                     .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
                     .foregroundColor(DesignSystem.Colors.textPrimary)
                     .lineLimit(1)
-                Text("\(meal.totalCalories) cal · \(meal.components.count) item\(meal.components.count == 1 ? "" : "s")")
+                Text({
+                    let count = meal.components.count
+                    let totalCal = meal.totalCalories
+                    let purity: Int = {
+                        guard totalCal > 0 else { return 0 }
+                        let w = meal.components.reduce(0.0) { $0 + Double($1.calories) * Double($1.toxinScore) }
+                        return Int(w / Double(totalCal))
+                    }()
+                    return "\(totalCal) cal · \(count) item\(count == 1 ? "" : "s") · Purity \(purity)"
+                }())
                     .font(.system(size: DesignSystem.FontSizes.caption))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
             }
@@ -757,7 +766,7 @@ private struct SavedRecipeRow: View {
                     .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
                     .foregroundColor(DesignSystem.Colors.textPrimary)
                     .lineLimit(1)
-                Text("\(recipe.perServingCalories) cal/serving · \(recipe.yield) serving\(recipe.yield == 1 ? "" : "s") · \(recipe.ingredients.count) ingredient\(recipe.ingredients.count == 1 ? "" : "s")")
+                Text("\(recipe.perServingCalories) cal/serving · \(recipe.yield) serving\(recipe.yield == 1 ? "" : "s") · Purity \(recipe.purityScore)")
                     .font(.system(size: DesignSystem.FontSizes.caption))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                     .lineLimit(1)

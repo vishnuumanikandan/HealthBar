@@ -38,7 +38,8 @@ struct HealthBarApp: App {
                 MoodEntry.self,
                 CustomFood.self,
                 SavedMeal.self,
-                SavedRecipe.self
+                SavedRecipe.self,
+                UserProfile.self
             ])
 
             let modelConfiguration = ModelConfiguration(

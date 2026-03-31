@@ -28,6 +28,9 @@ final class ProfileViewModel {
     /// Current daily goal data
     var currentGoal: DailyGoal?
 
+    /// The user's completed health profile (nil if not yet set up or not found).
+    var existingProfile: UserProfile?
+
     /// Loading state for UI
     var isLoading = false
 
@@ -87,6 +90,7 @@ final class ProfileViewModel {
         do {
             userProgress = try await coordinator.getUserProgress()
             currentGoal = try await coordinator.getCurrentGoal()
+            existingProfile = try await coordinator.getUserProfile()
         } catch {
             errorMessage = "Failed to load profile data: \(error.localizedDescription)"
         }
