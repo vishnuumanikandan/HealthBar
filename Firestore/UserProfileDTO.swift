@@ -19,6 +19,7 @@ struct UserProfileDTO: Codable {
 
     // MARK: - Fields (mirrors UserProfile, minus userId and id)
 
+    var displayName: String
     var sex: String
     var age: Int
     var weightKg: Double
@@ -39,6 +40,7 @@ struct UserProfileDTO: Codable {
     // MARK: - Conversion: UserProfile → UserProfileDTO
 
     init(from profile: UserProfile) {
+        self.displayName = profile.displayName
         self.sex = profile.sex
         self.age = profile.age
         self.weightKg = profile.weightKg
@@ -62,7 +64,7 @@ struct UserProfileDTO: Codable {
     /// Creates a UserProfile SwiftData model from this DTO.
     /// - Parameter userId: The authenticated user's ID (stamped onto the new profile).
     func toUserProfile(userId: String) -> UserProfile {
-        UserProfile(
+        let profile = UserProfile(
             userId: userId,
             sex: sex,
             age: age,
@@ -81,6 +83,8 @@ struct UserProfileDTO: Codable {
             createdAt: createdAt,
             updatedAt: updatedAt
         )
+        profile.displayName = displayName
+        return profile
     }
 
     // MARK: - Diff Helper
@@ -88,7 +92,8 @@ struct UserProfileDTO: Codable {
     /// Returns true if any persisted field in this DTO differs from the given UserProfile.
     /// Used by syncUserProfileFromFirestore to avoid unnecessary SwiftData rewrites.
     func differsFrom(_ profile: UserProfile) -> Bool {
-        return sex != profile.sex
+        return displayName != profile.displayName
+            || sex != profile.sex
             || age != profile.age
             || weightKg != profile.weightKg
             || heightCm != profile.heightCm

@@ -172,6 +172,35 @@ protocol FirestoreService {
     /// Same idempotency and MainActor guarantees as listenForFoodEntries.
     func listenForSavedRecipes(userId: String, onUpdate: @escaping ([SavedRecipeDTO]) -> Void)
 
+    // MARK: - AccountInfo (account/info document)
+
+    /// Writes (creates or overwrites) the account/info document for a user.
+    /// Firestore path: users/{userId}/account/info (fixed document ID "info").
+    func writeAccountInfo(_ info: AccountInfoDTO, userId: String) async throws
+
+    /// One-time fetch of the account/info document. Returns nil if it doesn't exist yet.
+    func fetchAccountInfo(userId: String) async throws -> AccountInfoDTO?
+
+    // MARK: - BadgeProgress (badges collection)
+
+    /// Uploads (creates or overwrites) a badge progress document.
+    /// Firestore path: users/{userId}/badges/{badgeId}.
+    func uploadBadgeProgress(_ badge: BadgeProgressDTO, userId: String) async throws
+
+    /// Starts a real-time listener for a user's badges collection.
+    /// Append-only: callers must never revert isUnlocked from true to false.
+    /// Same idempotency and MainActor guarantees as listenForFoodEntries.
+    func listenForBadges(userId: String, onUpdate: @escaping ([BadgeProgressDTO]) -> Void)
+
+    // MARK: - Account Deletion
+
+    /// Deletes all Firestore data under users/{userId}/ in batches.
+    ///
+    /// Deletes all known subcollections (each document in batches of ≤500),
+    /// then deletes the root users/{userId} document.
+    /// This must succeed before the Firebase Auth account is deleted.
+    func deleteAllUserData(userId: String) async throws
+
     // MARK: - Lifecycle
 
     /// Stops every active listener across all models and clears the sync user.

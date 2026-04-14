@@ -66,8 +66,23 @@ protocol AuthService {
     var isLoggedIn: Bool { get }
 
     /// The email address of the currently authenticated user, or `nil` if no
-    /// session is active.
+    /// session is active. Returns "guest" when in guest mode.
     var currentUserEmail: String? { get }
+
+    /// The display name of the currently authenticated user, or `nil` if not set.
+    var currentUserDisplayName: String? { get }
+
+    /// True when the user is in an anonymous guest session (no account).
+    /// Use this — never `currentUserEmail == "guest"` — to gate guest behavior.
+    var isGuest: Bool { get }
+
+    /// True immediately after account creation. Cleared after first successful
+    /// data load. Used to suppress false "unable to load" errors on new accounts.
+    var isNewUser: Bool { get set }
+
+    /// The Firebase UID of a guest user who just signed up, awaiting data migration.
+    /// Non-nil only during the brief window between sign-up and migration completion.
+    var pendingMigrationUserId: String? { get }
 
     /// Authenticates an existing account with the provided credentials.
     ///
@@ -77,9 +92,24 @@ protocol AuthService {
 
     /// Creates a new account with the provided credentials and starts a session.
     ///
+    /// - Parameter displayName: The user's chosen display name (2–30 chars, trimmed).
+    ///   The implementation sets this on Firebase Auth and writes it to Firestore account/info.
     /// - Throws: `AuthError.emailAlreadyRegistered` if an account already exists.
-    func signUp(email: String, password: String) async throws
+    func signUp(email: String, password: String, displayName: String) async throws
 
     /// Ends the current session and clears all local session state.
     func logout()
+
+    /// Starts an anonymous guest session.
+    /// Sets isGuest=true, isLoggedIn=true, currentUserEmail="guest".
+    /// Stops any active Firestore listeners first.
+    func continueAsGuest()
+
+    /// Called after guest→auth data migration completes successfully.
+    /// Sets isGuest=false, updates currentUserEmail to newUserId,
+    /// clears pendingMigrationUserId.
+    func completeMigration(newUserId: String)
+
+    /// Called if migration fails. Clears pendingMigrationUserId, keeps guest mode active.
+    func cancelMigration()
 }

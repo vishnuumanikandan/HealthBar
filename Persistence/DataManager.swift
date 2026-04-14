@@ -42,15 +42,17 @@ final class DataManager {
     /// Read **live** from AuthService on every call — never cached locally.
     /// Returns nil when no session is active, causing all queries to short-circuit
     /// and return empty results, which prevents any stale or cross-user data.
-    ///
-    /// TODO: Replace `authService.currentUserEmail` with `authService.currentUserUID`
-    /// (a stable, opaque Firebase UID) when Firebase is integrated in Phase 3.
-    /// Using currentUserEmail as a temporary stable identifier during local-only
-    /// development. Do NOT treat this value as a permanent identifier — always read
-    /// it from AuthService at the time of use and never persist it independently.
+    /// Returns "guest" when in guest mode — used as a local SwiftData scoping key only.
     private var currentUserId: String? {
-        authService.currentUserEmail  // TODO: swap for Firebase UID in Phase 3
+        authService.currentUserEmail
     }
+
+    /// True when the user is in an anonymous guest session.
+    ///
+    /// Used as the single gate for ALL Firestore entry points in this class.
+    /// "guest" userId must never appear in any Firestore path.
+    /// Always check this property — never infer guest state from userId.
+    private var isGuest: Bool { authService.isGuest }
 
     // MARK: - Initialization
 
@@ -155,8 +157,8 @@ final class DataManager {
         try modelContext.save()
 
         // Firestore sync: upload the newly created default goal (if any).
-        // Pending ID removed in applyDailyGoalUpdates when listener confirms the write.
-        if let goal = newDefaultGoal {
+        // Skipped for guest users — no Firestore writes in guest mode.
+        if !isGuest, let goal = newDefaultGoal {
             let dto = DailyGoalDTO(from: goal)
             FirestoreServiceImpl.shared.pendingDailyGoalIds.insert(dto.id)
             Task {
@@ -178,6 +180,9 @@ final class DataManager {
     ///   2. Upload any local-only entries → Firestore (entries that exist locally but not remotely).
     /// The ongoing listener handles all subsequent updates; it never uploads anything.
     private func startFirestoreSync(userId: String) {
+        // Guest mode: never register any Firestore listeners or perform any remote I/O.
+        // "guest" userId must never appear in a Firestore path.
+        guard !isGuest else { return }
 
         // MARK: Real-time listeners (idempotent — safe to call from 3 DataManagers)
 
@@ -223,6 +228,13 @@ final class DataManager {
         firestoreService.listenForSavedRecipes(userId: userId) { [weak self] dtos in
             Task { [weak self] in try? await self?.applySavedRecipeUpdates(dtos, userId: userId) }
         }
+
+        firestoreService.listenForBadges(userId: userId) { [weak self] dtos in
+            Task { [weak self] in try? await self?.applyBadgeUpdates(dtos, userId: userId) }
+        }
+
+        // Sync displayName from account/info on login (source of truth for display name).
+        Task { [weak self] in await self?.syncDisplayNameFromAccountInfo(userId: userId) }
 
         // MARK: One-time initial sync per model (runs once at login)
         // For each model:
@@ -992,24 +1004,26 @@ final class DataManager {
         modelContext.insert(entry)
         try modelContext.save()
 
-        // Firestore sync: upload after local write succeeds.
-        // Add to pending set BEFORE the Task fires so the listener cannot overwrite
-        // this entry with a stale snapshot while the upload is in-flight.
-        // The pending ID is removed in applyFirestoreUpdates when the listener confirms
-        // the entry — not here on upload completion.
-        let dto = FoodEntryDTO(from: entry)
-        FirestoreServiceImpl.shared.pendingUploadIds.insert(dto.id)
-        Task {
-            try? await firestoreService.uploadFoodEntry(dto)
+        // Firestore sync: upload after local write succeeds. Skipped for guest users.
+        if !isGuest {
+            let dto = FoodEntryDTO(from: entry)
+            FirestoreServiceImpl.shared.pendingUploadIds.insert(dto.id)
+            Task {
+                try? await firestoreService.uploadFoodEntry(dto)
+            }
+
+            let fingerprintDTO = FoodFingerprintDTO(from: entry)
+            FirestoreServiceImpl.shared.pendingFingerprintIds.insert(fingerprintDTO.id)
+            Task {
+                try? await firestoreService.uploadFoodFingerprint(fingerprintDTO)
+            }
         }
 
-        // Firestore sync: also upsert the FoodFingerprint for this food.
-        // FoodFingerprint has no @Model — only Firestore needs it.
-        // Pending ID removed in applyFoodFingerprintUpdates when listener confirms.
-        let fingerprintDTO = FoodFingerprintDTO(from: entry)
-        FirestoreServiceImpl.shared.pendingFingerprintIds.insert(fingerprintDTO.id)
+        // Badge check: first meal, 100 meals
         Task {
-            try? await firestoreService.uploadFoodFingerprint(fingerprintDTO)
+            if let badges = try? await checkAndUnlockBadges(trigger: .foodLogged), !badges.isEmpty {
+                await MainActor.run { BadgeToastQueue.shared.enqueue(badges) }
+            }
         }
 
         return entry
@@ -1025,8 +1039,11 @@ final class DataManager {
         try modelContext.save()
 
         // Firestore sync: remove the entry from Firestore after local delete succeeds.
-        Task {
-            try? await firestoreService.deleteFoodEntry(id: entryId, userId: userId)
+        // Skipped for guest users — "guest" must never appear in a Firestore path.
+        if !isGuest {
+            Task {
+                try? await firestoreService.deleteFoodEntry(id: entryId, userId: userId)
+            }
         }
     }
 
@@ -1034,10 +1051,12 @@ final class DataManager {
     func updateFoodEntry(_ entry: FoodEntry) async throws {
         try modelContext.save()
 
-        // Firestore sync: re-upload the entry with its updated fields.
-        let dto = FoodEntryDTO(from: entry)
-        Task {
-            try? await firestoreService.uploadFoodEntry(dto)
+        // Firestore sync: re-upload the entry with its updated fields. Skipped for guests.
+        if !isGuest {
+            let dto = FoodEntryDTO(from: entry)
+            Task {
+                try? await firestoreService.uploadFoodEntry(dto)
+            }
         }
     }
 
@@ -1176,12 +1195,13 @@ final class DataManager {
 
         try modelContext.save()
 
-        // Firestore sync: upload the created/updated goal.
-        // Pending ID removed in applyDailyGoalUpdates when listener confirms the write.
-        let dto = DailyGoalDTO(from: goalToUpload)
-        FirestoreServiceImpl.shared.pendingDailyGoalIds.insert(dto.id)
-        Task {
-            try? await firestoreService.uploadDailyGoal(dto)
+        // Firestore sync: upload the created/updated goal. Skipped for guests.
+        if !isGuest {
+            let dto = DailyGoalDTO(from: goalToUpload)
+            FirestoreServiceImpl.shared.pendingDailyGoalIds.insert(dto.id)
+            Task {
+                try? await firestoreService.uploadDailyGoal(dto)
+            }
         }
     }
 
@@ -1211,8 +1231,8 @@ final class DataManager {
     func saveUserProgress() async throws {
         try modelContext.save()
 
-        // Firestore sync: re-upload UserProgress after every local save.
-        // Pending ID removed in applyUserProgressUpdate when the listener confirms.
+        // Firestore sync: re-upload UserProgress after every local save. Skipped for guests.
+        guard !isGuest else { return }
         guard let userId = currentUserId, !userId.isEmpty else { return }
         let descriptor = FetchDescriptor<UserProgress>(
             predicate: #Predicate { progress in progress.userId == userId }
@@ -1255,12 +1275,13 @@ final class DataManager {
         modelContext.insert(quest)
         try modelContext.save()
 
-        // Firestore sync: upload new quest after local insert succeeds.
-        // Pending ID removed in applyDailyQuestUpdates when the listener confirms.
-        let dto = DailyQuestDTO(from: quest)
-        FirestoreServiceImpl.shared.pendingQuestIds.insert(dto.id)
-        Task {
-            try? await firestoreService.uploadDailyQuest(dto)
+        // Firestore sync: upload new quest after local insert succeeds. Skipped for guests.
+        if !isGuest {
+            let dto = DailyQuestDTO(from: quest)
+            FirestoreServiceImpl.shared.pendingQuestIds.insert(dto.id)
+            Task {
+                try? await firestoreService.uploadDailyQuest(dto)
+            }
         }
     }
 
@@ -1296,7 +1317,8 @@ final class DataManager {
         try modelContext.save()
 
         // Firestore sync: upload all of today's quests after any in-memory mutation.
-        // This is the primary sync path for isCompleted changes (append-only on merge).
+        // Skipped for guest users.
+        guard !isGuest else { return }
         guard let userId = currentUserId, !userId.isEmpty else { return }
         let startOfDay = Calendar.current.startOfDay(for: Date())
         let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: startOfDay)!
@@ -1568,12 +1590,13 @@ final class DataManager {
         modelContext.insert(entry)
         try modelContext.save()
 
-        // Firestore sync: upload after local write succeeds.
-        // Pending ID removed in applyMoodEntryUpdates when listener confirms the write.
-        let dto = MoodEntryDTO(from: entry)
-        FirestoreServiceImpl.shared.pendingMoodEntryIds.insert(dto.id)
-        Task {
-            try? await firestoreService.uploadMoodEntry(dto)
+        // Firestore sync: upload after local write succeeds. Skipped for guests.
+        if !isGuest {
+            let dto = MoodEntryDTO(from: entry)
+            FirestoreServiceImpl.shared.pendingMoodEntryIds.insert(dto.id)
+            Task {
+                try? await firestoreService.uploadMoodEntry(dto)
+            }
         }
 
         return entry
@@ -1641,11 +1664,13 @@ final class DataManager {
         modelContext.insert(food)
         try modelContext.save()
 
-        // Firestore sync: upload after local write succeeds.
-        let dto = CustomFoodDTO(from: food)
-        FirestoreServiceImpl.shared.pendingCustomFoodIds.insert(dto.id)
-        Task {
-            try? await firestoreService.uploadCustomFood(dto)
+        // Firestore sync: upload after local write succeeds. Skipped for guests.
+        if !isGuest {
+            let dto = CustomFoodDTO(from: food)
+            FirestoreServiceImpl.shared.pendingCustomFoodIds.insert(dto.id)
+            Task {
+                try? await firestoreService.uploadCustomFood(dto)
+            }
         }
     }
 
@@ -1653,10 +1678,12 @@ final class DataManager {
     func updateCustomFood(_ food: CustomFood) async throws {
         try modelContext.save()
 
-        // Firestore sync: re-upload the food with its updated fields.
-        let dto = CustomFoodDTO(from: food)
-        Task {
-            try? await firestoreService.uploadCustomFood(dto)
+        // Firestore sync: re-upload the food with its updated fields. Skipped for guests.
+        if !isGuest {
+            let dto = CustomFoodDTO(from: food)
+            Task {
+                try? await firestoreService.uploadCustomFood(dto)
+            }
         }
     }
 
@@ -1668,9 +1695,11 @@ final class DataManager {
         modelContext.delete(food)
         try modelContext.save()
 
-        // Firestore sync: remove the document after local delete succeeds.
-        Task {
-            try? await firestoreService.deleteCustomFood(id: foodId, userId: userId)
+        // Firestore sync: remove the document after local delete succeeds. Skipped for guests.
+        if !isGuest {
+            Task {
+                try? await firestoreService.deleteCustomFood(id: foodId, userId: userId)
+            }
         }
     }
 
@@ -1695,11 +1724,13 @@ final class DataManager {
         modelContext.insert(meal)
         try modelContext.save()
 
-        // Firestore sync: upload after local write succeeds.
-        let dto = SavedMealDTO(from: meal)
-        FirestoreServiceImpl.shared.pendingSavedMealIds.insert(dto.id)
-        Task {
-            try? await firestoreService.uploadSavedMeal(dto)
+        // Firestore sync: upload after local write succeeds. Skipped for guests.
+        if !isGuest {
+            let dto = SavedMealDTO(from: meal)
+            FirestoreServiceImpl.shared.pendingSavedMealIds.insert(dto.id)
+            Task {
+                try? await firestoreService.uploadSavedMeal(dto)
+            }
         }
     }
 
@@ -1707,10 +1738,12 @@ final class DataManager {
     func updateSavedMeal(_ meal: SavedMeal) async throws {
         try modelContext.save()
 
-        // Firestore sync: re-upload the meal with its updated fields.
-        let dto = SavedMealDTO(from: meal)
-        Task {
-            try? await firestoreService.uploadSavedMeal(dto)
+        // Firestore sync: re-upload the meal with its updated fields. Skipped for guests.
+        if !isGuest {
+            let dto = SavedMealDTO(from: meal)
+            Task {
+                try? await firestoreService.uploadSavedMeal(dto)
+            }
         }
     }
 
@@ -1722,9 +1755,11 @@ final class DataManager {
         modelContext.delete(meal)
         try modelContext.save()
 
-        // Firestore sync: remove the document after local delete succeeds.
-        Task {
-            try? await firestoreService.deleteSavedMeal(id: mealId, userId: userId)
+        // Firestore sync: remove the document after local delete succeeds. Skipped for guests.
+        if !isGuest {
+            Task {
+                try? await firestoreService.deleteSavedMeal(id: mealId, userId: userId)
+            }
         }
     }
 
@@ -1749,11 +1784,13 @@ final class DataManager {
         modelContext.insert(recipe)
         try modelContext.save()
 
-        // Firestore sync: upload after local write succeeds.
-        let dto = SavedRecipeDTO(from: recipe)
-        FirestoreServiceImpl.shared.pendingSavedRecipeIds.insert(dto.id)
-        Task {
-            try? await firestoreService.uploadSavedRecipe(dto)
+        // Firestore sync: upload after local write succeeds. Skipped for guests.
+        if !isGuest {
+            let dto = SavedRecipeDTO(from: recipe)
+            FirestoreServiceImpl.shared.pendingSavedRecipeIds.insert(dto.id)
+            Task {
+                try? await firestoreService.uploadSavedRecipe(dto)
+            }
         }
     }
 
@@ -1761,10 +1798,12 @@ final class DataManager {
     func updateSavedRecipe(_ recipe: SavedRecipe) async throws {
         try modelContext.save()
 
-        // Firestore sync: re-upload the recipe with its updated fields.
-        let dto = SavedRecipeDTO(from: recipe)
-        Task {
-            try? await firestoreService.uploadSavedRecipe(dto)
+        // Firestore sync: re-upload the recipe with its updated fields. Skipped for guests.
+        if !isGuest {
+            let dto = SavedRecipeDTO(from: recipe)
+            Task {
+                try? await firestoreService.uploadSavedRecipe(dto)
+            }
         }
     }
 
@@ -1776,9 +1815,11 @@ final class DataManager {
         modelContext.delete(recipe)
         try modelContext.save()
 
-        // Firestore sync: remove the document after local delete succeeds.
-        Task {
-            try? await firestoreService.deleteSavedRecipe(id: recipeId, userId: userId)
+        // Firestore sync: remove the document after local delete succeeds. Skipped for guests.
+        if !isGuest {
+            Task {
+                try? await firestoreService.deleteSavedRecipe(id: recipeId, userId: userId)
+            }
         }
     }
 
@@ -1844,11 +1885,13 @@ final class DataManager {
 
         try modelContext.save()
 
-        // Firestore sync: full document replace (source of truth)
-        let profileToSync = existing ?? profile
-        let dto = UserProfileDTO(from: profileToSync)
-        Task {
-            try? await firestoreService.uploadUserProfile(dto, userId: userId)
+        // Firestore sync: full document replace (source of truth). Skipped for guests.
+        if !isGuest {
+            let profileToSync = existing ?? profile
+            let dto = UserProfileDTO(from: profileToSync)
+            Task {
+                try? await firestoreService.uploadUserProfile(dto, userId: userId)
+            }
         }
     }
 
@@ -1866,11 +1909,13 @@ final class DataManager {
             existing.fatTarget = Double(fat)
             try modelContext.save()
 
-            // Firestore sync
-            let dto = DailyGoalDTO(from: existing)
-            FirestoreServiceImpl.shared.pendingDailyGoalIds.insert(dto.id)
-            Task {
-                try? await firestoreService.uploadDailyGoal(dto)
+            // Firestore sync. Skipped for guests.
+            if !isGuest {
+                let dto = DailyGoalDTO(from: existing)
+                FirestoreServiceImpl.shared.pendingDailyGoalIds.insert(dto.id)
+                Task {
+                    try? await firestoreService.uploadDailyGoal(dto)
+                }
             }
         } else {
             // No goal exists yet — create one with sensible purity default
@@ -1886,10 +1931,13 @@ final class DataManager {
             modelContext.insert(goal)
             try modelContext.save()
 
-            let dto = DailyGoalDTO(from: goal)
-            FirestoreServiceImpl.shared.pendingDailyGoalIds.insert(dto.id)
-            Task {
-                try? await firestoreService.uploadDailyGoal(dto)
+            // Firestore sync. Skipped for guests.
+            if !isGuest {
+                let dto = DailyGoalDTO(from: goal)
+                FirestoreServiceImpl.shared.pendingDailyGoalIds.insert(dto.id)
+                Task {
+                    try? await firestoreService.uploadDailyGoal(dto)
+                }
             }
         }
     }
@@ -1900,6 +1948,8 @@ final class DataManager {
     /// If local exists and matches → no-op.
     /// If local doesn't exist or differs → upsert from Firestore DTO.
     func syncUserProfileFromFirestore() async throws {
+        // Guest mode: never read from Firestore.
+        guard !isGuest else { return }
         guard let userId = currentUserId, !userId.isEmpty else { return }
 
         guard let dto = try await firestoreService.fetchUserProfile(userId: userId) else { return }
@@ -1930,6 +1980,463 @@ final class DataManager {
         }
         try modelContext.save()
     }
+
+    // MARK: - DisplayName Sync
+
+    /// Fetches account/info from Firestore and updates UserProfile.displayName locally.
+    ///
+    /// Called once per login from startFirestoreSync. Does NOT re-upload to Firestore
+    /// to avoid an infinite loop (Firestore → local only).
+    func syncDisplayNameFromAccountInfo(userId: String) async {
+        // Called from startFirestoreSync which is already guarded, but double-check for safety.
+        guard !isGuest, !userId.isEmpty else { return }
+
+        let accountInfo = try? await firestoreService.fetchAccountInfo(userId: userId)
+
+        let resolvedName: String
+        if let name = accountInfo?.displayName, !name.isEmpty {
+            resolvedName = name
+        } else if let firebaseName = authService.currentUserDisplayName, !firebaseName.isEmpty {
+            resolvedName = firebaseName
+        } else {
+            return // Nothing to sync
+        }
+
+        guard let profile = try? await getUserProfile() else { return }
+        guard profile.displayName != resolvedName else { return }
+
+        profile.displayName = resolvedName
+        try? modelContext.save()
+    }
+
+    // MARK: - Badge Methods
+
+    /// Returns the BadgeProgress record for the given badge, scoped to current user.
+    func getBadgeProgress(badgeId: String) async throws -> BadgeProgress? {
+        guard let userId = currentUserId, !userId.isEmpty else { return nil }
+        let descriptor = FetchDescriptor<BadgeProgress>(
+            predicate: #Predicate { $0.userId == userId && $0.badgeId == badgeId }
+        )
+        return try modelContext.fetch(descriptor).first
+    }
+
+    /// Returns all BadgeProgress records for the current user.
+    func getAllBadgeProgress() async throws -> [BadgeProgress] {
+        guard let userId = currentUserId, !userId.isEmpty else { return [] }
+        let descriptor = FetchDescriptor<BadgeProgress>(
+            predicate: #Predicate { $0.userId == userId }
+        )
+        return try modelContext.fetch(descriptor)
+    }
+
+    /// Creates or updates a BadgeProgress record. Append-only: never reverts isUnlocked from true.
+    func upsertBadgeProgress(badgeId: String, isUnlocked: Bool, unlockedAt: Date?) async throws {
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+
+        if let existing = try await getBadgeProgress(badgeId: badgeId) {
+            // Never revert an already-unlocked badge
+            if existing.isUnlocked { return }
+            existing.isUnlocked = isUnlocked
+            existing.unlockedAt = unlockedAt
+        } else {
+            let progress = BadgeProgress(
+                userId: userId,
+                badgeId: badgeId,
+                isUnlocked: isUnlocked,
+                unlockedAt: unlockedAt
+            )
+            modelContext.insert(progress)
+        }
+        try modelContext.save()
+    }
+
+    /// Returns the total number of food entries for the current user (across all dates).
+    func countAllFoodEntries() async throws -> Int {
+        guard let userId = currentUserId, !userId.isEmpty else { return 0 }
+        let descriptor = FetchDescriptor<FoodEntry>(
+            predicate: #Predicate { $0.userId == userId }
+        )
+        return try modelContext.fetchCount(descriptor)
+    }
+
+    /// Returns true if every DailyQuest for today is completed (for the current user).
+    func areAllQuestsCompletedToday() async throws -> Bool {
+        guard let userId = currentUserId, !userId.isEmpty else { return false }
+        let today = Calendar.current.startOfDay(for: Date())
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
+        let descriptor = FetchDescriptor<DailyQuest>(
+            predicate: #Predicate { $0.userId == userId && $0.date >= today && $0.date < tomorrow }
+        )
+        let quests = try modelContext.fetch(descriptor)
+        guard !quests.isEmpty else { return false }
+        return quests.allSatisfy { $0.isCompleted }
+    }
+
+    /// Checks badge unlock conditions for the given trigger. Idempotent — safe to call repeatedly.
+    ///
+    /// Returns only newly-unlocked badges (badges that were locked before this call).
+    /// Callers should enqueue the result into `BadgeToastQueue.shared`.
+    @discardableResult
+    func checkAndUnlockBadges(trigger: BadgeTrigger) async throws -> [BadgeDefinition] {
+        var newlyUnlocked: [BadgeDefinition] = []
+
+        func unlock(_ badgeId: String) async throws {
+            guard let def = BadgeDefinition.find(id: badgeId) else { return }
+            let existing = try await getBadgeProgress(badgeId: badgeId)
+            if existing?.isUnlocked == true { return }
+
+            try await upsertBadgeProgress(badgeId: badgeId, isUnlocked: true, unlockedAt: Date())
+
+            // Firestore sync for badge unlock. Skipped for guests.
+            if !isGuest, let userId = currentUserId, !userId.isEmpty {
+                let dto = BadgeProgressDTO(
+                    userId: userId,
+                    badgeId: badgeId,
+                    isUnlocked: true,
+                    unlockedAt: Date()
+                )
+                FirestoreServiceImpl.shared.pendingBadgeIds.insert(badgeId)
+                Task { try? await firestoreService.uploadBadgeProgress(dto, userId: userId) }
+            }
+
+            newlyUnlocked.append(def)
+        }
+
+        switch trigger {
+        case .foodLogged:
+            let count = try await countAllFoodEntries()
+            if count >= 1 { try await unlock("first_flame") }
+            if count >= 100 { try await unlock("century") }
+
+        case .streakUpdated:
+            let streakProgress = try await getUserProgress()
+            if streakProgress.currentStreak >= 7 { try await unlock("week_warrior") }
+            if streakProgress.currentStreak >= 30 { try await unlock("month_legend") }
+
+        case .questsChecked:
+            if try await areAllQuestsCompletedToday() { try await unlock("goal_getter") }
+
+        case .xpAwarded:
+            let xpProgress = try await getUserProgress()
+            if xpProgress.currentLevel >= 5 { try await unlock("level_up") }
+        }
+
+        return newlyUnlocked
+    }
+
+    // MARK: - Guest Mode Methods
+
+    /// Migrates all SwiftData records from userId=="guest" to the new authenticated userId.
+    ///
+    /// Rules (strict):
+    /// 1. Fetch all records where userId == "guest".
+    /// 2. For each record: if a record with newUserId and same id already exists → delete the
+    ///    guest copy (no duplicates). Otherwise → reassign userId in-place.
+    /// 3. Single modelContext.save() after all updates are applied.
+    ///
+    /// Called from ContentView when pendingMigrationUserId becomes non-nil.
+    /// DataManager Firestore guards are still active during this call (isGuest == true).
+    func migrateGuestData(to newUserId: String) async throws {
+        guard !newUserId.isEmpty, newUserId != "guest" else { return }
+
+        // Migrate all @Model types in-place. Never create duplicates.
+        // For each type: fetch guest records, then reassign userId if no record with the
+        // same UUID already exists for newUserId. Delete guest copy if duplicate found.
+        let guestFoodEntries = try modelContext.fetch(
+            FetchDescriptor<FoodEntry>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        let existingFoodIds = Set(
+            (try? modelContext.fetch(
+                FetchDescriptor<FoodEntry>(predicate: #Predicate { $0.userId == newUserId })
+            ))?.map { $0.id.uuidString } ?? []
+        )
+        for entry in guestFoodEntries {
+            if existingFoodIds.contains(entry.id.uuidString) {
+                modelContext.delete(entry)
+            } else {
+                entry.userId = newUserId
+            }
+        }
+
+        let guestGoals = try modelContext.fetch(
+            FetchDescriptor<DailyGoal>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        let existingGoalIds = Set(
+            (try? modelContext.fetch(
+                FetchDescriptor<DailyGoal>(predicate: #Predicate { $0.userId == newUserId })
+            ))?.map { $0.id.uuidString } ?? []
+        )
+        for goal in guestGoals {
+            if existingGoalIds.contains(goal.id.uuidString) {
+                modelContext.delete(goal)
+            } else {
+                goal.userId = newUserId
+            }
+        }
+
+        let guestProgress = try modelContext.fetch(
+            FetchDescriptor<UserProgress>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        let existingProgressIds = Set(
+            (try? modelContext.fetch(
+                FetchDescriptor<UserProgress>(predicate: #Predicate { $0.userId == newUserId })
+            ))?.map { $0.id.uuidString } ?? []
+        )
+        for progress in guestProgress {
+            if existingProgressIds.contains(progress.id.uuidString) {
+                modelContext.delete(progress)
+            } else {
+                progress.userId = newUserId
+            }
+        }
+
+        let guestQuests = try modelContext.fetch(
+            FetchDescriptor<DailyQuest>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        let existingQuestIds = Set(
+            (try? modelContext.fetch(
+                FetchDescriptor<DailyQuest>(predicate: #Predicate { $0.userId == newUserId })
+            ))?.map { $0.id.uuidString } ?? []
+        )
+        for quest in guestQuests {
+            if existingQuestIds.contains(quest.id.uuidString) {
+                modelContext.delete(quest)
+            } else {
+                quest.userId = newUserId
+            }
+        }
+
+        let guestMoods = try modelContext.fetch(
+            FetchDescriptor<MoodEntry>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        let existingMoodIds = Set(
+            (try? modelContext.fetch(
+                FetchDescriptor<MoodEntry>(predicate: #Predicate { $0.userId == newUserId })
+            ))?.map { $0.id.uuidString } ?? []
+        )
+        for mood in guestMoods {
+            if existingMoodIds.contains(mood.id.uuidString) {
+                modelContext.delete(mood)
+            } else {
+                mood.userId = newUserId
+            }
+        }
+
+        let guestBaselines = try modelContext.fetch(
+            FetchDescriptor<PersonalBaseline>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        let existingBaselineIds = Set(
+            (try? modelContext.fetch(
+                FetchDescriptor<PersonalBaseline>(predicate: #Predicate { $0.userId == newUserId })
+            ))?.map { $0.id.uuidString } ?? []
+        )
+        for baseline in guestBaselines {
+            if existingBaselineIds.contains(baseline.id.uuidString) {
+                modelContext.delete(baseline)
+            } else {
+                baseline.userId = newUserId
+            }
+        }
+
+        let guestCustomFoods = try modelContext.fetch(
+            FetchDescriptor<CustomFood>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        let existingCustomFoodIds = Set(
+            (try? modelContext.fetch(
+                FetchDescriptor<CustomFood>(predicate: #Predicate { $0.userId == newUserId })
+            ))?.map { $0.id.uuidString } ?? []
+        )
+        for food in guestCustomFoods {
+            if existingCustomFoodIds.contains(food.id.uuidString) {
+                modelContext.delete(food)
+            } else {
+                food.userId = newUserId
+            }
+        }
+
+        let guestMeals = try modelContext.fetch(
+            FetchDescriptor<SavedMeal>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        let existingMealIds = Set(
+            (try? modelContext.fetch(
+                FetchDescriptor<SavedMeal>(predicate: #Predicate { $0.userId == newUserId })
+            ))?.map { $0.id.uuidString } ?? []
+        )
+        for meal in guestMeals {
+            if existingMealIds.contains(meal.id.uuidString) {
+                modelContext.delete(meal)
+            } else {
+                meal.userId = newUserId
+            }
+        }
+
+        let guestRecipes = try modelContext.fetch(
+            FetchDescriptor<SavedRecipe>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        let existingRecipeIds = Set(
+            (try? modelContext.fetch(
+                FetchDescriptor<SavedRecipe>(predicate: #Predicate { $0.userId == newUserId })
+            ))?.map { $0.id.uuidString } ?? []
+        )
+        for recipe in guestRecipes {
+            if existingRecipeIds.contains(recipe.id.uuidString) {
+                modelContext.delete(recipe)
+            } else {
+                recipe.userId = newUserId
+            }
+        }
+
+        let guestBadges = try modelContext.fetch(
+            FetchDescriptor<BadgeProgress>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        let existingBadgeIds = Set(
+            (try? modelContext.fetch(
+                FetchDescriptor<BadgeProgress>(predicate: #Predicate { $0.userId == newUserId })
+            ))?.map { $0.badgeId } ?? []
+        )
+        for badge in guestBadges {
+            if existingBadgeIds.contains(badge.badgeId) {
+                modelContext.delete(badge)
+            } else {
+                badge.userId = newUserId
+            }
+        }
+
+        let guestProfiles = try modelContext.fetch(
+            FetchDescriptor<UserProfile>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        let existingProfileIds = Set(
+            (try? modelContext.fetch(
+                FetchDescriptor<UserProfile>(predicate: #Predicate { $0.userId == newUserId })
+            ))?.map { $0.id.uuidString } ?? []
+        )
+        for profile in guestProfiles {
+            if existingProfileIds.contains(profile.id.uuidString) {
+                modelContext.delete(profile)
+            } else {
+                profile.userId = newUserId
+            }
+        }
+
+        // Single save after all in-place updates and deletes.
+        try modelContext.save()
+    }
+
+    /// Deletes all SwiftData records belonging to the guest user ("guest" userId).
+    /// Called when a guest taps "Sign Out" and confirms they want to delete local data.
+    func deleteAllGuestData() async throws {
+        let guestEntries = try modelContext.fetch(
+            FetchDescriptor<FoodEntry>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        for entry in guestEntries { modelContext.delete(entry) }
+
+        let guestGoals = try modelContext.fetch(
+            FetchDescriptor<DailyGoal>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        for goal in guestGoals { modelContext.delete(goal) }
+
+        let guestProgress = try modelContext.fetch(
+            FetchDescriptor<UserProgress>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        for progress in guestProgress { modelContext.delete(progress) }
+
+        let guestQuests = try modelContext.fetch(
+            FetchDescriptor<DailyQuest>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        for quest in guestQuests { modelContext.delete(quest) }
+
+        let guestMoods = try modelContext.fetch(
+            FetchDescriptor<MoodEntry>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        for mood in guestMoods { modelContext.delete(mood) }
+
+        let guestBaselines = try modelContext.fetch(
+            FetchDescriptor<PersonalBaseline>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        for baseline in guestBaselines { modelContext.delete(baseline) }
+
+        let guestCustomFoods = try modelContext.fetch(
+            FetchDescriptor<CustomFood>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        for food in guestCustomFoods { modelContext.delete(food) }
+
+        let guestMeals = try modelContext.fetch(
+            FetchDescriptor<SavedMeal>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        for meal in guestMeals { modelContext.delete(meal) }
+
+        let guestRecipes = try modelContext.fetch(
+            FetchDescriptor<SavedRecipe>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        for recipe in guestRecipes { modelContext.delete(recipe) }
+
+        let guestBadges = try modelContext.fetch(
+            FetchDescriptor<BadgeProgress>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        for badge in guestBadges { modelContext.delete(badge) }
+
+        let guestProfiles = try modelContext.fetch(
+            FetchDescriptor<UserProfile>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        for profile in guestProfiles { modelContext.delete(profile) }
+
+        try modelContext.save()
+    }
+
+    /// Explicitly starts Firestore sync for the currently authenticated user.
+    /// Called after guest→auth migration completes to begin syncing without
+    /// relying on automatic triggers.
+    func startFirestoreSyncForCurrentUser() {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return }
+        startFirestoreSync(userId: userId)
+    }
+
+    /// Applies badge updates received from the Firestore listener. Append-only.
+    ///
+    /// - Skips badges in `pendingBadgeIds` (local write in-flight — our data is newer).
+    /// - Removes from `pendingBadgeIds` when Firestore confirms `isUnlocked == true`.
+    /// - Never reverts `isUnlocked` from true to false.
+    func applyBadgeUpdates(_ dtos: [BadgeProgressDTO], userId: String) async throws {
+        for dto in dtos {
+            // Skip if we have a pending local write for this badge
+            if FirestoreServiceImpl.shared.pendingBadgeIds.contains(dto.badgeId) {
+                if dto.isUnlocked {
+                    FirestoreServiceImpl.shared.pendingBadgeIds.remove(dto.badgeId)
+                }
+                continue
+            }
+
+            let descriptor = FetchDescriptor<BadgeProgress>(
+                predicate: #Predicate { $0.userId == userId && $0.badgeId == dto.badgeId }
+            )
+            let existing = try modelContext.fetch(descriptor).first
+
+            if let existing = existing {
+                if existing.isUnlocked { continue } // Never revert
+                existing.isUnlocked = dto.isUnlocked
+                existing.unlockedAt = dto.unlockedAt
+            } else {
+                let progress = BadgeProgress(
+                    userId: userId,
+                    badgeId: dto.badgeId,
+                    isUnlocked: dto.isUnlocked,
+                    unlockedAt: dto.unlockedAt
+                )
+                modelContext.insert(progress)
+            }
+        }
+        try? modelContext.save()
+    }
+}
+
+// MARK: - Badge Trigger
+
+/// Events that can trigger badge unlock checks.
+enum BadgeTrigger {
+    case foodLogged
+    case streakUpdated
+    case questsChecked
+    case xpAwarded
 }
 
 // MARK: - Error Types

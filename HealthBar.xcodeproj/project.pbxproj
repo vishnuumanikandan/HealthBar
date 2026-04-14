@@ -103,6 +103,12 @@
 		BEF96AC12F7CC83F00FB0F83 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96AC02F7CC83F00FB0F83 /* APIConfig.swift */; };
 		BEF96AC42F7CC86500FB0F83 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96AC22F7CC86500FB0F83 /* OnboardingView.swift */; };
 		BEF96AC72F7CC87700FB0F83 /* OnboardingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96AC62F7CC87700FB0F83 /* OnboardingViewModel.swift */; };
+		BEF96B532F88510B00FB0F83 /* BadgeProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96B522F88510B00FB0F83 /* BadgeProgress.swift */; };
+		BEF96B552F88511800FB0F83 /* BadgeDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96B542F88511800FB0F83 /* BadgeDefinition.swift */; };
+		BEF96B572F88515200FB0F83 /* BadgeProgressDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96B562F88515200FB0F83 /* BadgeProgressDTO.swift */; };
+		BEF96B592F88515A00FB0F83 /* AccountInfoDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96B582F88515A00FB0F83 /* AccountInfoDTO.swift */; };
+		BEF96B5B2F88519800FB0F83 /* BadgeToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96B5A2F88519800FB0F83 /* BadgeToast.swift */; };
+		BEF96B5D2F8851B200FB0F83 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96B5C2F8851B200FB0F83 /* AccountView.swift */; };
 		CC110AB12F300000000000B1 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110AA12F300000000000B1 /* AuthService.swift */; };
 		CC110AB22F300000000000B2 /* LocalAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110AA22F300000000000B2 /* LocalAuthService.swift */; };
 		CC110AB32F300000000000B3 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110AA32F300000000000B3 /* AuthViewModel.swift */; };
@@ -213,6 +219,12 @@
 		BEF96AC02F7CC83F00FB0F83 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
 		BEF96AC22F7CC86500FB0F83 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		BEF96AC62F7CC87700FB0F83 /* OnboardingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingViewModel.swift; sourceTree = "<group>"; };
+		BEF96B522F88510B00FB0F83 /* BadgeProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeProgress.swift; sourceTree = "<group>"; };
+		BEF96B542F88511800FB0F83 /* BadgeDefinition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeDefinition.swift; sourceTree = "<group>"; };
+		BEF96B562F88515200FB0F83 /* BadgeProgressDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeProgressDTO.swift; sourceTree = "<group>"; };
+		BEF96B582F88515A00FB0F83 /* AccountInfoDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountInfoDTO.swift; sourceTree = "<group>"; };
+		BEF96B5A2F88519800FB0F83 /* BadgeToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeToast.swift; sourceTree = "<group>"; };
+		BEF96B5C2F8851B200FB0F83 /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
 		CC110AA12F300000000000B1 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		CC110AA22F300000000000B2 /* LocalAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAuthService.swift; sourceTree = "<group>"; };
 		CC110AA32F300000000000B3 /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
@@ -354,6 +366,7 @@
 		1146B2612F1F37BD004767C9 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				BEF96B5C2F8851B200FB0F83 /* AccountView.swift */,
 				BEF96AC62F7CC87700FB0F83 /* OnboardingViewModel.swift */,
 				BEF96AC22F7CC86500FB0F83 /* OnboardingView.swift */,
 				BEF969F12F7BA74D00FB0F83 /* ToolsView.swift */,
@@ -435,6 +448,7 @@
 		AABB00002F282600000000A1 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				BEF96B5A2F88519800FB0F83 /* BadgeToast.swift */,
 				1111E1972F32DFEE006EF76F /* StreakMilestoneToast.swift */,
 				1111E1952F32DFE5006EF76F /* MealTypePill.swift */,
 				1111E18C2F29B129006EF76F /* PurityScoreInfoSheet.swift */,
@@ -458,6 +472,8 @@
 		BEF96AAB2F7CC7F600FB0F83 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				BEF96B542F88511800FB0F83 /* BadgeDefinition.swift */,
+				BEF96B522F88510B00FB0F83 /* BadgeProgress.swift */,
 				BEF96ABE2F7CC81E00FB0F83 /* UserProfile.swift */,
 				BEF96A9A2F7CC7F600FB0F83 /* Extensions */,
 				BEF96A9B2F7CC7F600FB0F83 /* CustomFood.swift */,
@@ -495,6 +511,8 @@
 		CC220AA02F400000000000C0 /* Firestore */ = {
 			isa = PBXGroup;
 			children = (
+				BEF96B582F88515A00FB0F83 /* AccountInfoDTO.swift */,
+				BEF96B562F88515200FB0F83 /* BadgeProgressDTO.swift */,
 				CC220AA12F400000000000C1 /* FirestoreService.swift */,
 				CC220AA22F400000000000C2 /* FoodEntryDTO.swift */,
 				CC220AA32F400000000000C3 /* FirestoreServiceImpl.swift */,
@@ -697,9 +715,11 @@
 				1146B2EB2F2343FF004767C9 /* NutritionManager.swift in Sources */,
 				1111E1402F285EF3006EF76F /* AllQuestsCompleteView.swift in Sources */,
 				1111E1982F32DFEE006EF76F /* StreakMilestoneToast.swift in Sources */,
+				BEF96B532F88510B00FB0F83 /* BadgeProgress.swift in Sources */,
 				1146B26C2F1F493D004767C9 /* DesignSystem.swift in Sources */,
 				BEF9698E2F7B48B500FB0F83 /* AddCustomFoodView.swift in Sources */,
 				BE77873E2F70E62E00666EE3 /* ProfileView.swift in Sources */,
+				BEF96B552F88511800FB0F83 /* BadgeDefinition.swift in Sources */,
 				BEF96A972F7CC7A200FB0F83 /* UserProfileDTO.swift in Sources */,
 				1111E13C2F285EBA006EF76F /* DailyGoalsView.swift in Sources */,
 				1111E18D2F29B129006EF76F /* PurityScoreInfoSheet.swift in Sources */,
@@ -721,6 +741,7 @@
 				BEF96ABB2F7CC7F600FB0F83 /* UserProgress.swift in Sources */,
 				BEF96ABC2F7CC7F600FB0F83 /* MoodEntry.swift in Sources */,
 				BEF96ABD2F7CC7F600FB0F83 /* SavedRecipe.swift in Sources */,
+				BEF96B5B2F88519800FB0F83 /* BadgeToast.swift in Sources */,
 				BEF969F02F7BA74500FB0F83 /* CalculatorViews.swift in Sources */,
 				BE7787962F72699800666EE3 /* FirebaseAuthService.swift in Sources */,
 				1111E1AE2F32E129006EF76F /* DailyInsightsCard.swift in Sources */,
@@ -748,6 +769,7 @@
 				BEF96AC12F7CC83F00FB0F83 /* APIConfig.swift in Sources */,
 				BEF969082F77A7F900FB0F83 /* AddFoodChoiceSheet.swift in Sources */,
 				1146B2F42F234473004767C9 /* FoodLogView.swift in Sources */,
+				BEF96B5D2F8851B200FB0F83 /* AccountView.swift in Sources */,
 				BEF969062F77A7F200FB0F83 /* BarcodeOptionsView.swift in Sources */,
 				1111E18B2F29B117006EF76F /* AdvancedNutrientCard.swift in Sources */,
 				BEF969882F7B489800FB0F83 /* RecipeBuilderView.swift in Sources */,
@@ -756,6 +778,7 @@
 				BEF9698C2F7B48AB00FB0F83 /* MiniFoodPickerView.swift in Sources */,
 				BEF969902F7B48BF00FB0F83 /* ServingSizePickerSheet.swift in Sources */,
 				CC110AB22F300000000000B2 /* LocalAuthService.swift in Sources */,
+				BEF96B592F88515A00FB0F83 /* AccountInfoDTO.swift in Sources */,
 				CC110AB32F300000000000B3 /* AuthViewModel.swift in Sources */,
 				CC110AB42F300000000000B4 /* LoginView.swift in Sources */,
 				CC110AB52F300000000000B5 /* SignUpView.swift in Sources */,
@@ -771,6 +794,7 @@
 				CC550AB12F600000000000D1 /* CustomFoodDTO.swift in Sources */,
 				CC550AB22F600000000000D2 /* SavedMealDTO.swift in Sources */,
 				CC550AB32F600000000000D3 /* SavedRecipeDTO.swift in Sources */,
+				BEF96B572F88515200FB0F83 /* BadgeProgressDTO.swift in Sources */,
 				BEF969042F77A7E900FB0F83 /* FoodDatabaseView.swift in Sources */,
 				BEF969942F7B493300FB0F83 /* FoodDatabase.swift in Sources */,
 			);

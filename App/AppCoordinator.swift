@@ -778,6 +778,62 @@ final class AppCoordinator {
 
         return (entry: newEntry, xpEarned: xpEarned)
     }
+
+    // MARK: - Badge Relay
+
+    /// Returns all BadgeProgress records for the current user.
+    func getAllBadgeProgress() async throws -> [BadgeProgress] {
+        return try await dataManager.getAllBadgeProgress()
+    }
+
+    /// Fires badge checks for streak and XP triggers after daily XP is awarded.
+    func checkBadgesAfterStreakUpdate() async {
+        if let badges = try? await dataManager.checkAndUnlockBadges(trigger: .streakUpdated), !badges.isEmpty {
+            BadgeToastQueue.shared.enqueue(badges)
+        }
+    }
+
+    func checkBadgesAfterXPAwarded() async {
+        if let badges = try? await dataManager.checkAndUnlockBadges(trigger: .xpAwarded), !badges.isEmpty {
+            BadgeToastQueue.shared.enqueue(badges)
+        }
+    }
+
+    func checkBadgesAfterQuestsCompleted() async {
+        if let badges = try? await dataManager.checkAndUnlockBadges(trigger: .questsChecked), !badges.isEmpty {
+            BadgeToastQueue.shared.enqueue(badges)
+        }
+    }
+
+    // MARK: - UserProfile DisplayName Update
+
+    /// Updates the displayName in the current user's UserProfile (local SwiftData only).
+    /// The caller (AccountViewModel) is responsible for also updating Firebase Auth and Firestore.
+    func updateUserProfileDisplayName(_ name: String) async throws {
+        guard let profile = try await dataManager.getUserProfile() else { return }
+        profile.displayName = name.trimmingCharacters(in: .whitespaces)
+        try await dataManager.upsertUserProfile(profile)
+    }
+
+    // MARK: - Guest Mode
+
+    /// Migrates all SwiftData records from userId=="guest" to the given authenticated userId.
+    /// Called by ContentView after a guest user signs up, before setting isGuest=false.
+    func migrateGuestData(to newUserId: String) async throws {
+        try await dataManager.migrateGuestData(to: newUserId)
+    }
+
+    /// Deletes all SwiftData records scoped to userId=="guest".
+    /// Called when a guest user confirms sign-out.
+    func deleteAllGuestData() async throws {
+        try await dataManager.deleteAllGuestData()
+    }
+
+    /// Explicitly starts Firestore sync for the current user.
+    /// Called after guest→auth migration completes — do not rely on automatic triggers.
+    func startFirestoreSyncForCurrentUser() {
+        dataManager.startFirestoreSyncForCurrentUser()
+    }
 }
 
 // MARK: - Supporting Types

@@ -209,6 +209,34 @@ struct LoginView: View {
             .frame(minHeight: 44) // Minimum tap target
             .accessibilityLabel("Don't have an account? Sign Up")
             .accessibilityHint("Double-tap to create a new HealthBar account")
+
+            // Divider
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary.opacity(0.25))
+                Text("or")
+                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary.opacity(0.25))
+            }
+            .padding(.horizontal, DesignSystem.Spacing.md)
+
+            // Continue as Guest — full access, local data only, no account required
+            Button {
+                focusedField = nil
+                Task { await viewModel.continueAsGuest() }
+            } label: {
+                Text("Continue as Guest")
+                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .frame(minHeight: 44)
+            }
+            .disabled(viewModel.isLoading)
+            .accessibilityLabel("Continue as Guest")
+            .accessibilityHint("Double-tap to use HealthBar without an account. Data is stored locally only.")
         }
     }
 }

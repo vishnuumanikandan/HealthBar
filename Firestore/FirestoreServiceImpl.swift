@@ -65,6 +65,7 @@ final class FirestoreServiceImpl: FirestoreService {
     private var customFoodsListener: ListenerRegistration?
     private var savedMealsListener: ListenerRegistration?
     private var savedRecipesListener: ListenerRegistration?
+    private var badgesListener: ListenerRegistration?
 
     // MARK: - Pending Upload Sets (one per model, shared across all DataManager instances)
 
@@ -99,6 +100,9 @@ final class FirestoreServiceImpl: FirestoreService {
 
     /// SavedRecipe IDs written locally but not yet confirmed by the Firestore listener.
     var pendingSavedRecipeIds: Set<String> = []
+
+    /// Badge IDs written locally but not yet confirmed by the Firestore listener.
+    var pendingBadgeIds: Set<String> = []
 
     // MARK: - Init
 
@@ -469,6 +473,85 @@ final class FirestoreServiceImpl: FirestoreService {
             }
     }
 
+    // MARK: - FirestoreService: AccountInfo
+
+    private func accountInfoDocument(for userId: String) -> DocumentReference {
+        db.collection("users").document(userId).collection("account").document("info")
+    }
+
+    func writeAccountInfo(_ info: AccountInfoDTO, userId: String) async throws {
+        try accountInfoDocument(for: userId).setData(from: info)
+    }
+
+    func fetchAccountInfo(userId: String) async throws -> AccountInfoDTO? {
+        let snapshot = try await accountInfoDocument(for: userId).getDocument()
+        return try? snapshot.data(as: AccountInfoDTO.self)
+    }
+
+    // MARK: - FirestoreService: BadgeProgress
+
+    private func badgesCollection(for userId: String) -> CollectionReference {
+        db.collection("users").document(userId).collection("badges")
+    }
+
+    func uploadBadgeProgress(_ badge: BadgeProgressDTO, userId: String) async throws {
+        try badgesCollection(for: userId).document(badge.badgeId).setData(from: badge)
+    }
+
+    func listenForBadges(userId: String, onUpdate: @escaping ([BadgeProgressDTO]) -> Void) {
+        guard shouldRegisterListener(userId: userId, existingHandle: badgesListener) else { return }
+        badgesListener?.remove()
+        badgesListener = badgesCollection(for: userId)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard self != nil, let snapshot, error == nil else { return }
+                let dtos = snapshot.documents.compactMap { try? $0.data(as: BadgeProgressDTO.self) }
+                Task { @MainActor in onUpdate(dtos) }
+            }
+    }
+
+    // MARK: - FirestoreService: Account Deletion
+
+    /// Deletes all Firestore data under users/{userId}/ in batches of ≤500.
+    /// Deletes all known subcollections first, then the root users/{userId} document.
+    func deleteAllUserData(userId: String) async throws {
+        let knownSubcollections = [
+            "foodEntries", "dailyGoals", "dailyQuests", "moodEntries",
+            "customFoods", "savedMeals", "savedRecipes", "personalBaselines",
+            "foodFingerprints", "userProgress", "profile", "account", "badges"
+        ]
+
+        let userDoc = db.collection("users").document(userId)
+
+        for subcollection in knownSubcollections {
+            let collectionRef = userDoc.collection(subcollection)
+            let snapshot = try await collectionRef.getDocuments()
+            let documents = snapshot.documents
+
+            // Delete in batches of ≤500
+            var index = 0
+            while index < documents.count {
+                let batch = db.batch()
+                let end = min(index + 500, documents.count)
+                for doc in documents[index..<end] {
+                    batch.deleteDocument(doc.reference)
+                }
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    batch.commit { error in
+                        if let error = error {
+                            continuation.resume(throwing: error)
+                        } else {
+                            continuation.resume()
+                        }
+                    }
+                }
+                index = end
+            }
+        }
+
+        // Delete the root users/{userId} document
+        try await deleteDocument(ref: userDoc)
+    }
+
     // MARK: - Lifecycle
 
     /// Stops all active listeners across every model, clears all handles and the sync user.
@@ -485,6 +568,7 @@ final class FirestoreServiceImpl: FirestoreService {
         customFoodsListener?.remove()
         savedMealsListener?.remove()
         savedRecipesListener?.remove()
+        badgesListener?.remove()
 
         foodEntriesListener = nil
         dailyGoalsListener = nil
@@ -496,6 +580,7 @@ final class FirestoreServiceImpl: FirestoreService {
         customFoodsListener = nil
         savedMealsListener = nil
         savedRecipesListener = nil
+        badgesListener = nil
 
         currentSyncUserId = nil
     }

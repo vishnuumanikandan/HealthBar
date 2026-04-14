@@ -25,6 +25,10 @@ final class UserProfile {
     /// Defaults to "legacy" so pre-migration records don't crash.
     var userId: String = "legacy"
 
+    /// The user's display name, synced from Firestore account/info on login.
+    /// Inline default = lightweight SwiftData migration; no schema version bump needed.
+    var displayName: String = ""
+
     // MARK: - Demographics
 
     /// "male" or "female"

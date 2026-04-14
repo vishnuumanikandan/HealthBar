@@ -30,6 +30,7 @@ final class AuthViewModel {
 
     // MARK: - Input Fields
 
+    var displayName: String = ""
     var email: String = ""
     var password: String = ""
     var confirmPassword: String = ""
@@ -40,6 +41,9 @@ final class AuthViewModel {
     var isLoading: Bool = false
 
     // MARK: - Per-Field Validation Errors
+
+    /// Set when the display name field fails validation on sign-up submission.
+    var displayNameError: String? = nil
 
     /// Set when the email field fails format validation on submission.
     var emailError: String? = nil
@@ -83,6 +87,7 @@ final class AuthViewModel {
     /// Disable the sign-up button when any field is empty or a request is in-flight.
     var isSignUpSubmittable: Bool {
         !isLoading
+            && !displayName.trimmingCharacters(in: .whitespaces).isEmpty
             && !email.trimmingCharacters(in: .whitespaces).isEmpty
             && !password.isEmpty
             && !confirmPassword.isEmpty
@@ -143,7 +148,8 @@ final class AuthViewModel {
         do {
             try await authService.signUp(
                 email: email.trimmingCharacters(in: .whitespaces),
-                password: password
+                password: password,
+                displayName: displayName.trimmingCharacters(in: .whitespaces)
             )
             // userId is now live in authService.currentUserEmail.
             // DataManager picks it up automatically on the next data access.
@@ -152,6 +158,14 @@ final class AuthViewModel {
         } catch {
             authError = AuthError.unknown(error.localizedDescription).errorDescription
         }
+    }
+
+    /// Starts an anonymous guest session. The auth service sets isGuest=true and
+    /// isLoggedIn=true, causing ContentView to transition to the main TabView.
+    func continueAsGuest() async {
+        isLoading = true
+        defer { isLoading = false }
+        authService.continueAsGuest()
     }
 
     /// Ends the current session and clears all form state.
@@ -176,6 +190,7 @@ final class AuthViewModel {
 
     /// Resets all input fields (called after logout so the form starts clean).
     private func clearFields() {
+        displayName = ""
         email = ""
         password = ""
         confirmPassword = ""
@@ -185,6 +200,7 @@ final class AuthViewModel {
     /// Clears all error messages. Called at the start of every submission attempt
     /// so stale errors don't persist alongside new ones.
     private func clearErrors() {
+        displayNameError = nil
         emailError = nil
         passwordError = nil
         confirmPasswordError = nil
@@ -214,11 +230,17 @@ final class AuthViewModel {
         return isValid
     }
 
-    /// Validates email, password, and confirm password for sign-up.
+    /// Validates display name, email, password, and confirm password for sign-up.
     /// Returns `true` if all fields pass. Sets per-field errors for each failure.
     @discardableResult
     private func validateSignUpFields() -> Bool {
         var isValid = true
+
+        let trimmedName = displayName.trimmingCharacters(in: .whitespaces)
+        if trimmedName.count < 2 || trimmedName.count > 30 {
+            displayNameError = "Display name must be 2–30 characters."
+            isValid = false
+        }
 
         if !isValidEmail(email) {
             emailError = "Please enter a valid email address."

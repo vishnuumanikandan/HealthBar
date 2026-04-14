@@ -49,6 +49,18 @@ final class LocalAuthService: AuthService {
     /// Email of the currently logged-in user. Nil when no session is active.
     private(set) var currentUserEmail: String? = nil
 
+    /// LocalAuthService does not support display names — always returns nil.
+    var currentUserDisplayName: String? { nil }
+
+    /// LocalAuthService does not support guest mode — always false.
+    var isGuest: Bool = false
+
+    /// LocalAuthService does not track new-user state.
+    var isNewUser: Bool = false
+
+    /// LocalAuthService does not support guest migration — always nil.
+    var pendingMigrationUserId: String? = nil
+
     // MARK: - UserDefaults Keys
 
     // Using UserDefaults directly — service-layer equivalent of @AppStorage.
@@ -100,7 +112,8 @@ final class LocalAuthService: AuthService {
     /// Creates a new account if no account already exists for this email.
     ///
     /// Automatically starts a session on successful sign-up (no separate login needed).
-    func signUp(email: String, password: String) async throws {
+    /// `displayName` is accepted for protocol conformance but ignored by this implementation.
+    func signUp(email: String, password: String, displayName: String) async throws {
         // Simulate async backend latency (remove when replacing with real network call)
         try await Task.sleep(nanoseconds: 800_000_000) // 0.8 s
 
@@ -125,6 +138,15 @@ final class LocalAuthService: AuthService {
         currentUserEmail = nil
         isLoggedIn = false
     }
+
+    /// No-op: LocalAuthService does not support guest mode.
+    func continueAsGuest() {}
+
+    /// No-op: LocalAuthService does not support guest migration.
+    func completeMigration(newUserId: String) {}
+
+    /// No-op: LocalAuthService does not support guest migration.
+    func cancelMigration() {}
 
     // MARK: - Private: Persistence
 

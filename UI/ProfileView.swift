@@ -33,6 +33,12 @@ struct ProfileView: View {
     /// Show onboarding / health profile editor
     @State private var showingOnboarding = false
 
+    /// Show account management screen
+    @State private var showingAccount = false
+
+    /// Selected badge for detail sheet
+    @State private var selectedBadge: BadgeDefinition? = nil
+
     /// Settings manager for app-wide settings
     @State private var settings = SettingsManager.shared
 
@@ -40,12 +46,30 @@ struct ProfileView: View {
     /// Provided by ContentView — ProfileView never references the auth service directly.
     private let onLogout: () -> Void
 
+    /// Callback invoked when a guest user taps "Create Account" in the upsell banner.
+    /// ContentView presents the sign-up sheet in response.
+    private let onCreateAccount: () -> Void
+
+    /// Auth service reference — read-only, used only to check isGuest and isNewUser.
+    /// ProfileView never calls methods on this directly.
+    private let authService: any AuthService
+
+    /// True when the guest sign-out warning dialog should be shown.
+    @State private var showGuestSignOutWarning = false
+
     // MARK: - Initialization
 
-    init(coordinator: AppCoordinator, onLogout: @escaping () -> Void) {
+    init(
+        coordinator: AppCoordinator,
+        authService: any AuthService,
+        onLogout: @escaping () -> Void,
+        onCreateAccount: @escaping () -> Void = {}
+    ) {
         self.coordinator = coordinator
+        self.authService = authService
         self.onLogout = onLogout
-        self._viewModel = State(initialValue: ProfileViewModel(coordinator: coordinator))
+        self.onCreateAccount = onCreateAccount
+        self._viewModel = State(initialValue: ProfileViewModel(coordinator: coordinator, authService: authService))
     }
 
     // MARK: - Body
@@ -79,6 +103,15 @@ struct ProfileView: View {
             .sheet(isPresented: $showingAccessibility) {
                 AccessibilitySettingsView()
             }
+            .sheet(isPresented: $showingAccount) {
+                AccountView(coordinator: coordinator, authService: FirebaseAuthService.shared)
+            }
+            .sheet(item: $selectedBadge) { badge in
+                BadgeDetailSheet(
+                    definition: badge,
+                    progress: viewModel.badgeProgressList.first { $0.badgeId == badge.id }
+                )
+            }
             .fullScreenCover(isPresented: $showingOnboarding) {
                 OnboardingView(
                     coordinator: coordinator,
@@ -98,6 +131,22 @@ struct ProfileView: View {
                         await viewModel.loadUserData()
                     }
                 }
+            }
+            // Guest sign-out warning: deleting local data is irreversible
+            .confirmationDialog(
+                "Sign Out of Guest Mode?",
+                isPresented: $showGuestSignOutWarning,
+                titleVisibility: .visible
+            ) {
+                Button("Sign Out & Delete Data", role: .destructive) {
+                    Task {
+                        try? await coordinator.deleteAllGuestData()
+                        onLogout()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("You're using guest mode. Signing out will delete all local data. Create a free account first to save your progress.")
             }
         }
     }
@@ -152,17 +201,40 @@ struct ProfileView: View {
     private var contentView: some View {
         ScrollView {
             VStack(spacing: DesignSystem.Spacing.lg) {
-                // Avatar and name section
+                // Guest mode upsell banner — shown above all other content
+                if authService.isGuest {
+                    guestBanner
+                }
                 avatarSection
-
-                // Stats grid
+                xpProgressSection
                 statsSection
-
-                // Settings section
+                badgesSection
                 settingsSection
             }
             .padding(DesignSystem.Spacing.lg)
         }
+    }
+
+    // MARK: - Guest Banner
+
+    /// Shown at the top of the profile when the user has no account.
+    /// Explains local-only storage and offers a path to sign up.
+    private var guestBanner: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            Text("Your data is stored locally on this device. It may be lost if the app is deleted. Create a free account to back up your progress.")
+                .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            AppButton(
+                title: "Create Account",
+                style: .primary,
+                action: { onCreateAccount() }
+            )
+        }
+        .padding(DesignSystem.Spacing.md)
+        .background(DesignSystem.Colors.primary.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
     }
 
     // MARK: - Avatar Section
@@ -186,8 +258,7 @@ struct ProfileView: View {
                 y: DesignSystem.Shadows.accentGlow.y
             )
 
-            // User name placeholder
-            Text("User")
+            Text(viewModel.displayName)
                 .font(.system(size: DesignSystem.FontSizes.title2, weight: .semibold))
                 .foregroundColor(DesignSystem.Colors.textPrimary)
 
@@ -260,6 +331,76 @@ struct ProfileView: View {
         }
     }
 
+    // MARK: - XP Progress Section
+
+    private var xpProgressSection: some View {
+        VStack(spacing: DesignSystem.Spacing.sm) {
+            HStack {
+                Text("\(viewModel.xpWithinLevel) XP")
+                Spacer()
+                Text("Level \(viewModel.nextLevel)")
+                Spacer()
+                Text("\(viewModel.xpToNextLevel) to next")
+            }
+            .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
+            .foregroundColor(DesignSystem.Colors.textSecondary)
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(DesignSystem.Colors.border)
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(DesignSystem.Colors.primaryGradient)
+                        .frame(width: max(0, geo.size.width * viewModel.levelProgress))
+                }
+            }
+            .frame(height: 8)
+        }
+        .padding(.horizontal, DesignSystem.Spacing.xs)
+    }
+
+    // MARK: - Badges Section
+
+    private var badgesSection: some View {
+        VStack(spacing: DesignSystem.Spacing.md) {
+            Text("Badges")
+                .font(.system(size: DesignSystem.FontSizes.title2, weight: .semibold))
+                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: DesignSystem.Spacing.md) {
+                ForEach(BadgeDefinition.all) { badge in
+                    let progress = viewModel.badgeProgressList.first { $0.badgeId == badge.id }
+                    let earned = progress?.isUnlocked == true
+
+                    Button {
+                        selectedBadge = badge
+                    } label: {
+                        VStack(spacing: DesignSystem.Spacing.xs) {
+                            Text(earned ? badge.emoji : "🔒")
+                                .font(.system(size: 34))
+                                .opacity(earned ? 1.0 : 0.35)
+                            Text(badge.title)
+                                .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
+                                .foregroundColor(earned ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textTertiary)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(DesignSystem.Spacing.sm)
+                        .background(DesignSystem.Colors.cardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+        }
+    }
+
     // MARK: - Settings Section
 
     private var settingsSection: some View {
@@ -299,15 +440,15 @@ struct ProfileView: View {
                     action: { showingOnboarding = true }
                 )
 
-                // Account button (placeholder)
-                settingButton(
-                    icon: "person.circle",
-                    title: "Account",
-                    subtitle: "Manage your profile",
-                    action: {
-                        // Placeholder - will navigate to account settings later
-                    }
-                )
+                // Account button — hidden for guest users (requires a real account)
+                if !authService.isGuest {
+                    settingButton(
+                        icon: "person.circle",
+                        title: "Account",
+                        subtitle: "Manage display name, password",
+                        action: { showingAccount = true }
+                    )
+                }
 
                 // About button (placeholder)
                 settingButton(
@@ -319,13 +460,21 @@ struct ProfileView: View {
                     }
                 )
 
-                // Sign Out — destructive, styled in danger red
+                // Sign Out — for guests shows a warning before deleting local data
                 settingButton(
                     icon: "rectangle.portrait.and.arrow.right",
                     title: "Sign Out",
-                    subtitle: "Log out of your account",
+                    subtitle: authService.isGuest
+                        ? "Delete local data and exit guest mode"
+                        : "Log out of your account",
                     iconColor: DesignSystem.Colors.danger,
-                    action: onLogout
+                    action: {
+                        if authService.isGuest {
+                            showGuestSignOutWarning = true
+                        } else {
+                            onLogout()
+                        }
+                    }
                 )
             }
         }
@@ -384,6 +533,70 @@ struct ProfileView: View {
     }
 }
 
+// MARK: - BadgeDetailSheet
+
+/// Sheet shown when tapping a badge in the badge grid.
+struct BadgeDetailSheet: View {
+
+    let definition: BadgeDefinition
+    let progress: BadgeProgress?
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                DesignSystem.Colors.primaryBackground.ignoresSafeArea()
+
+                VStack(spacing: DesignSystem.Spacing.lg) {
+                    Text(definition.emoji)
+                        .font(.system(size: 80))
+                        .padding(.top, DesignSystem.Spacing.lg)
+
+                    VStack(spacing: DesignSystem.Spacing.sm) {
+                        Text(definition.title)
+                            .font(.system(size: DesignSystem.FontSizes.title2, weight: .bold))
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                        Text(definition.description)
+                            .font(.system(size: DesignSystem.FontSizes.callout, weight: .regular))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, DesignSystem.Spacing.xl)
+                    }
+
+                    if let progress = progress, progress.isUnlocked, let date = progress.unlockedAt {
+                        HStack(spacing: DesignSystem.Spacing.xs) {
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundColor(DesignSystem.Colors.primary)
+                            Text("Unlocked \(date.formatted(date: .abbreviated, time: .omitted))")
+                                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
+                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                        }
+                    } else {
+                        HStack(spacing: DesignSystem.Spacing.xs) {
+                            Image(systemName: "lock.fill")
+                                .foregroundColor(DesignSystem.Colors.textTertiary)
+                            Text("Not yet unlocked")
+                                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
+                                .foregroundColor(DesignSystem.Colors.textTertiary)
+                        }
+                    }
+
+                    Spacer()
+                }
+            }
+            .navigationTitle("Badge")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Preview
 
 #Preview("Profile View") {
@@ -414,5 +627,5 @@ struct ProfileView: View {
 
     let coordinator = AppCoordinator(modelContext: context)
 
-    return ProfileView(coordinator: coordinator, onLogout: {})
+    return ProfileView(coordinator: coordinator, authService: LocalAuthService.shared, onLogout: {})
 }

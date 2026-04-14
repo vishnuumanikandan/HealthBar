@@ -21,7 +21,7 @@ import SwiftUI
 /// On successful sign-up the service starts a session, `isLoggedIn` flips true,
 /// and ContentView transitions to the main TabView automatically.
 ///
-/// `@FocusState` routes the keyboard: email → password → confirm password → submit.
+/// `@FocusState` routes the keyboard: displayName → email → password → confirm password → submit.
 struct SignUpView: View {
 
     // MARK: - Properties
@@ -32,6 +32,7 @@ struct SignUpView: View {
     // MARK: - Focus Routing
 
     private enum Field: Hashable {
+        case displayName
         case email
         case password
         case confirmPassword
@@ -113,6 +114,18 @@ struct SignUpView: View {
 
     private var fieldsSection: some View {
         VStack(spacing: DesignSystem.Spacing.md) {
+            // Display Name — first field, return key moves to email
+            AuthTextField(
+                label: "Display Name",
+                placeholder: "How should we call you?",
+                text: $viewModel.displayName,
+                isSecure: false,
+                errorMessage: viewModel.displayNameError,
+                submitLabel: .next,
+                onSubmit: { focusedField = .email }
+            )
+            .focused($focusedField, equals: .displayName)
+
             // Email
             AuthTextField(
                 label: "Email",

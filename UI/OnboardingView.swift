@@ -572,13 +572,19 @@ private struct ActivityLevelStep: View {
 private struct DietStyleStep: View {
     @Binding var dietStyle: String
 
-    private let styles: [(id: String, icon: String, title: String)] = [
-        ("standard",      "fork.knife",              "Standard"),
-        ("keto",          "drop.fill",               "Keto"),
-        ("vegan",         "leaf.fill",               "Vegan"),
-        ("vegetarian",    "carrot.fill",             "Vegetarian"),
-        ("paleo",         "flame.fill",              "Paleo"),
-        ("mediterranean", "fish.fill",               "Mediterranean")
+    private let styles: [(id: String, icon: String, title: String, description: String)] = [
+        ("standard",      "fork.knife",   "Standard",
+         "Balanced meals with no restrictions — a mix of all food groups."),
+        ("keto",          "drop.fill",    "Keto",
+         "Very low carb, high fat. Pushes your body to burn fat for fuel."),
+        ("vegan",         "leaf.fill",    "Vegan",
+         "No animal products. Plant-based proteins like beans, tofu, and nuts."),
+        ("vegetarian",    "carrot.fill",  "Vegetarian",
+         "No meat, but dairy and eggs are fine. Flexible and easy to follow."),
+        ("paleo",         "flame.fill",   "Paleo",
+         "Whole foods only — meat, fish, nuts, veggies. No grains or dairy."),
+        ("mediterranean", "fish.fill",    "Mediterranean",
+         "Olive oil, fish, veggies, whole grains. Heart-healthy and sustainable.")
     ]
 
     var body: some View {
@@ -586,50 +592,55 @@ private struct DietStyleStep: View {
             title: "Diet Style",
             subtitle: "Your preferred way of eating shapes your macro split."
         ) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DesignSystem.Spacing.md) {
-                    ForEach(styles, id: \.id) { style in
-                        Button {
+            VStack(spacing: DesignSystem.Spacing.sm) {
+                ForEach(styles, id: \.id) { style in
+                    let isSelected = dietStyle == style.id
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                             dietStyle = style.id
-                        } label: {
-                            VStack(spacing: DesignSystem.Spacing.sm) {
-                                ZStack {
-                                    Circle()
-                                        .fill(dietStyle == style.id
-                                              ? DesignSystem.Colors.primary
-                                              : DesignSystem.Colors.primary.opacity(0.1))
-                                        .frame(width: 64, height: 64)
-                                    Image(systemName: style.icon)
-                                        .font(.system(size: 28, weight: .semibold))
-                                        .foregroundColor(dietStyle == style.id ? .white : DesignSystem.Colors.primary)
-                                }
-                                Text(style.title)
-                                    .font(.system(size: DesignSystem.FontSizes.subheadline, weight: .medium))
-                                    .foregroundColor(dietStyle == style.id
-                                                     ? DesignSystem.Colors.primary
-                                                     : DesignSystem.Colors.textPrimary)
-                                    .multilineTextAlignment(.center)
-                            }
-                            .frame(width: 88)
-                            .padding(.vertical, DesignSystem.Spacing.md)
-                            .background(dietStyle == style.id
-                                        ? DesignSystem.Colors.primary.opacity(0.1)
-                                        : DesignSystem.Colors.cardBackground)
-                            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                                    .stroke(dietStyle == style.id
-                                            ? DesignSystem.Colors.primary
-                                            : DesignSystem.Colors.border, lineWidth: 1.5)
-                            )
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(style.title) diet style")
-                        .accessibilityAddTraits(dietStyle == style.id ? .isSelected : [])
+                    } label: {
+                        HStack(spacing: DesignSystem.Spacing.md) {
+                            ZStack {
+                                Circle()
+                                    .fill(isSelected
+                                          ? Color.white.opacity(0.25)
+                                          : DesignSystem.Colors.primary.opacity(0.1))
+                                    .frame(width: 44, height: 44)
+                                Image(systemName: style.icon)
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(isSelected ? .white : DesignSystem.Colors.primary)
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(style.title)
+                                    .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
+                                    .foregroundColor(isSelected ? .white : DesignSystem.Colors.textPrimary)
+                                Text(style.description)
+                                    .font(.system(size: DesignSystem.FontSizes.caption))
+                                    .foregroundColor(isSelected ? .white.opacity(0.85) : DesignSystem.Colors.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 0)
+                            if isSelected {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .padding(DesignSystem.Spacing.md)
+                        .background(isSelected
+                                    ? DesignSystem.Colors.primary
+                                    : DesignSystem.Colors.cardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                                .stroke(isSelected ? Color.clear : DesignSystem.Colors.border, lineWidth: 1)
+                        )
+                        .scaleEffect(isSelected ? 1.02 : 1.0)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(style.title): \(style.description)")
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
-                .padding(.horizontal, DesignSystem.Spacing.md)
-                .padding(.vertical, DesignSystem.Spacing.sm)
             }
         }
     }

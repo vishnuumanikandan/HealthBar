@@ -48,6 +48,14 @@ struct ContentView: View {
     /// True when the current user has no completed UserProfile. Triggers fullScreenCover.
     @State private var showOnboarding: Bool = false
 
+    // MARK: - Guest → Auth Upgrade State
+
+    /// Non-nil when guest→auth data migration failed. Shown as an alert.
+    @State private var migrationError: String? = nil
+
+    /// True when a guest user taps "Create Account" in ProfileView.
+    @State private var showSignUpFromGuest: Bool = false
+
     // MARK: - Initialization
 
     init() {
@@ -119,11 +127,14 @@ struct ContentView: View {
                 }
                 .tag(2)
 
-            // Profile Tab — receives logout closure so it can end the session
-            // without referencing FirebaseAuthService directly.
+            // Profile Tab — receives logout closure and guest state so it can
+            // end the session and show guest-mode UI without referencing
+            // FirebaseAuthService directly.
             ProfileView(
                 coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
-                onLogout: { authViewModel.logout() }
+                authService: FirebaseAuthService.shared,
+                onLogout: { authViewModel.logout() },
+                onCreateAccount: { showSignUpFromGuest = true }
             )
             .tabItem {
                 Label("Profile", systemImage: "person.fill")
@@ -131,21 +142,54 @@ struct ContentView: View {
             .tag(3)
         }
         .tint(DesignSystem.Colors.primary)
+        .overlay(alignment: .top) {
+            if let badge = BadgeToastQueue.shared.currentToast {
+                BadgeToastView(badge: badge, onDismiss: { BadgeToastQueue.shared.dismiss() })
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: BadgeToastQueue.shared.currentToast?.id)
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView(
                 coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
                 authService: authService
             )
         }
-        .task(id: authService.isLoggedIn) {
-            guard authService.isLoggedIn else {
+        // Sign-up sheet presented when a guest taps "Create Account" in ProfileView.
+        .sheet(isPresented: $showSignUpFromGuest) {
+            NavigationStack {
+                SignUpView(viewModel: authViewModel)
+            }
+        }
+        .alert("Migration Failed", isPresented: .init(
+            get: { migrationError != nil },
+            set: { if !$0 { migrationError = nil } }
+        )) {
+            Button("OK", role: .cancel) { migrationError = nil }
+        } message: {
+            Text(migrationError ?? "")
+        }
+        // Re-runs whenever currentUserEmail changes:
+        //   nil → "guest"   (guest mode entered)
+        //   "guest" → uid   (migration completed, real auth active)
+        //   nil → uid       (normal login / account creation)
+        .task(id: authService.currentUserEmail) {
+            guard let email = authService.currentUserEmail, !email.isEmpty else {
                 showOnboarding = false
                 return
             }
             let coordinator = AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared)
 
-            // If no local profile exists, try restoring from Firestore first (blocking).
-            // If local profile exists, sync Firestore in the background — don't block UI.
+            if authService.isGuest {
+                // Guest mode: skip all Firestore operations, check onboarding locally.
+                let completed = await coordinator.checkOnboardingCompleted()
+                showOnboarding = !completed
+                return
+            }
+
+            // Authenticated user: sync profile from Firestore, then check onboarding.
+            // If no local profile exists, block on Firestore fetch first.
+            // If local profile exists, sync Firestore in background — don't block UI.
             let localProfile = try? await coordinator.getUserProfile()
             if localProfile == nil {
                 try? await coordinator.syncUserProfileFromFirestore()
@@ -155,6 +199,30 @@ struct ContentView: View {
 
             let completed = await coordinator.checkOnboardingCompleted()
             showOnboarding = !completed
+        }
+        // Watches for guest→auth migration signal. Fires when a guest user signs up
+        // and pendingMigrationUserId becomes non-nil.
+        .onChange(of: authService.pendingMigrationUserId) { _, newUserId in
+            guard let newUserId else { return }
+            Task {
+                let coordinator = AppCoordinator(
+                    modelContext: modelContext,
+                    authService: FirebaseAuthService.shared
+                )
+                do {
+                    // Step 1–3: migrate SwiftData records from "guest" → real userId.
+                    try await coordinator.migrateGuestData(to: newUserId)
+                    // Step 4: drop guest mode, adopt real identity.
+                    authService.completeMigration(newUserId: newUserId)
+                    // Step 5: explicitly start Firestore sync (task(id: currentUserEmail)
+                    // will also re-fire, but belt+suspenders for the sync init).
+                    coordinator.startFirestoreSyncForCurrentUser()
+                } catch {
+                    // Migration failed: keep guest mode, show error.
+                    authService.cancelMigration()
+                    migrationError = "Failed to migrate data. Please try again."
+                }
+            }
         }
     }
 }
