@@ -166,10 +166,18 @@ final class FirebaseAuthService: AuthService {
     }
 
     func login(email: String, password: String) async throws {
+        let wasGuest = isGuest
+        if wasGuest {
+            isGuest = false
+            UserDefaults.standard.set(false, forKey: guestModeKey)
+        }
         do {
             try await Auth.auth().signIn(withEmail: email, password: password)
-            // isLoggedIn / currentUserEmail updated by auth state listener
         } catch {
+            if wasGuest {
+                isGuest = true
+                UserDefaults.standard.set(true, forKey: guestModeKey)
+            }
             throw Self.mapError(error)
         }
     }
@@ -227,13 +235,15 @@ final class FirebaseAuthService: AuthService {
     }
 
     func logout() {
-        // Clear guest state first so the auth listener fires normally after sign-out.
         isGuest = false
         isNewUser = false
         pendingMigrationUserId = nil
         UserDefaults.standard.set(false, forKey: guestModeKey)
+        // Explicitly clear state. In guest mode there is no Firebase user,
+        // so Auth.auth().signOut() won't trigger the state listener.
+        isLoggedIn = false
+        currentUserEmail = nil
         try? Auth.auth().signOut()
-        // isLoggedIn / currentUserEmail updated by auth state listener
     }
 
     // MARK: - Account Management

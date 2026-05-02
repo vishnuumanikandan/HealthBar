@@ -23,11 +23,14 @@ struct MiniFoodPickerView: View {
     let onAdd: (SavedMealComponent) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var settings = SettingsManager.shared
     @State private var pickerTab: PickerTab = .ingredients
     @State private var searchText: String = ""
     @State private var pickerFood: LoggableFood? = nil
     @State private var showingQuantityPicker: Bool = false
     @State private var showingAddCustomIngredient: Bool = false
+
+    private var tc: ThemeColors { settings.activeColors }
 
     // MARK: - Tab Enum
 
@@ -65,14 +68,15 @@ struct MiniFoodPickerView: View {
                     }
                 }
             }
-            .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
+            .background(tc.primaryBackground.ignoresSafeArea())
             .navigationTitle("Add Food")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: pickerTab == .ingredients ? "Search ingredients…" : "Search my foods…")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(AppFont.regular(17))
+                        .foregroundColor(tc.textSecondary)
                 }
             }
             .sheet(isPresented: $showingQuantityPicker) {
@@ -101,7 +105,7 @@ struct MiniFoodPickerView: View {
         }
         .padding(.horizontal, DesignSystem.Spacing.md)
         .padding(.vertical, DesignSystem.Spacing.sm)
-        .background(DesignSystem.Colors.cardBackground)
+        .background(tc.cardBackground)
     }
 
     private func tabPill(label: String, tab: PickerTab) -> some View {
@@ -110,12 +114,14 @@ struct MiniFoodPickerView: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { pickerTab = tab }
         } label: {
             Text(label)
-                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
+                .font(AppFont.bold(14))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(isSelected ? DesignSystem.Colors.primary : Color(.systemGray5))
-                .foregroundStyle(isSelected ? Color.white : DesignSystem.Colors.textPrimary)
-                .clipShape(Capsule())
+                .foregroundStyle(isSelected ? Color.white : tc.textPrimary)
+                .adaptivePill(
+                    borderColor: isSelected ? tc.primary : tc.textTertiary.opacity(0.4),
+                    fillColor: isSelected ? tc.primary : tc.cardBackground
+                )
         }
         .buttonStyle(.plain)
     }
@@ -132,22 +138,19 @@ struct MiniFoodPickerView: View {
                     } label: {
                         HStack {
                             Label("Add Custom Ingredient", systemImage: "plus.circle.fill")
-                                .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
+                                .font(AppFont.bold(16))
                             Spacer()
                         }
                         .foregroundColor(.white)
                         .padding(.vertical, DesignSystem.Spacing.xs)
                         .padding(.horizontal, DesignSystem.Spacing.sm)
-                        .background(
-                            LinearGradient(
-                                colors: [Color(.systemIndigo), DesignSystem.Colors.primary],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                        .adaptiveCard(
+                            borderColor: tc.buttonBorder,
+                            fillColor: .clear,
+                            fillGradient: DesignSystem.Colors.adaptiveGradient(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)
                         )
                     }
-                    .listRowBackground(DesignSystem.Colors.cardBackground)
+                    .listRowBackground(tc.cardBackground)
                 }
             }
             Section {
@@ -158,32 +161,32 @@ struct MiniFoodPickerView: View {
                     } label: {
                         HStack(spacing: DesignSystem.Spacing.md) {
                             ZStack {
-                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
+                                AdaptiveCardShapeStyle()
                                     .fill(iconColor(for: pickerTab).opacity(0.1))
                                     .frame(width: 36, height: 36)
                                 Image(systemName: iconName(for: pickerTab))
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(AppFont.regular(15))
                                     .foregroundColor(iconColor(for: pickerTab))
                             }
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(food.name)
-                                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                                    .font(AppFont.bold(16))
+                                    .foregroundColor(tc.textPrimary)
                                 Text("\(food.caloriesPerBase) cal · \(food.servingDescription)")
-                                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
-                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                                    .font(AppFont.regular(12))
+                                    .foregroundColor(tc.textSecondary)
                             }
 
                             Spacer()
 
                             Image(systemName: "plus")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(DesignSystem.Colors.primary)
+                                .font(AppFont.bold(14))
+                                .foregroundColor(tc.primary)
                         }
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .listRowBackground(DesignSystem.Colors.cardBackground)
+                    .listRowBackground(tc.cardBackground)
                 }
             }
         }
@@ -196,7 +199,7 @@ struct MiniFoodPickerView: View {
     }
 
     private func iconColor(for tab: PickerTab) -> Color {
-        tab == .ingredients ? DesignSystem.Colors.growth : Color(.systemIndigo)
+        tab == .ingredients ? tc.primaryDark : tc.primary
     }
 
     // MARK: - Empty States
@@ -204,11 +207,11 @@ struct MiniFoodPickerView: View {
     private func emptyState(message: String) -> some View {
         VStack(spacing: DesignSystem.Spacing.md) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 40))
-                .foregroundColor(DesignSystem.Colors.textTertiary)
+                .font(AppFont.regular(40))
+                .foregroundColor(tc.textTertiary)
             Text(message)
-                .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(AppFont.regular(16))
+                .foregroundColor(tc.textSecondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -216,16 +219,16 @@ struct MiniFoodPickerView: View {
     private var myFoodsEmptyState: some View {
         VStack(spacing: DesignSystem.Spacing.lg) {
             Image(systemName: "person.badge.plus")
-                .font(.system(size: 44))
-                .foregroundColor(Color(.systemIndigo).opacity(0.6))
+                .font(AppFont.regular(44))
+                .foregroundColor(tc.primary.opacity(0.6))
             VStack(spacing: DesignSystem.Spacing.xs) {
                 Text(searchText.isEmpty ? "No custom foods yet" : "No results for \"\(searchText)\"")
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(AppFont.bold(16))
+                    .foregroundColor(tc.textPrimary)
                 if searchText.isEmpty {
                     Text("Add your own ingredients below")
-                        .font(.system(size: DesignSystem.FontSizes.footnote))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(AppFont.regular(14))
+                        .foregroundColor(tc.textSecondary)
                 }
             }
             if searchText.isEmpty {
@@ -233,12 +236,15 @@ struct MiniFoodPickerView: View {
                     showingAddCustomIngredient = true
                 } label: {
                     Label("Add Custom Ingredient", systemImage: "plus")
-                        .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
+                        .font(AppFont.bold(16))
                         .foregroundColor(.white)
                         .padding(.horizontal, DesignSystem.Spacing.lg)
                         .padding(.vertical, DesignSystem.Spacing.sm)
-                        .background(Color(.systemIndigo))
-                        .clipShape(Capsule())
+                        .adaptivePill(
+                            borderColor: tc.buttonBorder,
+                            fillColor: .clear,
+                            fillGradient: DesignSystem.Colors.adaptiveGradient(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)
+                        )
                 }
                 .buttonStyle(PlainButtonStyle())
             }
@@ -261,6 +267,8 @@ private struct IngredientQuantitySheet: View {
     @State private var quantityText: String
     @State private var quantity: Double
 
+    private var tc: ThemeColors { SettingsManager.shared.activeColors }
+
     init(food: LoggableFood, onConfirm: @escaping (SavedMealComponent) -> Void) {
         self.food = food
         self.onConfirm = onConfirm
@@ -278,8 +286,8 @@ private struct IngredientQuantitySheet: View {
             VStack(spacing: DesignSystem.Spacing.lg) {
                 // Food name
                 Text(food.name)
-                    .font(.system(size: DesignSystem.FontSizes.title2, weight: .bold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(AppFont.bold(22))
+                    .foregroundColor(tc.textPrimary)
                     .multilineTextAlignment(.center)
                     .padding(.top, DesignSystem.Spacing.md)
 
@@ -291,8 +299,8 @@ private struct IngredientQuantitySheet: View {
                         quantity = v; quantityText = Self.fmt(v)
                     } label: {
                         Image(systemName: "minus.circle.fill")
-                            .font(.system(size: 36))
-                            .foregroundColor(DesignSystem.Colors.primary)
+                            .font(AppFont.regular(36))
+                            .foregroundColor(tc.primary)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .disabled(quantity <= 0.01)
@@ -302,14 +310,14 @@ private struct IngredientQuantitySheet: View {
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.center)
                             .font(.system(size: 36, weight: .bold, design: .rounded))
-                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                            .foregroundColor(tc.textPrimary)
                             .frame(width: 110)
                             .onChange(of: quantityText) { _, v in
                                 if let p = Double(v.replacingOccurrences(of: ",", with: ".")), p > 0 { quantity = p }
                             }
                         Text(food.unit)
-                            .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .font(AppFont.regular(14))
+                            .foregroundColor(tc.textSecondary)
                     }
 
                     Button {
@@ -318,8 +326,8 @@ private struct IngredientQuantitySheet: View {
                         quantity = v; quantityText = Self.fmt(v)
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 36))
-                            .foregroundColor(DesignSystem.Colors.primary)
+                            .font(AppFont.regular(36))
+                            .foregroundColor(tc.primary)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
@@ -327,10 +335,10 @@ private struct IngredientQuantitySheet: View {
 
                 // Nutrition preview
                 HStack(spacing: DesignSystem.Spacing.sm) {
-                    macroChip(value: "\(scaled.calories)", label: "cal", color: DesignSystem.Colors.energy)
-                    macroChip(value: String(format: "%.0f", scaled.protein), label: "P", color: DesignSystem.Colors.primary)
-                    macroChip(value: String(format: "%.0f", scaled.carbs), label: "C", color: .orange)
-                    macroChip(value: String(format: "%.0f", scaled.fat), label: "F", color: .purple)
+                    macroChip(value: "\(scaled.calories)", label: "cal", color: tc.macroBarCarbs)
+                    macroChip(value: String(format: "%.0f", scaled.protein), label: "P", color: tc.primary)
+                    macroChip(value: String(format: "%.0f", scaled.carbs), label: "C", color: tc.macroBarCarbs)
+                    macroChip(value: String(format: "%.0f", scaled.fat), label: "F", color: tc.macroBarFat)
                 }
 
                 AppButton(title: "Add Ingredient", style: .primary) {
@@ -353,13 +361,14 @@ private struct IngredientQuantitySheet: View {
                 Spacer()
             }
             .padding(DesignSystem.Spacing.lg)
-            .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
+            .background(tc.primaryBackground.ignoresSafeArea())
             .navigationTitle("Quantity")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Back") { dismiss() }
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(AppFont.regular(17))
+                        .foregroundColor(tc.textSecondary)
                 }
             }
             .presentationDetents([.medium])
@@ -370,16 +379,15 @@ private struct IngredientQuantitySheet: View {
     private func macroChip(value: String, label: String, color: Color) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.system(size: DesignSystem.FontSizes.headline, weight: .bold))
+                .font(AppFont.bold(17))
                 .foregroundColor(color)
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .font(AppFont.regular(10))
                 .foregroundColor(color.opacity(0.8))
         }
         .frame(maxWidth: .infinity)
         .padding(DesignSystem.Spacing.sm)
-        .background(color.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+        .adaptiveCard(borderColor: color.opacity(0.3), fillColor: color.opacity(0.1))
     }
 
     private var stepSize: Double {

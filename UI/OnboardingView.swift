@@ -74,7 +74,7 @@ struct OnboardingView: View {
                                 .foregroundColor(DesignSystem.Colors.textSecondary)
                                 .padding(7)
                                 .background(DesignSystem.Colors.cardBackground)
-                                .clipShape(Circle())
+                                .clipShape(AdaptivePillShapeStyle())
                         }
                         .accessibilityLabel("Jump to a different step")
                     }
@@ -133,7 +133,7 @@ struct OnboardingView: View {
                     .frame(height: 6)
 
                 Capsule()
-                    .fill(DesignSystem.Colors.primaryGradient)
+                    .fill(DesignSystem.Colors.primary)
                     .frame(
                         width: geo.size.width * progressFraction,
                         height: 6
@@ -249,37 +249,44 @@ private struct WelcomeStep: View {
 
             // App icon / logo area
             ZStack {
-                Circle()
-                    .fill(DesignSystem.Colors.primaryGradient)
+                AdaptiveCardShapeStyle()
+                    .fill(
+                        DesignSystem.Colors.adaptiveGradient(
+                            light: Color(hex: "#34D399"),
+                            mid: Color(hex: "#10B981"),
+                            dark: Color(hex: "#059669")
+                        )
+                    )
                     .frame(width: 110, height: 110)
+                    .overlay(
+                        AdaptiveCardShapeStyle()
+                            .stroke(Color(hex: "#047857"), lineWidth: 2)
+                    )
+
                 Image(systemName: "heart.fill")
                     .font(.system(size: 52, weight: .semibold))
                     .foregroundColor(.white)
             }
-            .shadow(
-                color: DesignSystem.Colors.primary.opacity(0.35),
-                radius: 16, x: 0, y: 6
-            )
 
             VStack(spacing: DesignSystem.Spacing.sm) {
                 Text("HealthBar")
-                    .font(.system(size: DesignSystem.FontSizes.largeTitle, weight: .bold))
+                    .font(AppFont.bold(34))
                     .foregroundColor(DesignSystem.Colors.textPrimary)
 
                 Text("Your AI-powered nutrition journey")
-                    .font(.system(size: DesignSystem.FontSizes.callout))
+                    .font(AppFont.regular(16))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                     .multilineTextAlignment(.center)
             }
 
             VStack(spacing: DesignSystem.Spacing.sm) {
                 Text("Let's build your health profile")
-                    .font(.system(size: DesignSystem.FontSizes.title2, weight: .semibold))
+                    .font(AppFont.bold(22))
                     .foregroundColor(DesignSystem.Colors.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text("Answer a few questions and our AI will create personalized calorie and macro targets just for you.")
-                    .font(.system(size: DesignSystem.FontSizes.callout))
+                    .font(AppFont.regular(16))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DesignSystem.Spacing.lg)
@@ -331,7 +338,7 @@ private struct AgeStep: View {
         ) {
             VStack(spacing: DesignSystem.Spacing.lg) {
                 Text("\(age)")
-                    .font(.system(size: 64, weight: .bold))
+                    .font(AppFont.bold(64))
                     .foregroundColor(DesignSystem.Colors.primary)
                     .accessibilityLabel("Age: \(age) years")
 
@@ -429,12 +436,12 @@ private struct GoalWeightStep: View {
 
                 if !directionLabel.isEmpty {
                     Text(directionLabel)
-                        .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
+                        .font(AppFont.regular(16))
                         .foregroundColor(DesignSystem.Colors.primary)
                         .padding(.horizontal, DesignSystem.Spacing.md)
                         .padding(.vertical, DesignSystem.Spacing.sm)
                         .background(DesignSystem.Colors.primary.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                        .clipShape(AdaptiveCardShapeStyle())
                         .accessibilityLabel(directionLabel)
                 }
             }
@@ -455,35 +462,34 @@ private struct WeeklyPaceStep: View {
         ) {
             VStack(spacing: DesignSystem.Spacing.sm) {
                 ForEach(options, id: \.self) { option in
+                    let isSelected = pace == option
                     Button {
                         pace = option
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                                 Text("\(option, specifier: "%.1f") lbs / week")
-                                    .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                                    .foregroundColor(pace == option ? .white : DesignSystem.Colors.textPrimary)
+                                    .font(isSelected ? AppFont.bold(16) : AppFont.regular(16))
+                                    .foregroundColor(DesignSystem.Colors.textPrimary)
                                 Text(paceDescription(option))
-                                    .font(.system(size: DesignSystem.FontSizes.caption))
-                                    .foregroundColor(pace == option ? .white.opacity(0.85) : DesignSystem.Colors.textSecondary)
+                                    .font(AppFont.regular(13))
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
                             }
                             Spacer()
-                            if pace == option {
+                            if isSelected {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.white)
+                                    .foregroundColor(DesignSystem.Colors.primary)
                             }
                         }
                         .padding(DesignSystem.Spacing.md)
-                        .background(pace == option ? DesignSystem.Colors.primary : DesignSystem.Colors.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                                .stroke(pace == option ? Color.clear : DesignSystem.Colors.border, lineWidth: 1)
+                        .adaptiveCard(
+                            borderColor: isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.border,
+                            fillColor: isSelected ? DesignSystem.Colors.primary.opacity(0.1) : DesignSystem.Colors.cardBackground
                         )
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(option, specifier: "%.1f") lbs per week, \(paceDescription(option))")
-                    .accessibilityAddTraits(pace == option ? .isSelected : [])
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
         }
@@ -520,47 +526,49 @@ private struct ActivityLevelStep: View {
         ) {
             VStack(spacing: DesignSystem.Spacing.sm) {
                 ForEach(levels, id: \.id) { level in
+                    let isSelected = activityLevel == level.id
                     Button {
                         activityLevel = level.id
                     } label: {
                         HStack(spacing: DesignSystem.Spacing.md) {
-                            ZStack {
-                                Circle()
-                                    .fill(activityLevel == level.id
-                                          ? Color.white.opacity(0.25)
-                                          : DesignSystem.Colors.primary.opacity(0.1))
-                                    .frame(width: 44, height: 44)
-                                Image(systemName: level.icon)
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundColor(activityLevel == level.id ? .white : DesignSystem.Colors.primary)
-                            }
+                            Image(systemName: level.icon)
+                                .foregroundColor(.white)
+                                .frame(width: 36, height: 36)
+                                .background(
+                                    DesignSystem.Colors.adaptiveGradient(
+                                        light: isSelected ? Color(hex: "#34D399") : Color(hex: "#D1D5DB"),
+                                        mid: isSelected ? Color(hex: "#10B981") : Color(hex: "#9CA3AF"),
+                                        dark: isSelected ? Color(hex: "#059669") : Color(hex: "#6B7280")
+                                    )
+                                )
+                                .clipShape(AdaptivePillShapeStyle())
+                                .overlay(AdaptivePillShapeStyle().stroke(
+                                    isSelected ? Color(hex: "#047857") : Color(hex: "#6B7280"),
+                                    lineWidth: 2
+                                ))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(level.title)
-                                    .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                                    .foregroundColor(activityLevel == level.id ? .white : DesignSystem.Colors.textPrimary)
+                                    .font(isSelected ? AppFont.bold(16) : AppFont.regular(16))
+                                    .foregroundColor(DesignSystem.Colors.textPrimary)
                                 Text(level.description)
-                                    .font(.system(size: DesignSystem.FontSizes.caption))
-                                    .foregroundColor(activityLevel == level.id ? .white.opacity(0.85) : DesignSystem.Colors.textSecondary)
+                                    .font(AppFont.regular(13))
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
                             }
                             Spacer()
-                            if activityLevel == level.id {
+                            if isSelected {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.white)
+                                    .foregroundColor(DesignSystem.Colors.primary)
                             }
                         }
                         .padding(DesignSystem.Spacing.md)
-                        .background(activityLevel == level.id
-                                    ? DesignSystem.Colors.primary
-                                    : DesignSystem.Colors.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                                .stroke(activityLevel == level.id ? Color.clear : DesignSystem.Colors.border, lineWidth: 1)
+                        .adaptiveCard(
+                            borderColor: isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.border,
+                            fillColor: isSelected ? DesignSystem.Colors.primary.opacity(0.1) : DesignSystem.Colors.cardBackground
                         )
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(level.title): \(level.description)")
-                    .accessibilityAddTraits(activityLevel == level.id ? .isSelected : [])
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
         }
@@ -601,39 +609,40 @@ private struct DietStyleStep: View {
                         }
                     } label: {
                         HStack(spacing: DesignSystem.Spacing.md) {
-                            ZStack {
-                                Circle()
-                                    .fill(isSelected
-                                          ? Color.white.opacity(0.25)
-                                          : DesignSystem.Colors.primary.opacity(0.1))
-                                    .frame(width: 44, height: 44)
-                                Image(systemName: style.icon)
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundColor(isSelected ? .white : DesignSystem.Colors.primary)
-                            }
+                            Image(systemName: style.icon)
+                                .foregroundColor(.white)
+                                .frame(width: 36, height: 36)
+                                .background(
+                                    DesignSystem.Colors.adaptiveGradient(
+                                        light: isSelected ? Color(hex: "#34D399") : Color(hex: "#D1D5DB"),
+                                        mid: isSelected ? Color(hex: "#10B981") : Color(hex: "#9CA3AF"),
+                                        dark: isSelected ? Color(hex: "#059669") : Color(hex: "#6B7280")
+                                    )
+                                )
+                                .clipShape(AdaptivePillShapeStyle())
+                                .overlay(AdaptivePillShapeStyle().stroke(
+                                    isSelected ? Color(hex: "#047857") : Color(hex: "#6B7280"),
+                                    lineWidth: 2
+                                ))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(style.title)
-                                    .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                                    .foregroundColor(isSelected ? .white : DesignSystem.Colors.textPrimary)
+                                    .font(isSelected ? AppFont.bold(16) : AppFont.regular(16))
+                                    .foregroundColor(DesignSystem.Colors.textPrimary)
                                 Text(style.description)
-                                    .font(.system(size: DesignSystem.FontSizes.caption))
-                                    .foregroundColor(isSelected ? .white.opacity(0.85) : DesignSystem.Colors.textSecondary)
+                                    .font(AppFont.regular(13))
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer(minLength: 0)
                             if isSelected {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.white)
+                                    .foregroundColor(DesignSystem.Colors.primary)
                             }
                         }
                         .padding(DesignSystem.Spacing.md)
-                        .background(isSelected
-                                    ? DesignSystem.Colors.primary
-                                    : DesignSystem.Colors.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                                .stroke(isSelected ? Color.clear : DesignSystem.Colors.border, lineWidth: 1)
+                        .adaptiveCard(
+                            borderColor: isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.border,
+                            fillColor: isSelected ? DesignSystem.Colors.primary.opacity(0.1) : DesignSystem.Colors.cardBackground
                         )
                         .scaleEffect(isSelected ? 1.02 : 1.0)
                     }
@@ -658,7 +667,7 @@ private struct MealsPerDayStep: View {
         ) {
             VStack(spacing: DesignSystem.Spacing.lg) {
                 Text("\(mealsPerDay)")
-                    .font(.system(size: 64, weight: .bold))
+                    .font(AppFont.bold(64))
                     .foregroundColor(DesignSystem.Colors.primary)
                     .accessibilityLabel("\(mealsPerDay) meals per day")
 
@@ -706,15 +715,13 @@ private struct AllergiesStep: View {
                     allergies = []
                 } label: {
                     Text("None")
-                        .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                        .foregroundColor(allergies.isEmpty ? .white : DesignSystem.Colors.textPrimary)
+                        .font(allergies.isEmpty ? AppFont.bold(16) : AppFont.regular(16))
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(DesignSystem.Spacing.md)
-                        .background(allergies.isEmpty ? DesignSystem.Colors.primary : DesignSystem.Colors.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                                .stroke(allergies.isEmpty ? Color.clear : DesignSystem.Colors.border, lineWidth: 1)
+                        .adaptiveCard(
+                            borderColor: allergies.isEmpty ? DesignSystem.Colors.primary : DesignSystem.Colors.border,
+                            fillColor: allergies.isEmpty ? DesignSystem.Colors.primary.opacity(0.1) : DesignSystem.Colors.cardBackground
                         )
                 }
                 .buttonStyle(.plain)
@@ -734,15 +741,13 @@ private struct AllergiesStep: View {
             }
         } label: {
             Text(label)
-                .font(.system(size: DesignSystem.FontSizes.subheadline, weight: .medium))
-                .foregroundColor(isSelected ? .white : DesignSystem.Colors.textPrimary)
+                .font(isSelected ? AppFont.bold(16) : AppFont.regular(16))
+                .foregroundColor(DesignSystem.Colors.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, DesignSystem.Spacing.md)
-                .background(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                        .stroke(isSelected ? Color.clear : DesignSystem.Colors.border, lineWidth: 1)
+                .adaptiveCard(
+                    borderColor: isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.border,
+                    fillColor: isSelected ? DesignSystem.Colors.primary.opacity(0.1) : DesignSystem.Colors.cardBackground
                 )
         }
         .buttonStyle(.plain)
@@ -821,36 +826,39 @@ private func qualityCard(
         binding.wrappedValue = option.id
     } label: {
         HStack(spacing: DesignSystem.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(isSelected
-                          ? Color.white.opacity(0.25)
-                          : DesignSystem.Colors.primary.opacity(0.1))
-                    .frame(width: 44, height: 44)
-                Image(systemName: option.icon)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(isSelected ? .white : DesignSystem.Colors.primary)
-            }
+            Image(systemName: option.icon)
+                .foregroundColor(.white)
+                .frame(width: 36, height: 36)
+                .background(
+                    DesignSystem.Colors.adaptiveGradient(
+                        light: isSelected ? Color(hex: "#34D399") : Color(hex: "#D1D5DB"),
+                        mid: isSelected ? Color(hex: "#10B981") : Color(hex: "#9CA3AF"),
+                        dark: isSelected ? Color(hex: "#059669") : Color(hex: "#6B7280")
+                    )
+                )
+                .clipShape(AdaptivePillShapeStyle())
+                .overlay(AdaptivePillShapeStyle().stroke(
+                    isSelected ? Color(hex: "#047857") : Color(hex: "#6B7280"),
+                    lineWidth: 2
+                ))
             VStack(alignment: .leading, spacing: 2) {
                 Text(option.title)
-                    .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                    .foregroundColor(isSelected ? .white : DesignSystem.Colors.textPrimary)
+                    .font(isSelected ? AppFont.bold(16) : AppFont.regular(16))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
                 Text(option.description)
-                    .font(.system(size: DesignSystem.FontSizes.caption))
-                    .foregroundColor(isSelected ? .white.opacity(0.85) : DesignSystem.Colors.textSecondary)
+                    .font(AppFont.regular(13))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
             }
             Spacer()
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.white)
+                    .foregroundColor(DesignSystem.Colors.primary)
             }
         }
         .padding(DesignSystem.Spacing.md)
-        .background(isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                .stroke(isSelected ? Color.clear : DesignSystem.Colors.border, lineWidth: 1)
+        .adaptiveCard(
+            borderColor: isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.border,
+            fillColor: isSelected ? DesignSystem.Colors.primary.opacity(0.1) : DesignSystem.Colors.cardBackground
         )
     }
     .buttonStyle(.plain)
@@ -868,7 +876,7 @@ private struct CalculatingStep: View {
             Spacer()
 
             ZStack {
-                Circle()
+                AdaptiveCardShapeStyle()
                     .fill(DesignSystem.Colors.primary.opacity(0.1))
                     .frame(width: 120, height: 120)
                 ProgressView()
@@ -878,11 +886,11 @@ private struct CalculatingStep: View {
 
             VStack(spacing: DesignSystem.Spacing.sm) {
                 Text("Building Your Plan")
-                    .font(.system(size: DesignSystem.FontSizes.title2, weight: .semibold))
+                    .font(AppFont.bold(22))
                     .foregroundColor(DesignSystem.Colors.textPrimary)
 
                 Text("Personalizing your plan with AI...")
-                    .font(.system(size: DesignSystem.FontSizes.callout))
+                    .font(AppFont.regular(16))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -913,11 +921,11 @@ private struct ResultsStep: View {
                         .foregroundColor(DesignSystem.Colors.primary)
 
                     Text("Your Plan is Ready")
-                        .font(.system(size: DesignSystem.FontSizes.title, weight: .bold))
+                        .font(AppFont.bold(28))
                         .foregroundColor(DesignSystem.Colors.textPrimary)
 
                     Text("AI-personalized for your goals and lifestyle")
-                        .font(.system(size: DesignSystem.FontSizes.callout))
+                        .font(AppFont.regular(16))
                         .foregroundColor(DesignSystem.Colors.textSecondary)
                         .multilineTextAlignment(.center)
                 }
@@ -926,28 +934,21 @@ private struct ResultsStep: View {
                 // Calorie target
                 VStack(spacing: DesignSystem.Spacing.sm) {
                     Text("Daily Calories")
-                        .font(.system(size: DesignSystem.FontSizes.subheadline, weight: .medium))
+                        .font(AppFont.regular(14))
                         .foregroundColor(DesignSystem.Colors.textSecondary)
 
                     Text("\(viewModel.calculatedCalories)")
-                        .font(.system(size: 52, weight: .bold))
+                        .font(AppFont.bold(52))
                         .foregroundStyle(DesignSystem.Colors.primaryGradient)
                         .accessibilityLabel("\(viewModel.calculatedCalories) calories per day")
 
                     Text("kcal / day")
-                        .font(.system(size: DesignSystem.FontSizes.callout))
+                        .font(AppFont.regular(16))
                         .foregroundColor(DesignSystem.Colors.textTertiary)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(DesignSystem.Spacing.lg)
-                .background(DesignSystem.Colors.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
-                .shadow(
-                    color: DesignSystem.Shadows.card.color,
-                    radius: DesignSystem.Shadows.card.radius,
-                    x: DesignSystem.Shadows.card.x,
-                    y: DesignSystem.Shadows.card.y
-                )
+                .adaptiveCard(borderColor: DesignSystem.Colors.primary, fillColor: DesignSystem.Colors.cardBackground)
 
                 // Macro grid
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
@@ -963,27 +964,36 @@ private struct ResultsStep: View {
                         HStack(spacing: DesignSystem.Spacing.sm) {
                             Image(systemName: "sparkles")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(DesignSystem.Colors.primary)
+                                .foregroundColor(.white)
+                                .frame(width: 28, height: 28)
+                                .background(
+                                    DesignSystem.Colors.adaptiveGradient(
+                                        light: Color(hex: "#34D399"),
+                                        mid: Color(hex: "#10B981"),
+                                        dark: Color(hex: "#059669")
+                                    )
+                                )
+                                .clipShape(AdaptivePillShapeStyle())
+                                .overlay(AdaptivePillShapeStyle().stroke(Color(hex: "#047857"), lineWidth: 2))
                             Text("Your Coaching Tip")
-                                .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
+                                .font(AppFont.bold(17))
                                 .foregroundColor(DesignSystem.Colors.textPrimary)
                         }
                         Text(viewModel.aiTip)
-                            .font(.system(size: DesignSystem.FontSizes.callout))
+                            .font(AppFont.regular(16))
                             .foregroundColor(DesignSystem.Colors.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(DesignSystem.Spacing.md)
-                    .background(DesignSystem.Colors.primary.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                    .adaptiveCard(borderColor: DesignSystem.Colors.primary.opacity(0.3), fillColor: DesignSystem.Colors.primary.opacity(0.08))
                     .accessibilityLabel("Coaching tip: \(viewModel.aiTip)")
                 }
 
                 // Error message
                 if let error = viewModel.saveError {
                     Text(error)
-                        .font(.system(size: DesignSystem.FontSizes.caption))
+                        .font(AppFont.regular(12))
                         .foregroundColor(DesignSystem.Colors.danger)
                         .multilineTextAlignment(.center)
                 }
@@ -1006,17 +1016,16 @@ private struct ResultsStep: View {
     private func macroCard(title: String, value: String, color: Color) -> some View {
         VStack(spacing: DesignSystem.Spacing.xs) {
             Text(value)
-                .font(.system(size: DesignSystem.FontSizes.title2, weight: .bold))
+                .font(AppFont.bold(22))
                 .foregroundColor(color)
                 .accessibilityLabel("\(title): \(value)")
             Text(title)
-                .font(.system(size: DesignSystem.FontSizes.caption))
+                .font(AppFont.regular(12))
                 .foregroundColor(DesignSystem.Colors.textSecondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DesignSystem.Spacing.md)
-        .background(DesignSystem.Colors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+        .adaptiveCard(borderColor: color.opacity(0.5), fillColor: DesignSystem.Colors.cardBackground)
     }
 }
 
@@ -1033,11 +1042,11 @@ private struct OnboardingStepContainer<Content: View>: View {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xl) {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
                     Text(title)
-                        .font(.system(size: DesignSystem.FontSizes.title, weight: .bold))
+                        .font(AppFont.bold(28))
                         .foregroundColor(DesignSystem.Colors.textPrimary)
 
                     Text(subtitle)
-                        .font(.system(size: DesignSystem.FontSizes.callout))
+                        .font(AppFont.regular(16))
                         .foregroundColor(DesignSystem.Colors.textSecondary)
                 }
 
@@ -1061,7 +1070,7 @@ private struct OnboardingTextField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
             Text(label)
-                .font(.system(size: DesignSystem.FontSizes.subheadline, weight: .medium))
+                .font(AppFont.regular(14))
                 .foregroundColor(DesignSystem.Colors.textSecondary)
 
             TextField(placeholder, text: $text)
@@ -1070,9 +1079,9 @@ private struct OnboardingTextField: View {
                 .foregroundColor(DesignSystem.Colors.textPrimary)
                 .padding(DesignSystem.Spacing.md)
                 .background(DesignSystem.Colors.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                .clipShape(AdaptiveCardShapeStyle())
                 .overlay(
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                    AdaptiveCardShapeStyle()
                         .stroke(DesignSystem.Colors.border, lineWidth: 1)
                 )
                 .accessibilityLabel(label)
@@ -1127,9 +1136,13 @@ private struct StepPickerSheet: View {
                 .accessibilityLabel(item.title)
                 .accessibilityAddTraits(item.step == currentStep ? .isSelected : [])
             }
-            .navigationTitle("Go to Step")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Go to Step")
+                        .font(AppFont.bold(18))
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Cancel") { dismiss() }
                         .foregroundColor(DesignSystem.Colors.primary)

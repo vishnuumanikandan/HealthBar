@@ -45,26 +45,24 @@ struct XPToast: View {
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.sm) {
             Image(systemName: "star.fill")
-                .font(.system(size: 18, weight: .semibold))
+                .font(AppFont.bold(18))
                 .foregroundColor(.yellow)
 
             Text(displayText)
-                .font(.system(size: DesignSystem.FontSizes.headline, weight: .bold))
+                .font(AppFont.bold(17))
                 .foregroundColor(.white)
         }
         .padding(.horizontal, DesignSystem.Spacing.lg)
         .padding(.vertical, DesignSystem.Spacing.md)
-        .background(
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [Color.orange, Color(hex: "#F59E0B")],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+        .adaptivePill(
+            borderColor: Color(hex: "#D97706"),
+            fillColor: .clear,
+            fillGradient: LinearGradient(
+                colors: [Color(hex: "#F59E0B"), Color(hex: "#D97706")],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
         )
-        .shadow(color: Color.orange.opacity(0.4), radius: 8, y: 4)
         .scaleEffect(isShowing ? 1.0 : 0.5)
         .opacity(isShowing ? 1.0 : 0.0)
         .allowsHitTesting(false) // CRITICAL: Don't block user taps
@@ -132,15 +130,17 @@ struct ConfettiBurst: View {
 
     let particleCount: Int
 
+    private var tc: ThemeColors { SettingsManager.shared.activeColors }
+
     var body: some View {
         ZStack {
             ForEach(0..<particleCount, id: \.self) { index in
                 ConfettiParticle(
                     color: [
-                        DesignSystem.Colors.primary,
-                        DesignSystem.Colors.energy,
+                        tc.primary,
+                        tc.macroBarCarbs,
                         Color.yellow,
-                        Color.orange
+                        Color(hex: "#F59E0B")
                     ].randomElement()!
                 )
             }
@@ -201,22 +201,21 @@ struct QuestRollbackToast: View {
     let questTitle: String
     @State private var isShowing = false
 
+    private var tc: ThemeColors { SettingsManager.shared.activeColors }
+
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.sm) {
             Image(systemName: "arrow.counterclockwise")
-                .font(.system(size: 16, weight: .medium))
+                .font(AppFont.regular(16))
                 .foregroundColor(.white)
 
             Text("\(questTitle) no longer met")
-                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
+                .font(AppFont.regular(14))
                 .foregroundColor(.white)
         }
         .padding(.horizontal, DesignSystem.Spacing.md)
         .padding(.vertical, DesignSystem.Spacing.sm)
-        .background(
-            Capsule()
-                .fill(DesignSystem.Colors.textSecondary)
-        )
+        .adaptivePill(borderColor: tc.textSecondary, fillColor: tc.textSecondary)
         .opacity(isShowing ? 1 : 0)
         .offset(y: isShowing ? 0 : -20)
         .allowsHitTesting(false)

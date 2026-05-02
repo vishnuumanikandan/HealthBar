@@ -220,6 +220,8 @@ final class AccountViewModel {
 struct AccountView: View {
 
     @State private var viewModel: AccountViewModel
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
 
     init(coordinator: AppCoordinator, authService: FirebaseAuthService) {
         self._viewModel = State(
@@ -229,7 +231,7 @@ struct AccountView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            DesignSystem.Colors.primaryBackground.ignoresSafeArea()
+            tc.primaryBackground.ignoresSafeArea()
 
             ScrollView {
                 VStack(spacing: DesignSystem.Spacing.lg) {
@@ -250,8 +252,14 @@ struct AccountView: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.7), value: viewModel.toastMessage)
-        .navigationTitle("Account")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Account")
+                    .font(AppFont.bold(20))
+                    .foregroundColor(tc.textPrimary)
+            }
+        }
         .task { await viewModel.loadData() }
         .sheet(isPresented: $viewModel.showPasswordSheet) {
             passwordSheetView
@@ -291,12 +299,12 @@ struct AccountView: View {
         sectionCard(title: "Email") {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                 Text(viewModel.currentEmail.isEmpty ? "—" : viewModel.currentEmail)
-                    .font(.system(size: DesignSystem.FontSizes.body, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(AppFont.bold(16))
+                    .foregroundColor(tc.textPrimary)
 
                 Text("To change your email, contact support.")
-                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(AppFont.regular(14))
+                    .foregroundColor(tc.textSecondary)
             }
         }
     }
@@ -316,7 +324,7 @@ struct AccountView: View {
     // MARK: - Danger Section
 
     private var dangerSection: some View {
-        sectionCard(title: "Danger Zone") {
+        sectionCard(title: "Danger Zone", borderColor: .red) {
             AppButton(
                 title: "Delete Account",
                 style: .secondary,
@@ -331,7 +339,7 @@ struct AccountView: View {
     private var passwordSheetView: some View {
         NavigationStack {
             ZStack {
-                DesignSystem.Colors.primaryBackground.ignoresSafeArea()
+                tc.primaryBackground.ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: DesignSystem.Spacing.md) {
@@ -371,11 +379,18 @@ struct AccountView: View {
                     .padding(DesignSystem.Spacing.lg)
                 }
             }
-            .navigationTitle("Change Password")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Change Password")
+                        .font(AppFont.bold(20))
+                        .foregroundColor(tc.textPrimary)
+                }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { viewModel.showPasswordSheet = false }
+                    Button { viewModel.showPasswordSheet = false } label: {
+                        Text("Cancel").font(AppFont.regular(16))
+                            .foregroundColor(tc.primary)
+                    }
                 }
             }
         }
@@ -386,13 +401,13 @@ struct AccountView: View {
     private var deleteSheetView: some View {
         NavigationStack {
             ZStack {
-                DesignSystem.Colors.primaryBackground.ignoresSafeArea()
+                tc.primaryBackground.ignoresSafeArea()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
                         Text("This will permanently delete your account and all associated data. This action cannot be undone.")
-                            .font(.system(size: DesignSystem.FontSizes.callout, weight: .regular))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .font(AppFont.regular(16))
+                            .foregroundColor(DesignSystem.Colors.danger)
                             .padding(.bottom, DesignSystem.Spacing.xs)
 
                         AuthTextField(
@@ -423,11 +438,18 @@ struct AccountView: View {
                     .padding(DesignSystem.Spacing.lg)
                 }
             }
-            .navigationTitle("Delete Account")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Delete Account")
+                        .font(AppFont.bold(20))
+                        .foregroundColor(tc.textPrimary)
+                }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { viewModel.showDeleteSheet = false }
+                    Button { viewModel.showDeleteSheet = false } label: {
+                        Text("Cancel").font(AppFont.regular(16))
+                            .foregroundColor(tc.primary)
+                    }
                 }
             }
         }
@@ -435,36 +457,31 @@ struct AccountView: View {
 
     // MARK: - Helpers
 
-    private func sectionCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+    private func sectionCard<Content: View>(title: String, borderColor: Color? = nil, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
             Text(title)
-                .font(.system(size: DesignSystem.FontSizes.title3, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(AppFont.bold(20))
+                .foregroundColor(tc.textPrimary)
 
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
                 content()
             }
             .padding(DesignSystem.Spacing.md)
-            .background(DesignSystem.Colors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+            .adaptiveCard(borderColor: borderColor ?? tc.primary, fillColor: tc.cardBackground)
         }
     }
 
     private func toastBanner(_ message: String) -> some View {
         HStack(spacing: DesignSystem.Spacing.sm) {
             Image(systemName: "checkmark.circle.fill")
-                .foregroundColor(DesignSystem.Colors.primary)
+                .foregroundColor(tc.primary)
             Text(message)
-                .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(AppFont.bold(16))
+                .foregroundColor(tc.textPrimary)
             Spacer()
         }
         .padding(.horizontal, DesignSystem.Spacing.md)
         .padding(.vertical, DesignSystem.Spacing.sm)
-        .background(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                .fill(DesignSystem.Colors.cardBackground)
-                .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 3)
-        )
+        .adaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground)
     }
 }

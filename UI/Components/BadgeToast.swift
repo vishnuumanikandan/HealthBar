@@ -65,37 +65,31 @@ struct BadgeToastView: View {
     let badge: BadgeDefinition
     let onDismiss: () -> Void
 
+    private var tc: ThemeColors { SettingsManager.shared.activeColors }
+
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.sm) {
             Text(badge.emoji)
-                .font(.system(size: 32))
+                .font(AppFont.regular(32))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Badge Unlocked!")
-                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(AppFont.bold(12))
+                    .foregroundColor(tc.textSecondary)
                 Text(badge.title)
-                    .font(.system(size: DesignSystem.FontSizes.body, weight: .bold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(AppFont.bold(17))
+                    .foregroundColor(tc.textPrimary)
             }
 
             Spacer()
 
             Image(systemName: "xmark")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(AppFont.bold(12))
+                .foregroundColor(tc.textSecondary)
         }
         .padding(.horizontal, DesignSystem.Spacing.md)
         .padding(.vertical, DesignSystem.Spacing.sm)
-        .background(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                .fill(DesignSystem.Colors.cardBackground)
-                .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                        .stroke(DesignSystem.Colors.primary.opacity(0.4), lineWidth: 1)
-                )
-        )
+        .adaptiveCard(borderColor: tc.primary.opacity(0.4), fillColor: tc.cardBackground)
         .padding(.horizontal, DesignSystem.Spacing.md)
         .padding(.top, DesignSystem.Spacing.sm)
         .onTapGesture { onDismiss() }

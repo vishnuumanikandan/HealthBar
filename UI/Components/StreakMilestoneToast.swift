@@ -31,11 +31,13 @@ struct StreakMilestoneToast: View {
     @State private var contentOffset: CGFloat = 20
     @State private var contentOpacity: Double = 0
 
+    private var tc: ThemeColors { SettingsManager.shared.activeColors }
+
     var body: some View {
         VStack(spacing: DesignSystem.Spacing.md) {
             // Animated flame icon
             Image(systemName: "flame.fill")
-                .font(.system(size: 64, weight: .bold))
+                .font(AppFont.bold(64))
                 .foregroundStyle(
                     LinearGradient(
                         colors: [Color(hex: "#F59E0B"), Color(hex: "#FBBF24")],
@@ -48,15 +50,15 @@ struct StreakMilestoneToast: View {
 
             // Title
             Text(milestone.title)
-                .font(.system(size: DesignSystem.FontSizes.title, weight: .bold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(AppFont.bold(28))
+                .foregroundColor(tc.textPrimary)
                 .offset(y: contentOffset)
                 .opacity(contentOpacity)
 
             // Message
             Text(milestone.message)
-                .font(.system(size: DesignSystem.FontSizes.callout, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(AppFont.regular(16))
+                .foregroundColor(tc.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, DesignSystem.Spacing.lg)
                 .offset(y: contentOffset)
@@ -65,43 +67,30 @@ struct StreakMilestoneToast: View {
             // XP Badge
             HStack(spacing: DesignSystem.Spacing.xs) {
                 Image(systemName: "star.fill")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(AppFont.bold(18))
                     .foregroundColor(.white)
 
                 Text("+\(milestone.bonusXP) XP")
-                    .font(.system(size: DesignSystem.FontSizes.headline, weight: .bold))
+                    .font(AppFont.bold(17))
                     .foregroundColor(.white)
             }
             .padding(.horizontal, DesignSystem.Spacing.lg)
             .padding(.vertical, DesignSystem.Spacing.md)
-            .background(
-                LinearGradient(
+            .adaptivePill(
+                borderColor: Color(hex: "#D97706"),
+                fillColor: .clear,
+                fillGradient: LinearGradient(
                     colors: [Color(hex: "#F59E0B"), Color(hex: "#D97706")],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
             )
-            .clipShape(Capsule())
-            .shadow(color: Color(hex: "#F59E0B").opacity(0.4), radius: 8, y: 4)
             .offset(y: contentOffset)
             .opacity(contentOpacity)
         }
         .padding(DesignSystem.Spacing.xl)
         .frame(maxWidth: 320)
-        .background(DesignSystem.Colors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.xl))
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.xl)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [Color(hex: "#F59E0B").opacity(0.5), Color(hex: "#FBBF24").opacity(0.3)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 2
-                )
-        )
-        .shadow(color: Color(hex: "#F59E0B").opacity(0.3), radius: 20)
+        .adaptiveCard(borderColor: Color(hex: "#F59E0B").opacity(0.5), fillColor: tc.cardBackground)
         .allowsHitTesting(false)
         .onAppear {
             // Flame animation

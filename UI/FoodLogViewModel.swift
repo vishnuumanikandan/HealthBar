@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import ImageIO
 
 /// ViewModel for the Food Log feature
 ///
@@ -24,6 +25,9 @@ final class FoodLogViewModel {
 
     /// Barcode service for nutrition lookup
     private let barcodeService: BarcodeService
+
+    /// AI food recognition service for natural-language meal logging
+    private let aiService: AIFoodRecognitionService
 
     // MARK: - Data State
 
@@ -279,15 +283,61 @@ final class FoodLogViewModel {
     /// Show edit sheet
     var showingEditSheet: Bool = false
 
+    // MARK: - AI Recognition State
+
+    /// Controls visibility of the DescribeMealView sheet
+    var showingDescribeMeal: Bool = false
+
+    /// User's typed meal description
+    var mealDescriptionInput: String = ""
+
+    /// Whether an AI recognition request is in flight
+    var isRecognizing: Bool = false
+
+    /// Error or clarification message from the last recognition attempt
+    var recognitionError: String? = nil
+
+    /// Items returned by the AI recognition service (source of truth before review)
+    var recognizedItems: [RecognizedFoodItem] = []
+
+    /// Controls visibility of the RecognizedFoodsReviewView sheet
+    var showingRecognitionReview: Bool = false
+
+    /// In-flight recognition task (for cancellation)
+    private var recognitionTask: Task<Void, Never>? = nil
+
+    /// Timestamp of the last recognition request start (for rate limiting)
+    private var lastRecognitionStart: Date? = nil
+
+    // MARK: - Describe Meal Photo State (isolated from manual AddFoodForm photo)
+
+    /// Finalized JPEG data for the describe-meal photo (ready for API + persistence)
+    var describeMealPhotoData: Data? = nil
+
+    /// Whether photo is being processed (downsample + compress)
+    var isAttachingDescribeMealPhoto: Bool = false
+
+    /// Controls camera picker for describe-meal flow
+    var showingDescribeMealCameraPicker: Bool = false
+
+    /// Controls photo library picker for describe-meal flow
+    var showingDescribeMealPhotoPicker: Bool = false
+
     // MARK: - Initialization
 
     /// Initializes the view model with an app coordinator
     /// - Parameters:
     ///   - coordinator: The app coordinator for business logic
     ///   - barcodeService: Service for barcode nutrition lookup (defaults to new instance)
-    init(coordinator: AppCoordinator, barcodeService: BarcodeService = BarcodeService()) {
+    ///   - aiService: AI food recognition service (defaults to new instance)
+    init(
+        coordinator: AppCoordinator,
+        barcodeService: BarcodeService = BarcodeService(),
+        aiService: AIFoodRecognitionService = AIFoodRecognitionService()
+    ) {
         self.coordinator = coordinator
         self.barcodeService = barcodeService
+        self.aiService = aiService
     }
 
     // MARK: - Data Loading
@@ -1446,6 +1496,250 @@ final class FoodLogViewModel {
             #endif
         } catch {
             showToastMessage("Couldn't move item")
+        }
+    }
+
+    // MARK: - AI Meal Recognition
+
+    /// Opens the DescribeMealView sheet, pre-configured with the pending meal type.
+    func openDescribeMeal() {
+        formMealType = pendingMealType
+        mealDescriptionInput = ""
+        recognitionError = nil
+        recognizedItems = []
+        isRecognizing = false
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        describeMealPhotoData = nil
+        isAttachingDescribeMealPhoto = false
+        showingDescribeMeal = true
+    }
+
+    /// Sends the meal description (and optional photo) to the AI recognition service.
+    ///
+    /// Request lifecycle rules:
+    /// - Only one request active at a time (cancels prior).
+    /// - Minimum 1s between request starts (rate gate).
+    /// - Results are discarded if the task is cancelled or the sheet closed.
+    func recognizeMeal() async {
+        let trimmed = mealDescriptionInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasText = !trimmed.isEmpty
+        let hasImage = describeMealPhotoData != nil
+        guard hasText || hasImage else { return }
+
+        // Rate gate: ignore if less than 1s since last start
+        if let lastStart = lastRecognitionStart, Date().timeIntervalSince(lastStart) < 1.0 {
+            return
+        }
+
+        // Cancel any prior in-flight request
+        recognitionTask?.cancel()
+
+        lastRecognitionStart = Date()
+        isRecognizing = true
+        recognitionError = nil
+
+        // Capture photo data before entering the task (avoid cross-actor access)
+        let imageData = describeMealPhotoData
+
+        let task = Task {
+            defer {
+                if !Task.isCancelled {
+                    isRecognizing = false
+                }
+                recognitionTask = nil
+            }
+
+            do {
+                let items = try await aiService.recognize(
+                    description: hasText ? trimmed : nil,
+                    imageData: imageData
+                )
+
+                // Guard: only apply results if not cancelled and sheet still open
+                guard !Task.isCancelled, showingDescribeMeal else { return }
+
+                recognizedItems = items
+
+                // Close input sheet, then open review after animation
+                showingDescribeMeal = false
+                try await Task.sleep(for: .milliseconds(400))
+
+                guard !Task.isCancelled else { return }
+                showingRecognitionReview = true
+
+            } catch is CancellationError {
+                print("[AIFoodRecognition] Request cancelled")
+            } catch let error as AIFoodRecognitionError {
+                guard !Task.isCancelled, showingDescribeMeal else { return }
+                recognitionError = error.userMessage
+            } catch {
+                guard !Task.isCancelled, showingDescribeMeal else { return }
+                recognitionError = "Something went wrong. Try again or add food manually."
+            }
+        }
+
+        recognitionTask = task
+    }
+
+    /// Cancels any in-flight AI recognition request and resets loading state.
+    func cancelRecognition() {
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        isRecognizing = false
+        describeMealPhotoData = nil
+    }
+
+    // MARK: - Describe Meal Photo Handling
+
+    /// Processes an image for the describe-meal flow using an off-MainActor pipeline:
+    /// 1. Downsample during decode (longest edge ≤ 1568px) — never fully decodes original.
+    /// 2. Normalize orientation (physically rotate pixels upright).
+    /// 3. Iteratively compress to JPEG < 1MB.
+    ///
+    /// Only the final JPEG `Data` is published to `describeMealPhotoData` on MainActor.
+    func attachDescribeMealPhoto(_ image: UIImage) async {
+        isAttachingDescribeMealPhoto = true
+
+        do {
+            let jpegData = try await Self.processImageForRecognition(image)
+            describeMealPhotoData = jpegData
+            print("[AIFoodRecognition] Photo attached — \(jpegData.count) bytes")
+
+            #if os(iOS)
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+            #endif
+        } catch {
+            print("[AIFoodRecognition] Photo processing failed: \(error)")
+            recognitionError = "Couldn't process the photo. You can still analyze with text."
+            describeMealPhotoData = nil
+        }
+
+        isAttachingDescribeMealPhoto = false
+    }
+
+    /// Clears the describe-meal photo.
+    func clearDescribeMealPhoto() {
+        describeMealPhotoData = nil
+
+        #if os(iOS)
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
+        #endif
+    }
+
+    /// Off-MainActor image processing pipeline.
+    /// Downsample → normalize orientation → JPEG compress to < 1MB.
+    private static nonisolated func processImageForRecognition(_ image: UIImage) throws -> Data {
+        let maxDimension: CGFloat = 1568
+        let maxBytes = 1_000_000
+
+        // Step 1: Get JPEG data from the UIImage to create a CGImageSource for downsampling.
+        // This avoids holding the full-resolution decoded bitmap.
+        guard let sourceData = image.jpegData(compressionQuality: 1.0) else {
+            throw ImageProcessingError.encodingFailed
+        }
+
+        guard let source = CGImageSourceCreateWithData(sourceData as CFData, nil) else {
+            throw ImageProcessingError.encodingFailed
+        }
+
+        // Determine if downsampling is needed
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true, // normalizes orientation
+            kCGImageSourceThumbnailMaxPixelSize: maxDimension
+        ]
+
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            throw ImageProcessingError.encodingFailed
+        }
+
+        // Step 2: The thumbnail is already orientation-normalized via kCGImageSourceCreateThumbnailWithTransform.
+        // Create a UIImage from the CGImage (orientation .up since pixels are physically rotated).
+        let normalizedImage = UIImage(cgImage: cgImage, scale: 1.0, orientation: .up)
+
+        // Step 3: Iterative JPEG compression to < 1MB
+        var quality: CGFloat = 0.7
+        guard var data = normalizedImage.jpegData(compressionQuality: quality) else {
+            throw ImageProcessingError.encodingFailed
+        }
+
+        while data.count > maxBytes && quality > 0.1 {
+            quality -= 0.1
+            if let compressed = normalizedImage.jpegData(compressionQuality: quality) {
+                data = compressed
+            } else {
+                break
+            }
+        }
+
+        guard data.count <= maxBytes else {
+            throw ImageProcessingError.tooLarge
+        }
+
+        return data
+    }
+
+    private enum ImageProcessingError: Error {
+        case encodingFailed
+        case tooLarge
+    }
+
+    /// Logs the reviewed/edited recognized items through the existing addFoodEntry path.
+    ///
+    /// Each included item becomes one `FoodEntry` with `toxinScore: 30` (default)
+    /// and `mealType` from `formMealType`. When a describe-meal photo was used,
+    /// it is attached to every entry created from this recognition.
+    /// - Parameter items: The reviewed items to log.
+    func logRecognizedItems(_ items: [RecognizedFoodItem]) async {
+        guard !isSubmittingForm else { return }
+        isSubmittingForm = true
+
+        // Capture photo data for logging (attach meal photo to each entry)
+        let mealPhoto = describeMealPhotoData
+
+        var totalXP = 0
+        var loggedCount = 0
+
+        for item in items {
+            do {
+                let result = try await coordinator.addFoodEntry(
+                    name: item.name,
+                    calories: item.calories,
+                    protein: item.protein,
+                    carbs: item.carbs,
+                    fat: item.fat,
+                    toxinScore: 30,
+                    date: selectedDate,
+                    photoData: mealPhoto,
+                    mealType: formMealType
+                )
+                totalXP += result.xpEarned
+                loggedCount += 1
+            } catch {
+                print("[AIFoodRecognition] Failed to log '\(item.name)': \(error)")
+            }
+        }
+
+        isSubmittingForm = false
+
+        // Close review sheet and clear state
+        showingRecognitionReview = false
+        recognizedItems = []
+        describeMealPhotoData = nil
+
+        // Refresh data
+        await loadTodaysData()
+        if !isViewingToday {
+            await loadEntriesForSelectedDate()
+        }
+
+        // Show success toast
+        if loggedCount > 0 {
+            let xpText = totalXP > 0 ? " (+\(totalXP) XP)" : ""
+            showToastMessage("\(loggedCount) item\(loggedCount == 1 ? "" : "s") logged\(xpText)")
         }
     }
 

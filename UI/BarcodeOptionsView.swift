@@ -23,9 +23,12 @@ struct BarcodeOptionsView: View {
     /// Closure that dismisses the entire AddFoodChoiceSheet (and this navigation stack)
     let onDismissAll: () -> Void
 
+    @State private var settings = SettingsManager.shared
     @State private var showingCamera = false
     @State private var showingManualAlert = false
     @State private var manualInput = ""
+
+    private var tc: ThemeColors { settings.activeColors }
 
     var body: some View {
         VStack(spacing: DesignSystem.Spacing.md) {
@@ -50,7 +53,7 @@ struct BarcodeOptionsView: View {
             Spacer()
         }
         .padding(DesignSystem.Spacing.lg)
-        .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
+        .background(tc.primaryBackground.ignoresSafeArea())
         .navigationTitle("Scan Barcode")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingCamera) {
@@ -92,38 +95,31 @@ struct BarcodeOptionsView: View {
         Button(action: action) {
             HStack(spacing: DesignSystem.Spacing.md) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                        .fill(DesignSystem.Colors.primary.opacity(0.12))
+                    AdaptiveCardShapeStyle()
+                        .fill(tc.primary.opacity(0.12))
                         .frame(width: 52, height: 52)
                     Image(systemName: sfSymbol)
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.primary)
+                        .font(AppFont.regular(24))
+                        .foregroundColor(tc.primary)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .font(AppFont.bold(18))
+                        .foregroundColor(tc.textPrimary)
                     Text(subtitle)
-                        .font(.system(size: DesignSystem.FontSizes.footnote, weight: .regular))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(AppFont.regular(13))
+                        .foregroundColor(tc.textSecondary)
                 }
 
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .font(AppFont.regular(14))
+                    .foregroundColor(tc.textTertiary)
             }
             .padding(DesignSystem.Spacing.md)
-            .background(DesignSystem.Colors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
-            .shadow(
-                color: DesignSystem.Shadows.card.color,
-                radius: DesignSystem.Shadows.card.radius / 2,
-                x: DesignSystem.Shadows.card.x,
-                y: DesignSystem.Shadows.card.y
-            )
+            .adaptiveCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.cardBackground)
         }
         .buttonStyle(PlainButtonStyle())
     }
