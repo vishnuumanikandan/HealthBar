@@ -22,9 +22,12 @@ struct ServingSizePickerSheet: View {
     let onConfirm: (LoggableFood, Double) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var settings = SettingsManager.shared
 
     @State private var quantityText: String
     @State private var quantity: Double
+
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     // MARK: - Init
 
@@ -59,21 +62,22 @@ struct ServingSizePickerSheet: View {
                 }
                 .padding(DesignSystem.Spacing.lg)
             }
-            .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
+            .background(tc.primaryBackground.ignoresSafeArea())
             .navigationTitle("Serving Size")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(PixelFont.regular(16))
+                        .foregroundColor(tc.textSecondary)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
                         onConfirm(food, quantity)
                         dismiss()
                     }
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                    .foregroundColor(isValid ? DesignSystem.Colors.primary : DesignSystem.Colors.textTertiary)
+                    .font(PixelFont.bold(16))
+                    .foregroundColor(isValid ? tc.primary : tc.textTertiary)
                     .disabled(!isValid)
                 }
             }
@@ -87,30 +91,29 @@ struct ServingSizePickerSheet: View {
     private var foodHeader: some View {
         HStack(spacing: DesignSystem.Spacing.md) {
             ZStack {
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                    .fill(DesignSystem.Colors.primary.opacity(0.12))
+                PixelCardShape()
+                    .fill(tc.primary.opacity(0.12))
                     .frame(width: 56, height: 56)
                 Image(systemName: "fork.knife")
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .font(PixelFont.regular(24))
+                    .foregroundColor(tc.primary)
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(food.name)
-                    .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(PixelFont.bold(17))
+                    .foregroundColor(tc.textPrimary)
                     .lineLimit(2)
 
                 Text("Base: \(food.servingDescription) = \(food.caloriesPerBase) cal")
-                    .font(.system(size: DesignSystem.FontSizes.footnote, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.regular(14))
+                    .foregroundColor(tc.textSecondary)
             }
 
             Spacer()
         }
         .padding(DesignSystem.Spacing.md)
-        .background(DesignSystem.Colors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+        .pixelCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.cardBackground)
     }
 
     // MARK: - Serving Control
@@ -118,8 +121,8 @@ struct ServingSizePickerSheet: View {
     private var servingControl: some View {
         VStack(spacing: DesignSystem.Spacing.sm) {
             Text("Quantity")
-                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(PixelFont.bold(14))
+                .foregroundColor(tc.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: DesignSystem.Spacing.md) {
@@ -131,8 +134,8 @@ struct ServingSizePickerSheet: View {
                     quantityText = Self.formatQuantity(newVal)
                 } label: {
                     Image(systemName: "minus.circle.fill")
-                        .font(.system(size: 32))
-                        .foregroundColor(quantity <= 0.01 ? DesignSystem.Colors.textTertiary : DesignSystem.Colors.primary)
+                        .font(PixelFont.regular(32))
+                        .foregroundColor(quantity <= 0.01 ? tc.textTertiary : tc.primary)
                 }
                 .buttonStyle(PlainButtonStyle())
                 .disabled(quantity <= 0.01)
@@ -143,7 +146,7 @@ struct ServingSizePickerSheet: View {
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.center)
                         .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .foregroundColor(tc.textPrimary)
                         .frame(width: 100)
                         .onChange(of: quantityText) { _, newValue in
                             if let parsed = Double(newValue.replacingOccurrences(of: ",", with: ".")), parsed > 0 {
@@ -152,8 +155,8 @@ struct ServingSizePickerSheet: View {
                         }
 
                     Text(food.unit)
-                        .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(PixelFont.regular(12))
+                        .foregroundColor(tc.textSecondary)
                 }
 
                 // Increment
@@ -164,14 +167,13 @@ struct ServingSizePickerSheet: View {
                     quantityText = Self.formatQuantity(newVal)
                 } label: {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 32))
-                        .foregroundColor(DesignSystem.Colors.primary)
+                        .font(PixelFont.regular(32))
+                        .foregroundColor(tc.primary)
                 }
                 .buttonStyle(PlainButtonStyle())
             }
             .padding(DesignSystem.Spacing.md)
-            .background(DesignSystem.Colors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+            .pixelCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.cardBackground)
         }
     }
 
@@ -181,19 +183,19 @@ struct ServingSizePickerSheet: View {
         VStack(spacing: DesignSystem.Spacing.sm) {
             HStack {
                 Text("Nutrition Preview")
-                    .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.bold(14))
+                    .foregroundColor(tc.textSecondary)
                 Spacer()
                 Text(quantityText.isEmpty ? "—" : "\(quantityText) \(food.unit)")
-                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .font(PixelFont.regular(12))
+                    .foregroundColor(tc.textTertiary)
             }
 
             HStack(spacing: DesignSystem.Spacing.sm) {
-                nutritionCell(label: "Calories", value: "\(scaled.calories)", unit: "kcal", color: DesignSystem.Colors.energy)
-                nutritionCell(label: "Protein", value: String(format: "%.1f", scaled.protein), unit: "g", color: DesignSystem.Colors.primary)
-                nutritionCell(label: "Carbs", value: String(format: "%.1f", scaled.carbs), unit: "g", color: .orange)
-                nutritionCell(label: "Fat", value: String(format: "%.1f", scaled.fat), unit: "g", color: .purple)
+                nutritionCell(label: "Calories", value: "\(scaled.calories)", unit: "kcal", color: tc.macroBarCarbs)
+                nutritionCell(label: "Protein", value: String(format: "%.1f", scaled.protein), unit: "g", color: tc.primary)
+                nutritionCell(label: "Carbs", value: String(format: "%.1f", scaled.carbs), unit: "g", color: tc.macroBarCarbs)
+                nutritionCell(label: "Fat", value: String(format: "%.1f", scaled.fat), unit: "g", color: tc.macroBarFat)
             }
         }
     }
@@ -201,21 +203,20 @@ struct ServingSizePickerSheet: View {
     private func nutritionCell(label: String, value: String, unit: String, color: Color) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.system(size: DesignSystem.FontSizes.title3, weight: .bold, design: .rounded))
+                .font(PixelFont.bold(20))
                 .foregroundColor(color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
             Text(unit)
-                .font(.system(size: 10, weight: .medium))
+                .font(PixelFont.regular(10))
                 .foregroundColor(color.opacity(0.8))
             Text(label)
-                .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(PixelFont.regular(12))
+                .foregroundColor(tc.textSecondary)
         }
         .frame(maxWidth: .infinity)
         .padding(DesignSystem.Spacing.sm)
-        .background(color.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+        .pixelCard(borderColor: color.opacity(0.2), fillColor: color.opacity(0.08))
     }
 
     // MARK: - Helpers

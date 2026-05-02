@@ -28,6 +28,8 @@ struct FoodLogView: View {
     @State private var settings = SettingsManager.shared
     @State private var draggingOver: MealType? = nil
 
+    private var tc: ThemeColors { settings.activeTheme.colors }
+
     // Fix #8: track which sections are collapsed
     @State private var collapsedSections: Set<MealType> = []
 
@@ -45,7 +47,7 @@ struct FoodLogView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                DesignSystem.Colors.primaryBackground
+                tc.primaryBackground
                     .ignoresSafeArea()
 
                 if viewModel.isLoading && viewModel.displayedEntries.isEmpty && viewModel.isViewingToday {
@@ -54,7 +56,14 @@ struct FoodLogView: View {
                     contentView
                 }
             }
-            .navigationTitle("Food Log")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Food Log")
+                        .font(PixelFont.bold(20))
+                        .foregroundColor(tc.textPrimary)
+                }
+            }
             // Add Food 3-choice sheet
             .sheet(isPresented: $viewModel.showingAddFoodChoice) {
                 AddFoodChoiceSheet(viewModel: viewModel)
@@ -66,6 +75,14 @@ struct FoodLogView: View {
             // Add food entry form
             .sheet(isPresented: $viewModel.showingAddFood) {
                 AddFoodFormView(viewModel: viewModel)
+            }
+            // AI Describe Meal input sheet
+            .sheet(isPresented: $viewModel.showingDescribeMeal) {
+                DescribeMealView(viewModel: viewModel)
+            }
+            // AI Recognized Foods review sheet
+            .sheet(isPresented: $viewModel.showingRecognitionReview) {
+                RecognizedFoodsReviewView(viewModel: viewModel)
             }
             // Edit meal form
             .sheet(isPresented: $viewModel.showingEditSheet) {
@@ -168,8 +185,8 @@ struct FoodLogView: View {
         VStack(spacing: DesignSystem.Spacing.md) {
             ProgressView().scaleEffect(1.5)
             Text("Loading your meals...")
-                .font(.system(size: DesignSystem.FontSizes.callout, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(PixelFont.regular(DesignSystem.FontSizes.callout))
+                .foregroundColor(tc.textSecondary)
         }
     }
 
@@ -227,11 +244,11 @@ struct FoodLogView: View {
                 viewModel.navigateToPreviousDay()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(PixelFont.bold(18))
                     .foregroundColor(
                         viewModel.canNavigateBack
-                            ? DesignSystem.Colors.primary
-                            : DesignSystem.Colors.textTertiary
+                            ? tc.primary
+                            : tc.textTertiary
                     )
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
@@ -242,8 +259,8 @@ struct FoodLogView: View {
             Spacer()
 
             Text(viewModel.selectedDateDisplayLabel)
-                .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(PixelFont.bold(DesignSystem.FontSizes.headline))
+                .foregroundColor(tc.textPrimary)
                 .animation(nil, value: viewModel.selectedDateDisplayLabel)
 
             Spacer()
@@ -252,11 +269,11 @@ struct FoodLogView: View {
                 viewModel.navigateToNextDay()
             } label: {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(PixelFont.bold(18))
                     .foregroundColor(
                         viewModel.canNavigateForward
-                            ? DesignSystem.Colors.primary
-                            : DesignSystem.Colors.textTertiary
+                            ? tc.primary
+                            : tc.textTertiary
                     )
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
@@ -266,14 +283,7 @@ struct FoodLogView: View {
         }
         .padding(.horizontal, DesignSystem.Spacing.md)
         .padding(.vertical, DesignSystem.Spacing.sm)
-        .background(DesignSystem.Colors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-        .shadow(
-            color: DesignSystem.Shadows.card.color,
-            radius: DesignSystem.Shadows.card.radius / 2,
-            x: DesignSystem.Shadows.card.x,
-            y: DesignSystem.Shadows.card.y
-        )
+        .pixelCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
     }
 
     // MARK: - Meal Category Section
@@ -301,21 +311,21 @@ struct FoodLogView: View {
             // Section header
             HStack(spacing: DesignSystem.Spacing.sm) {
                 Image(systemName: mealType.icon)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(PixelFont.bold(16))
                     .foregroundColor(mealType.color)
 
                 Text(mealType.displayName)
-                    .font(.system(size: DesignSystem.FontSizes.title2, weight: .bold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(PixelFont.bold(18))
+                    .foregroundColor(tc.textPrimary)
 
                 if !allEntries.isEmpty {
                     Text("\(allEntries.count)")
-                        .font(.system(size: DesignSystem.FontSizes.caption, weight: .semibold))
+                        .font(PixelFont.bold(DesignSystem.FontSizes.caption))
                         .foregroundColor(mealType.color)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(mealType.color.opacity(0.15))
-                        .clipShape(Capsule())
+                        .clipShape(PixelPillShape())
                 }
 
                 Spacer()
@@ -323,8 +333,8 @@ struct FoodLogView: View {
                 // Fix #8: show total cal when collapsed
                 if isCollapsed && !allEntries.isEmpty {
                     Text("\(sectionCalTotal) cal")
-                        .font(.system(size: DesignSystem.FontSizes.caption, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(PixelFont.regular(13))
+                        .foregroundColor(tc.textSecondary)
                 }
 
                 // Fix #8: collapse toggle (only when there are entries)
@@ -339,8 +349,8 @@ struct FoodLogView: View {
                         }
                     } label: {
                         Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .font(PixelFont.bold(13))
+                            .foregroundColor(tc.textSecondary)
                             .frame(width: 28, height: 28)
                             .contentShape(Rectangle())
                     }
@@ -351,15 +361,21 @@ struct FoodLogView: View {
                 Button {
                     viewModel.openAddFoodChoice(for: mealType)
                 } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(mealType.color)
+                    Text("+")
+                        .font(PixelFont.bold(16))
+                        .foregroundColor(.white)
+                        .frame(width: 30, height: 30)
+                        .pixelPill(
+                            borderColor: mealType.color.adjustedBrightness(-0.2),
+                            fillColor: .clear,
+                            fillGradient: DesignSystem.Colors.threeBandFrom(mealType.color)
+                        )
                 }
                 .buttonStyle(PlainButtonStyle())
             }
             .padding(.horizontal, DesignSystem.Spacing.md)
             .padding(.top, DesignSystem.Spacing.md)
-            .padding(.bottom, (allEntries.isEmpty || isCollapsed) ? 0 : DesignSystem.Spacing.sm)
+            .padding(.bottom, (allEntries.isEmpty || isCollapsed) ? DesignSystem.Spacing.xs : DesignSystem.Spacing.sm)
 
             // Content (hidden when collapsed)
             if !isCollapsed {
@@ -370,23 +386,15 @@ struct FoodLogView: View {
                     } label: {
                         HStack(spacing: DesignSystem.Spacing.sm) {
                             Image(systemName: "plus")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(PixelFont.bold(13))
                                 .foregroundColor(mealType.color)
                             Text("Add \(mealType.displayName)")
-                                .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                .font(PixelFont.regular(DesignSystem.FontSizes.callout))
+                                .foregroundColor(tc.textSecondary)
                             Spacer()
                         }
                         .padding(DesignSystem.Spacing.md)
-                        .background(mealType.color.opacity(0.06))
-                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                                .stroke(
-                                    mealType.color.opacity(0.3),
-                                    style: StrokeStyle(lineWidth: 1.5, dash: [6, 3])
-                                )
-                        )
+                        .pixelCard(borderColor: mealType.color.opacity(0.3), fillColor: mealType.color.opacity(0.06))
                     }
                     .buttonStyle(PlainButtonStyle())
                     .padding(.horizontal, DesignSystem.Spacing.md)
@@ -430,21 +438,9 @@ struct FoodLogView: View {
                 Color.clear.frame(height: DesignSystem.Spacing.sm)
             }
         }
-        .background(
-            draggingOver == mealType
-                ? mealType.color.opacity(0.08)
-                : DesignSystem.Colors.cardBackground
-        )
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                .stroke(mealType.color.opacity(draggingOver == mealType ? 0.5 : 0), lineWidth: 2)
-        )
-        .shadow(
-            color: DesignSystem.Shadows.card.color,
-            radius: DesignSystem.Shadows.card.radius,
-            x: DesignSystem.Shadows.card.x,
-            y: DesignSystem.Shadows.card.y
+        .pixelCard(
+            borderColor: draggingOver == mealType ? mealType.color.opacity(0.5) : tc.primary.opacity(0.15),
+            fillColor: draggingOver == mealType ? mealType.color.opacity(0.08) : tc.cardBackground
         )
         .dropDestination(for: String.self) { items, _ in
             guard let item = items.first else { return false }
@@ -487,22 +483,22 @@ struct FoodLogView: View {
             // Bundle header row
             HStack(spacing: DesignSystem.Spacing.sm) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                        .fill(Color.orange.opacity(0.12))
+                    PixelCardShape()
+                        .fill(tc.iconAmber.mid.opacity(0.15))
                         .frame(width: 32, height: 32)
                     Image(systemName: "rectangle.stack.fill")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Color.orange)
+                        .font(PixelFont.regular(13))
+                        .foregroundColor(tc.iconAmber.mid)
                 }
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(bundleName)
-                        .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .font(PixelFont.bold(DesignSystem.FontSizes.callout))
+                        .foregroundColor(tc.textPrimary)
                         .lineLimit(1)
                     Text("\(totalCal) cal · \(components.count) item\(components.count == 1 ? "" : "s")")
-                        .font(.system(size: DesignSystem.FontSizes.caption))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(PixelFont.regular(DesignSystem.FontSizes.caption))
+                        .foregroundColor(tc.textSecondary)
                 }
 
                 Spacer()
@@ -518,8 +514,8 @@ struct FoodLogView: View {
                     }
                 } label: {
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(PixelFont.bold(12))
+                        .foregroundColor(tc.textSecondary)
                         .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
                 }
@@ -534,8 +530,8 @@ struct FoodLogView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(PixelFont.regular(14))
+                        .foregroundColor(tc.textSecondary)
                         .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
                 }
@@ -543,8 +539,7 @@ struct FoodLogView: View {
             }
             .padding(.vertical, 8)
             .padding(.horizontal, DesignSystem.Spacing.md)
-            .background(DesignSystem.Colors.secondaryBackground)
-            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+            .pixelCard(borderColor: tc.iconAmber.mid.opacity(0.25), fillColor: tc.cardBackground)
             // Drag entire bundle to a new section
             .draggable("bundle:\(bundleId)")
 
@@ -554,19 +549,19 @@ struct FoodLogView: View {
                     ForEach(components, id: \.id) { component in
                         HStack(spacing: DesignSystem.Spacing.sm) {
                             Image(systemName: "circle.fill")
-                                .font(.system(size: 5))
-                                .foregroundColor(DesignSystem.Colors.textTertiary)
+                                .font(PixelFont.regular(5))
+                                .foregroundColor(tc.textTertiary)
 
                             Text(component.name)
-                                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.textPrimary)
+                                .font(PixelFont.regular(DesignSystem.FontSizes.footnote))
+                                .foregroundColor(tc.textPrimary)
                                 .lineLimit(1)
 
                             Spacer()
 
                             Text("\(component.calories) cal")
-                                .font(.system(size: DesignSystem.FontSizes.caption))
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                .font(PixelFont.regular(DesignSystem.FontSizes.caption))
+                                .foregroundColor(tc.textSecondary)
 
                             // Per-component delete button
                             Button {
@@ -575,7 +570,7 @@ struct FoodLogView: View {
                                 }
                             } label: {
                                 Image(systemName: "trash")
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(PixelFont.regular(12))
                                     .foregroundColor(.red.opacity(0.7))
                                     .frame(width: 24, height: 24)
                                     .contentShape(Rectangle())
@@ -584,8 +579,7 @@ struct FoodLogView: View {
                         }
                         .padding(.vertical, 5)
                         .padding(.horizontal, DesignSystem.Spacing.md)
-                        .background(DesignSystem.Colors.secondaryBackground.opacity(0.6))
-                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                        .pixelCard(borderColor: tc.primary.opacity(0.1), fillColor: tc.cardBackground.opacity(0.6))
                     }
                 }
             }
@@ -601,28 +595,23 @@ struct FoodLogView: View {
 
         return VStack(spacing: DesignSystem.Spacing.md) {
             Text(progressTitle)
-                .font(.system(size: DesignSystem.FontSizes.title2, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(PixelFont.bold(DesignSystem.FontSizes.title2))
+                .foregroundColor(tc.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             // Paged carousel: Page 1 = calories+macros, Page 2 = extra nutrients
             TabView {
                 // Page 1: Calorie ring + macro cards
                 VStack(spacing: DesignSystem.Spacing.md) {
-                    VStack(spacing: DesignSystem.Spacing.sm) {
-                        ProgressRing(
-                            progress: viewModel.calorieProgress,
-                            lineWidth: 16,
-                            size: 160,
-                            showPercentage: false,
-                            centerText: viewModel.calorieText
-                        )
-                        .frame(width: 160, height: 160)
-
-                        Text("Calories")
-                            .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
-                    }
+                    PixelCalorieRing(
+                        progress: viewModel.calorieProgress,
+                        calories: viewModel.totalCalories,
+                        filledColor: tc.ringFilled,
+                        emptyColor: tc.ringEmpty,
+                        textColor: tc.textPrimary,
+                        labelColor: tc.textSecondary
+                    )
+                    .frame(width: 210, height: 210)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.top, DesignSystem.Spacing.sm)
 
@@ -635,21 +624,21 @@ struct FoodLogView: View {
                             icon: "leaf.fill", title: "Protein",
                             current: Int(viewModel.totalProtein),
                             target: Int(viewModel.currentGoal?.proteinTarget ?? 1),
-                            unit: "g", color: DesignSystem.Colors.primary,
+                            unit: "g", color: tc.macroBarProtein,
                             progress: viewModel.proteinProgress
                         )
                         macroCard(
                             icon: "flame.fill", title: "Carbs",
                             current: Int(viewModel.totalCarbs),
                             target: Int(viewModel.currentGoal?.carbTarget ?? 1),
-                            unit: "g", color: DesignSystem.Colors.energy,
+                            unit: "g", color: tc.macroBarCarbs,
                             progress: viewModel.carbProgress
                         )
                         macroCard(
                             icon: "drop.fill", title: "Fat",
                             current: Int(viewModel.totalFat),
                             target: Int(viewModel.currentGoal?.fatTarget ?? 1),
-                            unit: "g", color: DesignSystem.Colors.warning,
+                            unit: "g", color: tc.macroBarFat,
                             progress: viewModel.fatProgress
                         )
                     }
@@ -662,7 +651,7 @@ struct FoodLogView: View {
                     .padding(.bottom, DesignSystem.Spacing.lg)
             }
             .tabViewStyle(.page(indexDisplayMode: .always))
-            .frame(height: 340)
+            .frame(height: 400)
 
             if settings.trackAdvancedNutrition {
                 AdvancedNutrientsGrid(entries: viewModel.displayedEntries, goal: viewModel.currentGoal)
@@ -670,14 +659,7 @@ struct FoodLogView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(DesignSystem.Spacing.lg)
-        .background(DesignSystem.Colors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
-        .shadow(
-            color: DesignSystem.Shadows.card.color,
-            radius: DesignSystem.Shadows.card.radius,
-            x: DesignSystem.Shadows.card.x,
-            y: DesignSystem.Shadows.card.y
-        )
+        .pixelCard(borderColor: tc.primary.opacity(0.2), fillColor: tc.cardBackground)
     }
 
     // MARK: - Nutrients Detail Page (Page 2 of progress)
@@ -694,8 +676,8 @@ struct FoodLogView: View {
 
         return VStack(spacing: DesignSystem.Spacing.md) {
             Text("Nutrition Details")
-                .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(PixelFont.bold(DesignSystem.FontSizes.headline))
+                .foregroundColor(tc.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, DesignSystem.Spacing.sm)
 
@@ -716,8 +698,8 @@ struct FoodLogView: View {
             }
 
             Text("Logged values only — missing if food not entered")
-                .font(.system(size: 10, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textTertiary)
+                .font(PixelFont.regular(10))
+                .foregroundColor(tc.textTertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
         }
     }
@@ -726,28 +708,27 @@ struct FoodLogView: View {
                                icon: String, color: Color) -> some View {
         HStack(spacing: DesignSystem.Spacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(PixelFont.bold(13))
                 .foregroundColor(color)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(label)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.regular(11))
+                    .foregroundColor(tc.textSecondary)
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text(value)
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .font(PixelFont.bold(16))
+                        .foregroundColor(tc.textPrimary)
                     Text(unit)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .font(PixelFont.regular(10))
+                        .foregroundColor(tc.textTertiary)
                 }
             }
             Spacer()
         }
         .padding(DesignSystem.Spacing.sm)
-        .background(color.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+        .pixelCard(borderColor: color.opacity(0.2), fillColor: color.opacity(0.08))
     }
 
     // MARK: - Recent Foods Section
@@ -755,8 +736,8 @@ struct FoodLogView: View {
     private var recentFoodsSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
             Text("Recent Foods")
-                .font(.system(size: DesignSystem.FontSizes.title2, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(PixelFont.bold(DesignSystem.FontSizes.title2))
+                .foregroundColor(tc.textPrimary)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: DesignSystem.Spacing.md) {
@@ -783,15 +764,15 @@ struct FoodLogView: View {
                             .resizable()
                             .scaledToFill()
                             .frame(width: 80, height: 80)
-                            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                            .clipShape(PixelCardShape())
                     } else {
                         ZStack {
-                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                                .fill(DesignSystem.Colors.primary.opacity(0.1))
+                            PixelCardShape()
+                                .fill(tc.primary.opacity(0.1))
                                 .frame(width: 80, height: 80)
                             Image(systemName: "fork.knife")
-                                .font(.system(size: 28, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.primary)
+                                .font(PixelFont.regular(28))
+                                .foregroundColor(tc.primary)
                         }
                     }
 
@@ -800,13 +781,13 @@ struct FoodLogView: View {
                             Task { await viewModel.toggleFavorite(entry) }
                         } label: {
                             Image(systemName: entry.isFavorite ? "star.fill" : "star")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(entry.isFavorite ? DesignSystem.Colors.energy : .white)
+                                .font(PixelFont.bold(14))
+                                .foregroundColor(entry.isFavorite ? tc.macroBarCarbs : .white)
                                 .padding(6)
                                 .background(
                                     Circle()
                                         .fill(entry.isFavorite
-                                              ? DesignSystem.Colors.energy.opacity(0.2)
+                                              ? tc.macroBarCarbs.opacity(0.2)
                                               : Color.black.opacity(0.4))
                                 )
                         }
@@ -815,28 +796,21 @@ struct FoodLogView: View {
                 }
 
                 Text(entry.name)
-                    .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(PixelFont.bold(DesignSystem.FontSizes.footnote))
+                    .foregroundColor(tc.textPrimary)
                     .lineLimit(1)
                     .frame(width: 80, alignment: .leading)
 
                 Text("\(entry.calories) cal")
-                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.regular(DesignSystem.FontSizes.caption))
+                    .foregroundColor(tc.textSecondary)
 
                 Text(viewModel.relativeTimeString(from: entry.date))
-                    .font(.system(size: 10, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .font(PixelFont.regular(10))
+                    .foregroundColor(tc.textTertiary)
             }
             .padding(DesignSystem.Spacing.sm)
-            .background(DesignSystem.Colors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-            .shadow(
-                color: DesignSystem.Shadows.card.color,
-                radius: DesignSystem.Shadows.card.radius / 2,
-                x: DesignSystem.Shadows.card.x,
-                y: DesignSystem.Shadows.card.y
-            )
+            .pixelCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -849,31 +823,32 @@ struct FoodLogView: View {
         color: Color, progress: Double
     ) -> some View {
         VStack(spacing: DesignSystem.Spacing.sm) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.15))
-                    .frame(width: DesignSystem.Sizes.iconCircleSmall, height: DesignSystem.Sizes.iconCircleSmall)
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(color)
-            }
+            Image(systemName: icon)
+                .font(PixelFont.bold(14))
+                .foregroundColor(.white)
+                .frame(width: 34, height: 34)
+                .pixelPill(
+                    borderColor: color.adjustedBrightness(-0.2),
+                    fillColor: .clear,
+                    fillGradient: DesignSystem.Colors.threeBandFrom(color)
+                )
 
             Text(title)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(PixelFont.regular(12))
+                .foregroundColor(tc.textSecondary)
 
             Text("\(current)")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(PixelFont.bold(20))
+                .foregroundColor(tc.textPrimary)
 
             Text("/ \(target)\(unit)")
-                .font(.system(size: 10, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textTertiary)
+                .font(PixelFont.regular(10))
+                .foregroundColor(tc.textTertiary)
 
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(DesignSystem.Colors.border)
+                        .fill(tc.macroBarTrack)
                         .frame(height: 4)
                     RoundedRectangle(cornerRadius: 2)
                         .fill(color)
@@ -885,14 +860,7 @@ struct FoodLogView: View {
         }
         .padding(DesignSystem.Spacing.md)
         .frame(maxWidth: .infinity)
-        .background(DesignSystem.Colors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-        .shadow(
-            color: DesignSystem.Shadows.card.color,
-            radius: DesignSystem.Shadows.card.radius / 2,
-            x: DesignSystem.Shadows.card.x,
-            y: DesignSystem.Shadows.card.y
-        )
+        .pixelCard(borderColor: color.opacity(0.2), fillColor: tc.cardBackground)
     }
 
     // MARK: - Toast Overlay
@@ -902,17 +870,15 @@ struct FoodLogView: View {
             Spacer()
             HStack(spacing: DesignSystem.Spacing.sm) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(PixelFont.bold(20))
                     .foregroundColor(.white)
                 Text(message)
-                    .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
+                    .font(PixelFont.bold(DesignSystem.FontSizes.headline))
                     .foregroundColor(.white)
             }
             .padding(.horizontal, DesignSystem.Spacing.lg)
             .padding(.vertical, DesignSystem.Spacing.md)
-            .background(DesignSystem.Colors.primary)
-            .clipShape(Capsule())
-            .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+            .pixelPill(borderColor: tc.primary, fillColor: tc.primary)
             .padding(.bottom, 80)
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -939,6 +905,9 @@ private struct SwipeableEntryCard: View {
     let onEdit: () -> Void
     let onDelete: () -> Void
 
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
+
     @State private var offset: CGFloat = 0
     /// Offset captured at gesture start — used for context-aware snapping
     @State private var dragStartOffset: CGFloat = 0
@@ -959,7 +928,7 @@ private struct SwipeableEntryCard: View {
                         onEdit()
                     } label: {
                         Image(systemName: "pencil")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(PixelFont.bold(15))
                             .foregroundColor(.white)
                             .frame(width: 64)
                             .frame(maxHeight: .infinity)
@@ -972,7 +941,7 @@ private struct SwipeableEntryCard: View {
                         onDelete()
                     } label: {
                         Image(systemName: "trash")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(PixelFont.bold(15))
                             .foregroundColor(.white)
                             .frame(width: 64)
                             .frame(maxHeight: .infinity)
@@ -981,7 +950,7 @@ private struct SwipeableEntryCard: View {
                     .buttonStyle(PlainButtonStyle())
                 }
                 .frame(maxWidth: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                .clipShape(PixelCardShape())
             }
 
             // Leading action: favorite (full-width HStack, button at leading edge)
@@ -992,14 +961,14 @@ private struct SwipeableEntryCard: View {
                         onFavorite()
                     } label: {
                         Image(systemName: entry.isFavorite ? "star.fill" : "star")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(PixelFont.bold(15))
                             .foregroundColor(.white)
                             .frame(width: leadWidth)
                             .frame(maxHeight: .infinity)
-                            .background(Color.green)
+                            .background(tc.primary)
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                    .clipShape(PixelCardShape())
                     Spacer()
                 }
                 .frame(maxWidth: .infinity)
@@ -1074,30 +1043,30 @@ private struct SwipeableEntryCard: View {
                     .resizable()
                     .scaledToFill()
                     .frame(width: 32, height: 32)
-                    .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                    .clipShape(PixelCardShape())
             }
 
             // Food info: name + cal + time on two lines
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.name)
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(PixelFont.regular(16))
+                    .foregroundColor(tc.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: 4) {
                     Text("\(entry.calories) cal")
-                        .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(PixelFont.bold(14))
+                        .foregroundColor(tc.primary)
                     Text("·")
-                        .font(.system(size: DesignSystem.FontSizes.caption))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .font(PixelFont.regular(DesignSystem.FontSizes.caption))
+                        .foregroundColor(tc.textTertiary)
                     Text(timeString(from: entry.date))
-                        .font(.system(size: DesignSystem.FontSizes.caption))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .font(PixelFont.regular(12))
+                        .foregroundColor(tc.textTertiary)
                     if entry.isFavorite {
                         Image(systemName: "star.fill")
-                            .font(.system(size: 9))
-                            .foregroundColor(DesignSystem.Colors.energy)
+                            .font(PixelFont.regular(9))
+                            .foregroundColor(tc.macroBarCarbs)
                     }
                 }
             }
@@ -1130,16 +1099,15 @@ private struct SwipeableEntryCard: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.regular(16))
+                    .foregroundColor(tc.textSecondary)
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, DesignSystem.Spacing.md)
-        .background(DesignSystem.Colors.secondaryBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+        .pixelCard(borderColor: tc.primary.opacity(0.15), fillColor: tc.cardBackground)
     }
 
     private func timeString(from date: Date) -> String {

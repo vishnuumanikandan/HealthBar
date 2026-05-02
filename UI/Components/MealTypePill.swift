@@ -16,19 +16,20 @@ struct MealTypePill: View {
     /// The meal type to display
     let mealType: MealType
 
+    private var tc: ThemeColors { SettingsManager.shared.activeTheme.colors }
+
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.xs) {
             Image(systemName: mealType.icon)
-                .font(.system(size: 10, weight: .semibold))
+                .font(PixelFont.bold(10))
 
             Text(mealType.displayName)
-                .font(.system(size: DesignSystem.FontSizes.caption2, weight: .medium))
+                .font(PixelFont.regular(11))
         }
         .foregroundColor(mealType.color)
         .padding(.horizontal, DesignSystem.Spacing.sm)
         .padding(.vertical, DesignSystem.Spacing.xs)
-        .background(mealType.color.opacity(0.15))
-        .clipShape(Capsule())
+        .pixelPill(borderColor: mealType.color.opacity(0.3), fillColor: mealType.color.opacity(0.15))
         .accessibilityLabel("Meal type: \(mealType.displayName)")
     }
 }

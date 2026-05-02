@@ -21,6 +21,8 @@ struct FoodDatabaseView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: FoodDatabaseTab = .allFoods
     @State private var dbViewModel: FoodDatabaseViewModel
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     init(viewModel: FoodLogViewModel) {
         self._viewModel = Bindable(viewModel)
@@ -35,15 +37,19 @@ struct FoodDatabaseView: View {
                 tabContent
                     .animation(.easeInOut(duration: 0.2), value: selectedTab)
             }
-            .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
-            .navigationTitle("Food Database")
+            .background(tc.primaryBackground.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .interactiveDismissDisabled(true)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Food Database")
+                        .font(PixelFont.bold(20))
+                        .foregroundColor(tc.textPrimary)
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
-                        .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.primary)
+                        .font(PixelFont.regular(DesignSystem.FontSizes.callout))
+                        .foregroundColor(tc.primary)
                 }
             }
             .sheet(isPresented: $dbViewModel.showingServingSizePicker) {
@@ -112,12 +118,14 @@ struct FoodDatabaseView: View {
                         }
                     } label: {
                         Text(tab.rawValue)
-                            .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
+                            .font(PixelFont.bold(DesignSystem.FontSizes.footnote))
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
-                            .background(isSelected ? DesignSystem.Colors.primary : Color(.systemGray5))
-                            .foregroundStyle(isSelected ? Color.white : DesignSystem.Colors.textPrimary)
-                            .clipShape(Capsule())
+                            .foregroundStyle(isSelected ? tc.textPrimary : tc.textSecondary)
+                            .pixelPill(
+                                borderColor: tc.primary,
+                                fillColor: isSelected ? .white : tc.cardBackground
+                            )
                     }
                     .buttonStyle(.plain)
                 }
@@ -126,19 +134,19 @@ struct FoodDatabaseView: View {
             .padding(.vertical, DesignSystem.Spacing.sm)
         }
         .frame(height: 52)
-        .background(DesignSystem.Colors.cardBackground)
+        .background(tc.cardBackground)
     }
 
     // MARK: - Tab Description
 
     private var tabDescription: some View {
         Text(selectedTab.description)
-            .font(.system(size: DesignSystem.FontSizes.footnote, weight: .regular))
-            .foregroundColor(DesignSystem.Colors.textSecondary)
+            .font(PixelFont.regular(DesignSystem.FontSizes.footnote))
+            .foregroundColor(tc.textSecondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, DesignSystem.Spacing.lg)
             .padding(.vertical, DesignSystem.Spacing.xs)
-            .background(DesignSystem.Colors.primaryBackground)
+            .background(tc.primaryBackground)
     }
 
     // MARK: - Tab Content
@@ -172,12 +180,11 @@ struct FoodDatabaseView: View {
             VStack {
                 Spacer()
                 Text(message)
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
+                    .font(PixelFont.bold(DesignSystem.FontSizes.callout))
                     .foregroundColor(.white)
                     .padding(.horizontal, DesignSystem.Spacing.lg)
                     .padding(.vertical, DesignSystem.Spacing.md)
-                    .background(DesignSystem.Colors.primary)
-                    .clipShape(Capsule())
+                    .pixelPill(borderColor: tc.primary, fillColor: tc.primary)
                     .padding(.bottom, DesignSystem.Spacing.xl)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -191,6 +198,8 @@ struct FoodDatabaseView: View {
 private struct AllFoodsTab: View {
 
     @Bindable var dbViewModel: FoodDatabaseViewModel
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     var body: some View {
         if dbViewModel.isLoading {
@@ -213,17 +222,14 @@ private struct AllFoodsTab: View {
                         dbViewModel.showingAddCustomFood = true
                     } label: {
                         Label("Add \"\(dbViewModel.allFoodsSearchText)\" as Custom Food", systemImage: "plus")
-                            .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
+                            .font(PixelFont.bold(DesignSystem.FontSizes.callout))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DesignSystem.Spacing.md)
-                            .background(
-                                LinearGradient(
-                                    colors: [DesignSystem.Colors.primary, DesignSystem.Colors.growth],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                            .pixelCard(
+                                borderColor: tc.buttonBorder,
+                                fillColor: .clear,
+                                fillGradient: DesignSystem.Colors.threeBand(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)
                             )
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -240,17 +246,14 @@ private struct AllFoodsTab: View {
                         dbViewModel.showingAddCustomFood = true
                     } label: {
                         Label("Can't find it? Add your own", systemImage: "plus.circle.fill")
-                            .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
+                            .font(PixelFont.bold(DesignSystem.FontSizes.callout))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DesignSystem.Spacing.md)
-                            .background(
-                                LinearGradient(
-                                    colors: [DesignSystem.Colors.primary, DesignSystem.Colors.growth],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                            .pixelCard(
+                                borderColor: tc.buttonBorder,
+                                fillColor: .clear,
+                                fillGradient: DesignSystem.Colors.threeBand(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)
                             )
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -262,8 +265,8 @@ private struct AllFoodsTab: View {
                         BuiltInFoodRow(food: food) {
                             dbViewModel.beginLog(builtIn: food)
                         }
-                        .listRowBackground(DesignSystem.Colors.cardBackground)
-                        .listRowSeparatorTint(DesignSystem.Colors.border)
+                        .listRowBackground(tc.cardBackground)
+                        .listRowSeparatorTint(tc.primary.opacity(0.3))
                     }
                 }
             }
@@ -281,6 +284,8 @@ private struct MyFoodsTab: View {
     @Bindable var dbViewModel: FoodDatabaseViewModel
     let logViewModel: FoodLogViewModel
     let onDismiss: () -> Void
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     var body: some View {
         if dbViewModel.filteredCustomFoods.isEmpty && dbViewModel.myFoodsSearchText.isEmpty {
@@ -303,17 +308,14 @@ private struct MyFoodsTab: View {
                         openAddFoodForm()
                     } label: {
                         Label("Add New Food", systemImage: "plus")
-                            .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
+                            .font(PixelFont.bold(DesignSystem.FontSizes.callout))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DesignSystem.Spacing.md)
-                            .background(
-                                LinearGradient(
-                                    colors: [DesignSystem.Colors.primary, DesignSystem.Colors.growth],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                            .pixelCard(
+                                borderColor: tc.buttonBorder,
+                                fillColor: .clear,
+                                fillGradient: DesignSystem.Colors.threeBand(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)
                             )
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -330,7 +332,7 @@ private struct MyFoodsTab: View {
                         } onDelete: {
                             Task { await dbViewModel.deleteCustomFood(food) }
                         }
-                        .listRowBackground(DesignSystem.Colors.cardBackground)
+                        .listRowBackground(tc.cardBackground)
                     }
                 }
             }
@@ -354,6 +356,8 @@ private struct MyMealsTab: View {
     @Bindable var dbViewModel: FoodDatabaseViewModel
     let logViewModel: FoodLogViewModel
     let onLogged: () -> Void
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     var body: some View {
         if dbViewModel.savedMeals.isEmpty {
@@ -377,17 +381,14 @@ private struct MyMealsTab: View {
                         dbViewModel.showingMealBuilder = true
                     } label: {
                         Label("New Meal Bundle", systemImage: "plus")
-                            .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
+                            .font(PixelFont.bold(DesignSystem.FontSizes.callout))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DesignSystem.Spacing.md)
-                            .background(
-                                LinearGradient(
-                                    colors: [Color.orange, DesignSystem.Colors.energy],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                            .pixelCard(
+                                borderColor: tc.buttonBorder,
+                                fillColor: .clear,
+                                fillGradient: DesignSystem.Colors.threeBand(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)
                             )
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -412,7 +413,7 @@ private struct MyMealsTab: View {
                         } onDelete: {
                             Task { await dbViewModel.deleteSavedMeal(meal) }
                         }
-                        .listRowBackground(DesignSystem.Colors.cardBackground)
+                        .listRowBackground(tc.cardBackground)
                     }
                 }
             }
@@ -428,6 +429,8 @@ private struct SavedFoodsTab: View {
 
     @Bindable var dbViewModel: FoodDatabaseViewModel
     let logViewModel: FoodLogViewModel
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     var body: some View {
         if logViewModel.favoriteFoods.isEmpty {
@@ -448,8 +451,8 @@ private struct SavedFoodsTab: View {
                 SavedFoodEntryRow(entry: entry) {
                     dbViewModel.beginLog(entry: entry)
                 }
-                .listRowBackground(DesignSystem.Colors.cardBackground)
-                .listRowSeparatorTint(DesignSystem.Colors.border)
+                .listRowBackground(tc.cardBackground)
+                .listRowSeparatorTint(tc.primary.opacity(0.3))
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
@@ -462,6 +465,8 @@ private struct SavedFoodsTab: View {
 private struct MyRecipesTab: View {
 
     @Bindable var dbViewModel: FoodDatabaseViewModel
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     var body: some View {
         if dbViewModel.savedRecipes.isEmpty {
@@ -485,17 +490,14 @@ private struct MyRecipesTab: View {
                         dbViewModel.showingRecipeBuilder = true
                     } label: {
                         Label("New Recipe", systemImage: "plus")
-                            .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
+                            .font(PixelFont.bold(DesignSystem.FontSizes.callout))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DesignSystem.Spacing.md)
-                            .background(
-                                LinearGradient(
-                                    colors: [Color.teal, DesignSystem.Colors.growth],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                            .pixelCard(
+                                borderColor: tc.buttonBorder,
+                                fillColor: .clear,
+                                fillGradient: DesignSystem.Colors.threeBand(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)
                             )
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -515,7 +517,7 @@ private struct MyRecipesTab: View {
                         } onDelete: {
                             Task { await dbViewModel.deleteRecipe(recipe) }
                         }
-                        .listRowBackground(DesignSystem.Colors.cardBackground)
+                        .listRowBackground(tc.cardBackground)
                     }
                 }
             }
@@ -531,34 +533,35 @@ private struct BuiltInFoodRow: View {
 
     let food: BuiltInFood
     let onLog: () -> Void
+    private var tc: ThemeColors { SettingsManager.shared.activeTheme.colors }
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.md) {
             ZStack {
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                    .fill(DesignSystem.Colors.growth.opacity(0.1))
+                PixelCardShape()
+                    .fill(tc.primary.opacity(0.15))
                     .frame(width: 40, height: 40)
                 Image(systemName: "leaf.fill")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.growth)
+                    .font(PixelFont.bold(16))
+                    .foregroundColor(tc.primary)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(food.name)
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(PixelFont.regular(16))
+                    .foregroundColor(tc.textPrimary)
                     .lineLimit(1)
                 Text("\(food.calories) cal · \(food.servingDescription)")
-                    .font(.system(size: DesignSystem.FontSizes.caption))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.regular(12))
+                    .foregroundColor(tc.textSecondary)
             }
 
             Spacer()
 
             Button(action: onLog) {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .font(PixelFont.regular(28))
+                    .foregroundColor(tc.primary)
             }
             .buttonStyle(PlainButtonStyle())
         }
@@ -572,34 +575,35 @@ private struct CustomFoodRow: View {
     let onLog: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
+    private var tc: ThemeColors { SettingsManager.shared.activeTheme.colors }
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.md) {
             ZStack {
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                    .fill(Color(.systemIndigo).opacity(0.12))
+                PixelCardShape()
+                    .fill(tc.primary.opacity(0.15))
                     .frame(width: 40, height: 40)
                 Image(systemName: "person.fill")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(Color(.systemIndigo))
+                    .font(PixelFont.bold(16))
+                    .foregroundColor(tc.primary)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(food.name)
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(PixelFont.regular(16))
+                    .foregroundColor(tc.textPrimary)
                     .lineLimit(1)
                 Text("\(food.calories) cal · \(food.servingSizeName)")
-                    .font(.system(size: DesignSystem.FontSizes.caption))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.regular(12))
+                    .foregroundColor(tc.textSecondary)
             }
 
             Spacer()
 
             Button(action: onLog) {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .font(PixelFont.regular(28))
+                    .foregroundColor(tc.primary)
             }
             .buttonStyle(PlainButtonStyle())
         }
@@ -622,31 +626,32 @@ private struct SavedMealRow: View {
     let onLog: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
+    private var tc: ThemeColors { SettingsManager.shared.activeTheme.colors }
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.md) {
             // Photo thumbnail or icon
             ZStack {
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                    .fill(Color.orange.opacity(0.12))
+                PixelCardShape()
+                    .fill(tc.iconAmber.mid.opacity(0.15))
                     .frame(width: 40, height: 40)
                 if let data = meal.photoData, let uiImage = UIImage(data: data) {
                     Image(uiImage: uiImage)
                         .resizable()
                         .scaledToFill()
                         .frame(width: 40, height: 40)
-                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                        .clipShape(PixelCardShape())
                 } else {
                     Image(systemName: "rectangle.stack.fill")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(Color.orange)
+                        .font(PixelFont.bold(15))
+                        .foregroundColor(tc.iconAmber.mid)
                 }
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(meal.name)
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(PixelFont.regular(16))
+                    .foregroundColor(tc.textPrimary)
                     .lineLimit(1)
                 Text({
                     let count = meal.components.count
@@ -658,16 +663,16 @@ private struct SavedMealRow: View {
                     }()
                     return "\(totalCal) cal · \(count) item\(count == 1 ? "" : "s") · Purity \(purity)"
                 }())
-                    .font(.system(size: DesignSystem.FontSizes.caption))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.regular(12))
+                    .foregroundColor(tc.textSecondary)
             }
 
             Spacer()
 
             Button(action: onLog) {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .font(PixelFont.regular(28))
+                    .foregroundColor(tc.primary)
             }
             .buttonStyle(PlainButtonStyle())
         }
@@ -688,12 +693,13 @@ private struct SavedFoodEntryRow: View {
 
     let entry: FoodEntry
     let onLog: () -> Void
+    private var tc: ThemeColors { SettingsManager.shared.activeTheme.colors }
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.md) {
             ZStack {
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                    .fill(DesignSystem.Colors.primary.opacity(0.1))
+                PixelCardShape()
+                    .fill(tc.primary.opacity(0.1))
                     .frame(width: 40, height: 40)
 
                 if let photoData = entry.photoData,
@@ -702,30 +708,30 @@ private struct SavedFoodEntryRow: View {
                         .resizable()
                         .scaledToFill()
                         .frame(width: 40, height: 40)
-                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                        .clipShape(PixelCardShape())
                 } else {
                     Image(systemName: "star.fill")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(PixelFont.bold(16))
                         .foregroundColor(.yellow)
                 }
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.name)
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(PixelFont.regular(16))
+                    .foregroundColor(tc.textPrimary)
                     .lineLimit(1)
                 Text("\(entry.calories) cal  ·  P:\(Int(entry.protein))g  C:\(Int(entry.carbs))g  F:\(Int(entry.fat))g")
-                    .font(.system(size: DesignSystem.FontSizes.caption))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.regular(12))
+                    .foregroundColor(tc.textSecondary)
             }
 
             Spacer()
 
             Button(action: onLog) {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .font(PixelFont.regular(28))
+                    .foregroundColor(tc.primary)
             }
             .buttonStyle(PlainButtonStyle())
         }
@@ -740,35 +746,36 @@ private struct SavedRecipeRow: View {
     let onSaveAsFood: () -> Void   // Save per-serving as a My Foods entry
     let onEdit: () -> Void
     let onDelete: () -> Void
+    private var tc: ThemeColors { SettingsManager.shared.activeTheme.colors }
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.md) {
             // Photo thumbnail or icon
             ZStack {
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                    .fill(Color.teal.opacity(0.12))
+                PixelCardShape()
+                    .fill(tc.iconGreen.mid.opacity(0.15))
                     .frame(width: 40, height: 40)
                 if let data = recipe.photoData, let uiImage = UIImage(data: data) {
                     Image(uiImage: uiImage)
                         .resizable()
                         .scaledToFill()
                         .frame(width: 40, height: 40)
-                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                        .clipShape(PixelCardShape())
                 } else {
                     Image(systemName: "list.bullet.rectangle.fill")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(Color.teal)
+                        .font(PixelFont.bold(14))
+                        .foregroundColor(tc.iconGreen.mid)
                 }
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(recipe.name)
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(PixelFont.regular(16))
+                    .foregroundColor(tc.textPrimary)
                     .lineLimit(1)
                 Text("\(recipe.perServingCalories) cal/serving · \(recipe.yield) serving\(recipe.yield == 1 ? "" : "s") · Purity \(recipe.purityScore)")
-                    .font(.system(size: DesignSystem.FontSizes.caption))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.regular(12))
+                    .foregroundColor(tc.textSecondary)
                     .lineLimit(1)
             }
 
@@ -777,8 +784,8 @@ private struct SavedRecipeRow: View {
             // Primary: log directly to food log
             Button(action: onLog) {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .font(PixelFont.regular(28))
+                    .foregroundColor(tc.primary)
             }
             .buttonStyle(PlainButtonStyle())
         }
@@ -797,7 +804,7 @@ private struct SavedRecipeRow: View {
             Button(action: onSaveAsFood) {
                 Label("Save to My Foods", systemImage: "arrow.down.to.line")
             }
-            .tint(DesignSystem.Colors.growth)
+            .tint(tc.primaryDark)
         }
     }
 }

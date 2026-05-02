@@ -16,6 +16,8 @@ struct PurityScoreInfoSheet: View {
     /// Environment dismiss action
     @Environment(\.dismiss) private var dismiss
 
+    private var tc: ThemeColors { SettingsManager.shared.activeTheme.colors }
+
     // MARK: - Body
 
     var body: some View {
@@ -42,7 +44,7 @@ struct PurityScoreInfoSheet: View {
             }
             .padding(DesignSystem.Spacing.lg)
         }
-        .background(DesignSystem.Colors.primaryBackground)
+        .background(tc.primaryBackground)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
@@ -55,21 +57,21 @@ struct PurityScoreInfoSheet: View {
             // Icon
             ZStack {
                 Circle()
-                    .fill(DesignSystem.Colors.primary.opacity(0.15))
+                    .fill(tc.primary.opacity(0.15))
                     .frame(width: 80, height: 80)
 
                 Image(systemName: "leaf.fill")
-                    .font(.system(size: 40, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .font(PixelFont.bold(40))
+                    .foregroundColor(tc.primary)
             }
 
             Text("Purity Score")
-                .font(.system(size: DesignSystem.FontSizes.title, weight: .bold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(PixelFont.bold(DesignSystem.FontSizes.title))
+                .foregroundColor(tc.textPrimary)
 
             Text("Understanding food processing levels")
-                .font(.system(size: DesignSystem.FontSizes.callout, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(PixelFont.regular(DesignSystem.FontSizes.callout))
+                .foregroundColor(tc.textSecondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.bottom, DesignSystem.Spacing.md)
@@ -81,20 +83,20 @@ struct PurityScoreInfoSheet: View {
             sectionHeader(icon: "questionmark.circle.fill", title: "What is it?")
 
             Text("The Purity Score measures how processed your food is on a scale of 0-100. A lower score means cleaner, less processed food.")
-                .font(.system(size: DesignSystem.FontSizes.body, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(PixelFont.regular(DesignSystem.FontSizes.body))
+                .foregroundColor(tc.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
             // Score ranges
             VStack(spacing: DesignSystem.Spacing.sm) {
-                scoreRangeRow(range: "0-20", label: "Clean", description: "Unprocessed whole foods", color: DesignSystem.Colors.primary)
-                scoreRangeRow(range: "21-40", label: "Good", description: "Minimally processed", color: DesignSystem.Colors.growth)
-                scoreRangeRow(range: "41-60", label: "Moderate", description: "Processed foods", color: DesignSystem.Colors.warning)
-                scoreRangeRow(range: "61-80", label: "High", description: "Heavily processed", color: DesignSystem.Colors.energy)
+                scoreRangeRow(range: "0-20", label: "Clean", description: "Unprocessed whole foods", color: tc.primary)
+                scoreRangeRow(range: "21-40", label: "Good", description: "Minimally processed", color: tc.primaryDark)
+                scoreRangeRow(range: "41-60", label: "Moderate", description: "Processed foods", color: tc.macroBarFat)
+                scoreRangeRow(range: "61-80", label: "High", description: "Heavily processed", color: tc.macroBarCarbs)
                 scoreRangeRow(range: "81-100", label: "Very High", description: "Ultra-processed", color: DesignSystem.Colors.danger)
             }
             .padding(DesignSystem.Spacing.md)
-            .background(DesignSystem.Colors.cardBackground)
+            .background(tc.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
         }
     }
@@ -105,8 +107,8 @@ struct PurityScoreInfoSheet: View {
             sectionHeader(icon: "function", title: "How it's calculated")
 
             Text("When you scan a barcode, the Purity Score is automatically calculated using:")
-                .font(.system(size: DesignSystem.FontSizes.body, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(PixelFont.regular(DesignSystem.FontSizes.body))
+                .foregroundColor(tc.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
@@ -115,7 +117,7 @@ struct PurityScoreInfoSheet: View {
                 factorRow(icon: "3.circle.fill", title: "Additives Count", description: "Number of food additives")
             }
             .padding(DesignSystem.Spacing.md)
-            .background(DesignSystem.Colors.cardBackground)
+            .background(tc.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
         }
     }
@@ -126,8 +128,8 @@ struct PurityScoreInfoSheet: View {
             sectionHeader(icon: "chart.bar.fill", title: "NOVA Food Groups")
 
             Text("NOVA is a scientific food classification system based on processing level:")
-                .font(.system(size: DesignSystem.FontSizes.body, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(PixelFont.regular(DesignSystem.FontSizes.body))
+                .foregroundColor(tc.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(spacing: DesignSystem.Spacing.sm) {
@@ -135,19 +137,19 @@ struct PurityScoreInfoSheet: View {
                     group: "1",
                     title: "Unprocessed",
                     examples: "Fresh fruits, vegetables, eggs, meat, fish",
-                    color: DesignSystem.Colors.primary
+                    color: tc.primary
                 )
                 novaGroupRow(
                     group: "2",
                     title: "Culinary Ingredients",
                     examples: "Oils, butter, sugar, salt, flour",
-                    color: DesignSystem.Colors.growth
+                    color: tc.primaryDark
                 )
                 novaGroupRow(
                     group: "3",
                     title: "Processed",
                     examples: "Canned vegetables, cheese, bread",
-                    color: DesignSystem.Colors.warning
+                    color: tc.macroBarFat
                 )
                 novaGroupRow(
                     group: "4",
@@ -157,7 +159,7 @@ struct PurityScoreInfoSheet: View {
                 )
             }
             .padding(DesignSystem.Spacing.md)
-            .background(DesignSystem.Colors.cardBackground)
+            .background(tc.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
         }
     }
@@ -175,7 +177,7 @@ struct PurityScoreInfoSheet: View {
                 tipRow(icon: "xmark.circle.fill", tip: "Avoid products with ingredients you can't pronounce")
             }
             .padding(DesignSystem.Spacing.md)
-            .background(DesignSystem.Colors.cardBackground)
+            .background(tc.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
         }
     }
@@ -186,12 +188,12 @@ struct PurityScoreInfoSheet: View {
     private func sectionHeader(icon: String, title: String) -> some View {
         HStack(spacing: DesignSystem.Spacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.primary)
+                .font(PixelFont.bold(18))
+                .foregroundColor(tc.primary)
 
             Text(title)
-                .font(.system(size: DesignSystem.FontSizes.title3, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(PixelFont.bold(DesignSystem.FontSizes.title3))
+                .foregroundColor(tc.textPrimary)
         }
     }
 
@@ -199,18 +201,18 @@ struct PurityScoreInfoSheet: View {
     private func scoreRangeRow(range: String, label: String, description: String, color: Color) -> some View {
         HStack(spacing: DesignSystem.Spacing.md) {
             Text(range)
-                .font(.system(size: 14, weight: .bold))
+                .font(PixelFont.bold(14))
                 .foregroundColor(color)
                 .frame(width: 50, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(PixelFont.bold(14))
+                    .foregroundColor(tc.textPrimary)
 
                 Text(description)
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.regular(12))
+                    .foregroundColor(tc.textSecondary)
             }
 
             Spacer()
@@ -225,17 +227,17 @@ struct PurityScoreInfoSheet: View {
     private func factorRow(icon: String, title: String, description: String) -> some View {
         HStack(alignment: .top, spacing: DesignSystem.Spacing.md) {
             Image(systemName: icon)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.secondary)
+                .font(PixelFont.bold(20))
+                .foregroundColor(tc.primary)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(PixelFont.bold(14))
+                    .foregroundColor(tc.textPrimary)
 
                 Text(description)
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.regular(12))
+                    .foregroundColor(tc.textSecondary)
             }
         }
     }
@@ -249,18 +251,18 @@ struct PurityScoreInfoSheet: View {
                     .frame(width: 32, height: 32)
 
                 Text(group)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(PixelFont.bold(16))
                     .foregroundColor(color)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(PixelFont.bold(14))
+                    .foregroundColor(tc.textPrimary)
 
                 Text(examples)
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.regular(12))
+                    .foregroundColor(tc.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -272,13 +274,13 @@ struct PurityScoreInfoSheet: View {
     private func tipRow(icon: String, tip: String) -> some View {
         HStack(alignment: .top, spacing: DesignSystem.Spacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.primary)
+                .font(PixelFont.bold(14))
+                .foregroundColor(tc.primary)
                 .frame(width: 20)
 
             Text(tip)
-                .font(.system(size: 14, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(PixelFont.regular(14))
+                .foregroundColor(tc.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

@@ -22,6 +22,8 @@ struct MealBuilderView: View {
     let onSave: (SavedMeal, Bool) -> Void  // (meal, isNew)
 
     @Environment(\.dismiss) private var dismiss
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
     @State private var mealName: String = ""
     @State private var components: [SavedMealComponent] = []
     @State private var showingFoodPicker: Bool = false
@@ -55,8 +57,8 @@ struct MealBuilderView: View {
     }
 
     private var purityColor: Color {
-        mealPurityScore < 30 ? DesignSystem.Colors.primary
-            : mealPurityScore < 60 ? DesignSystem.Colors.energy
+        mealPurityScore < 30 ? tc.primary
+            : mealPurityScore < 60 ? tc.macroBarCarbs
             : DesignSystem.Colors.danger
     }
 
@@ -75,21 +77,22 @@ struct MealBuilderView: View {
                 }
                 .padding(DesignSystem.Spacing.lg)
             }
-            .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
+            .background(tc.primaryBackground.ignoresSafeArea())
             .navigationTitle(isNew ? "New Meal" : "Edit Meal")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(PixelFont.regular(16))
+                        .foregroundColor(tc.textSecondary)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if isSaving {
-                        ProgressView().tint(DesignSystem.Colors.primary)
+                        ProgressView().tint(tc.primary)
                     } else {
                         Button("Save") { save() }
-                            .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                            .foregroundColor(isValid ? DesignSystem.Colors.primary : DesignSystem.Colors.textTertiary)
+                            .font(PixelFont.bold(16))
+                            .foregroundColor(isValid ? tc.primary : tc.textTertiary)
                             .disabled(!isValid)
                     }
                 }
@@ -121,8 +124,8 @@ struct MealBuilderView: View {
                 showingPhotoPicker = true
             } label: {
                 ZStack {
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                        .fill(DesignSystem.Colors.cardBackground)
+                    PixelCardShape()
+                        .fill(tc.cardBackground)
                         .frame(width: 80, height: 80)
 
                     if let image = selectedPhoto {
@@ -130,15 +133,15 @@ struct MealBuilderView: View {
                             .resizable()
                             .scaledToFill()
                             .frame(width: 80, height: 80)
-                            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                            .clipShape(PixelCardShape())
                     } else {
                         VStack(spacing: 4) {
                             Image(systemName: "camera.fill")
-                                .font(.system(size: 22, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.textTertiary)
+                                .font(PixelFont.bold(22))
+                                .foregroundColor(tc.textTertiary)
                             Text("Add Photo")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.textTertiary)
+                                .font(PixelFont.regular(10))
+                                .foregroundColor(tc.textTertiary)
                         }
                     }
                 }
@@ -147,18 +150,18 @@ struct MealBuilderView: View {
 
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                 Text("Meal Photo")
-                    .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.bold(14))
+                    .foregroundColor(tc.textSecondary)
                 Text("Optional — shows as thumbnail in My Meals")
-                    .font(.system(size: DesignSystem.FontSizes.caption))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .font(PixelFont.regular(12))
+                    .foregroundColor(tc.textTertiary)
                 if selectedPhoto != nil {
                     Button("Remove") {
                         mealPhotoData = nil
                         selectedPhoto = nil
                         pickerItem = nil
                     }
-                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
+                    .font(PixelFont.regular(12))
                     .foregroundColor(DesignSystem.Colors.danger)
                 }
             }
@@ -172,16 +175,15 @@ struct MealBuilderView: View {
     private var nameField: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
             Text("Meal Name")
-                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(PixelFont.bold(14))
+                .foregroundColor(tc.textSecondary)
 
             TextField("e.g. Pre-Workout Snack", text: $mealName)
                 .focused($nameFieldFocused)
                 .font(.system(size: DesignSystem.FontSizes.body, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .foregroundColor(tc.textPrimary)
                 .padding(DesignSystem.Spacing.md)
-                .background(DesignSystem.Colors.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                .pixelCard(borderColor: tc.primary.opacity(0.15), fillColor: tc.cardBackground)
         }
     }
 
@@ -193,12 +195,12 @@ struct MealBuilderView: View {
             VStack(spacing: DesignSystem.Spacing.sm) {
                 HStack {
                     Text("Foods")
-                        .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(PixelFont.bold(14))
+                        .foregroundColor(tc.textSecondary)
                     Spacer()
                     Text("\(components.count) item\(components.count == 1 ? "" : "s")")
-                        .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .font(PixelFont.regular(12))
+                        .foregroundColor(tc.textTertiary)
                 }
 
                 ForEach(components.indices, id: \.self) { index in
@@ -211,25 +213,26 @@ struct MealBuilderView: View {
     private func componentRow(component: SavedMealComponent, index: Int) -> some View {
         HStack(spacing: DesignSystem.Spacing.md) {
             ZStack {
-                Circle()
-                    .fill(DesignSystem.Colors.primary.opacity(0.1))
+                PixelPillShape()
+                    .fill(DesignSystem.Colors.threeBandFrom(tc.primary))
                     .frame(width: 36, height: 36)
+                    .overlay(PixelPillShape().stroke(tc.primary.adjustedBrightness(-0.2), lineWidth: 2))
                 Image(systemName: "fork.knife")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .font(PixelFont.bold(14))
+                    .foregroundColor(.white)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(component.foodName)
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(PixelFont.bold(16))
+                    .foregroundColor(tc.textPrimary)
                     .lineLimit(1)
 
                 let qtyStr = component.quantity.truncatingRemainder(dividingBy: 1) == 0
                     ? "\(Int(component.quantity))" : String(format: "%.1f", component.quantity)
                 Text("\(qtyStr) \(component.servingUnit) · \(component.calories) cal")
-                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.regular(12))
+                    .foregroundColor(tc.textSecondary)
             }
 
             Spacer()
@@ -240,14 +243,13 @@ struct MealBuilderView: View {
                 withAnimation(.spring(response: 0.3)) { components = updated }
             } label: {
                 Image(systemName: "minus.circle.fill")
-                    .font(.system(size: 22))
+                    .font(PixelFont.regular(22))
                     .foregroundColor(DesignSystem.Colors.danger.opacity(0.8))
             }
             .buttonStyle(PlainButtonStyle())
         }
         .padding(DesignSystem.Spacing.md)
-        .background(DesignSystem.Colors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+        .pixelCard(borderColor: tc.primary.opacity(0.15), fillColor: tc.cardBackground)
     }
 
     // MARK: - Add Food Button
@@ -258,17 +260,14 @@ struct MealBuilderView: View {
         } label: {
             HStack(spacing: DesignSystem.Spacing.sm) {
                 Image(systemName: "plus")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(PixelFont.bold(15))
                 Text("Add Food")
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
+                    .font(PixelFont.bold(16))
             }
-            .foregroundColor(DesignSystem.Colors.primary)
+            .foregroundColor(tc.primary)
             .frame(maxWidth: .infinity)
             .padding(DesignSystem.Spacing.md)
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                    .stroke(DesignSystem.Colors.primary, lineWidth: 1.5)
-            )
+            .pixelCard(borderColor: tc.primary, fillColor: tc.primaryBackground)
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -279,35 +278,35 @@ struct MealBuilderView: View {
         VStack(spacing: DesignSystem.Spacing.sm) {
             HStack {
                 Text("Meal Total")
-                    .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.bold(14))
+                    .foregroundColor(tc.textSecondary)
                 Spacer()
             }
 
             HStack(spacing: DesignSystem.Spacing.sm) {
-                macroChip(value: "\(totalCalories)", label: "cal", color: DesignSystem.Colors.energy)
-                macroChip(value: String(format: "%.0fg", totalProtein), label: "Protein", color: DesignSystem.Colors.primary)
-                macroChip(value: String(format: "%.0fg", totalCarbs), label: "Carbs", color: .orange)
-                macroChip(value: String(format: "%.0fg", totalFat), label: "Fat", color: .purple)
+                macroChip(value: "\(totalCalories)", label: "cal", color: tc.macroBarCarbs)
+                macroChip(value: String(format: "%.0fg", totalProtein), label: "Protein", color: tc.macroBarProtein)
+                macroChip(value: String(format: "%.0fg", totalCarbs), label: "Carbs", color: tc.macroBarCarbs)
+                macroChip(value: String(format: "%.0fg", totalFat), label: "Fat", color: tc.macroBarFat)
             }
 
             // Purity score row
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Meal Purity Score")
-                        .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(PixelFont.bold(14))
+                        .foregroundColor(tc.textSecondary)
                     Text("Calorie-weighted average")
-                        .font(.system(size: DesignSystem.FontSizes.caption))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .font(PixelFont.regular(12))
+                        .foregroundColor(tc.textTertiary)
                 }
                 Spacer()
                 Text("\(mealPurityScore)")
-                    .font(.system(size: DesignSystem.FontSizes.title2, weight: .bold))
+                    .font(PixelFont.bold(22))
                     .foregroundColor(purityColor)
                 Text("/ 100")
-                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .font(PixelFont.regular(12))
+                    .foregroundColor(tc.textTertiary)
             }
             .padding(.top, DesignSystem.Spacing.xs)
         }
@@ -316,18 +315,17 @@ struct MealBuilderView: View {
     private func macroChip(value: String, label: String, color: Color) -> some View {
         VStack(spacing: 3) {
             Text(value)
-                .font(.system(size: DesignSystem.FontSizes.callout, weight: .bold))
+                .font(PixelFont.bold(16))
                 .foregroundColor(color)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
             Text(label)
-                .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(PixelFont.regular(12))
+                .foregroundColor(tc.textSecondary)
         }
         .frame(maxWidth: .infinity)
         .padding(DesignSystem.Spacing.sm)
-        .background(color.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+        .pixelCard(borderColor: color.opacity(0.2), fillColor: color.opacity(0.08))
     }
 
     // MARK: - Actions

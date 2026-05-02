@@ -25,6 +25,7 @@ final class SettingsManager {
     private enum Keys {
         static let trackAdvancedNutrition = "trackAdvancedNutrition"
         static let dailyMoodCheckEnabled = "dailyMoodCheckEnabled"
+        static let themePreference = "themePreference"
     }
 
     // MARK: - Settings Properties
@@ -46,6 +47,22 @@ final class SettingsManager {
         }
     }
 
+    /// Theme preference: "auto" (default), "morning", "afternoon", or "night"
+    /// "auto" cycles based on time of day. Named values lock to that theme.
+    var themePreference: String {
+        didSet {
+            UserDefaults.standard.set(themePreference, forKey: Keys.themePreference)
+        }
+    }
+
+    /// Resolves the active theme based on preference
+    var activeTheme: TimeOfDayTheme {
+        if themePreference == "auto" {
+            return TimeOfDayTheme.current()
+        }
+        return TimeOfDayTheme(rawValue: themePreference) ?? TimeOfDayTheme.current()
+    }
+
     // MARK: - Initialization
 
     private init() {
@@ -59,6 +76,13 @@ final class SettingsManager {
         } else {
             self.dailyMoodCheckEnabled = UserDefaults.standard.bool(forKey: Keys.dailyMoodCheckEnabled)
         }
+
+        // Theme preference defaults to "auto"
+        if let pref = UserDefaults.standard.string(forKey: Keys.themePreference) {
+            self.themePreference = pref
+        } else {
+            self.themePreference = "auto"
+        }
     }
 
     // MARK: - Methods
@@ -67,5 +91,6 @@ final class SettingsManager {
     func resetToDefaults() {
         trackAdvancedNutrition = false
         dailyMoodCheckEnabled = true
+        themePreference = "auto"
     }
 }

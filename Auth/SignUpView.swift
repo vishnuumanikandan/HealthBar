@@ -29,6 +29,10 @@ struct SignUpView: View {
     /// Shared ViewModel (same instance as LoginView).
     @Bindable var viewModel: AuthViewModel
 
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var showLogin = false
+
     // MARK: - Focus Routing
 
     private enum Field: Hashable {
@@ -71,8 +75,17 @@ struct SignUpView: View {
         .onTapGesture {
             focusedField = nil
         }
-        .navigationTitle("Create Account")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Create Account")
+                    .font(PixelFont.bold(20))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+            }
+        }
+        .navigationDestination(isPresented: $showLogin) {
+            LoginView(viewModel: viewModel, showNavBar: true)
+        }
     }
 
     // MARK: - Header
@@ -81,29 +94,33 @@ struct SignUpView: View {
         VStack(spacing: DesignSystem.Spacing.md) {
             // App icon mark
             ZStack {
-                Circle()
-                    .fill(DesignSystem.Colors.primaryGradient)
+                PixelCardShape()
+                    .fill(
+                        DesignSystem.Colors.threeBand(
+                            light: Color(hex: "#34D399"),
+                            mid: Color(hex: "#10B981"),
+                            dark: Color(hex: "#059669")
+                        )
+                    )
                     .frame(width: 72, height: 72)
+                    .overlay(
+                        PixelCardShape()
+                            .stroke(Color(hex: "#047857"), lineWidth: 2)
+                    )
 
                 Image(systemName: "heart.fill")
                     .font(.system(size: 32, weight: .semibold))
                     .foregroundColor(.white)
             }
-            .shadow(
-                color: DesignSystem.Shadows.successPulse.color,
-                radius: DesignSystem.Shadows.successPulse.radius,
-                x: DesignSystem.Shadows.successPulse.x,
-                y: DesignSystem.Shadows.successPulse.y
-            )
             .accessibilityHidden(true)
 
             Text("HealthBar")
-                .font(.system(size: DesignSystem.FontSizes.title, weight: .bold))
+                .font(PixelFont.bold(28))
                 .foregroundColor(DesignSystem.Colors.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Text("Start your journey today.")
-                .font(.system(size: DesignSystem.FontSizes.callout, weight: .regular))
+                .font(PixelFont.regular(16))
                 .foregroundColor(DesignSystem.Colors.textSecondary)
                 .multilineTextAlignment(.center)
         }
@@ -177,7 +194,7 @@ struct SignUpView: View {
                 .foregroundColor(DesignSystem.Colors.danger)
 
             Text(message)
-                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .regular))
+                .font(PixelFont.regular(14))
                 .foregroundColor(DesignSystem.Colors.danger)
                 .multilineTextAlignment(.leading)
 
@@ -185,9 +202,9 @@ struct SignUpView: View {
         }
         .padding(DesignSystem.Spacing.md)
         .background(DesignSystem.Colors.danger.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+        .clipShape(PixelCardShape())
         .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+            PixelCardShape()
                 .stroke(DesignSystem.Colors.danger.opacity(0.3), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
@@ -212,20 +229,22 @@ struct SignUpView: View {
             .accessibilityLabel(viewModel.isLoading ? "Creating account" : "Create Account")
             .accessibilityHint("Double-tap to create your HealthBar account")
 
-            // The NavigationStack back button (top-left) is the primary mechanism
-            // to return to LoginView. We surface a visible text hint below.
-            HStack(spacing: DesignSystem.Spacing.xs) {
-                Text("Already have an account?")
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+            Button {
+                showLogin = true
+            } label: {
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Text("Already have an account?")
+                        .font(PixelFont.regular(16))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
 
-                Text("Log In")
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    Text("Log In")
+                        .font(PixelFont.bold(16))
+                        .foregroundColor(DesignSystem.Colors.primary)
+                }
             }
             .frame(minHeight: 44)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Already have an account? Use the back button to return to Log In")
+            .accessibilityLabel("Already have an account? Log In")
+            .accessibilityHint("Double-tap to return to the login screen")
         }
     }
 }

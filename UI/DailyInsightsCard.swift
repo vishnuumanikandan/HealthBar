@@ -84,6 +84,9 @@ struct DailyInsightsCard: View {
 
     /// Animation state
     @State private var isVisible = false
+    @State private var settings = SettingsManager.shared
+
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
@@ -91,12 +94,12 @@ struct DailyInsightsCard: View {
             HStack {
                 HStack(spacing: DesignSystem.Spacing.sm) {
                     Image(systemName: "lightbulb.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.energy)
+                        .font(PixelFont.bold(16))
+                        .foregroundColor(tc.macroBarCarbs)
 
                     Text("Today's Insights")
-                        .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .font(PixelFont.bold(17))
+                        .foregroundColor(tc.textPrimary)
                 }
 
                 Spacer()
@@ -111,16 +114,16 @@ struct DailyInsightsCard: View {
                     }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .font(PixelFont.bold(20))
+                        .foregroundColor(tc.textTertiary)
                 }
                 .accessibilityLabel("Dismiss insights card")
             }
 
             // Insight message
             Text(insights.insightMessage)
-                .font(.system(size: DesignSystem.FontSizes.callout, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(PixelFont.regular(16))
+                .foregroundColor(tc.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             // Quick stats row
@@ -130,7 +133,7 @@ struct DailyInsightsCard: View {
                     icon: "fork.knife",
                     value: "\(insights.mealCount)",
                     label: "meals",
-                    color: DesignSystem.Colors.primary
+                    color: tc.primary
                 )
 
                 // Protein status
@@ -138,7 +141,7 @@ struct DailyInsightsCard: View {
                     icon: insights.proteinGoalHit ? "checkmark.circle.fill" : "circle",
                     value: insights.proteinGoalHit ? "Hit" : "\(Int(insights.proteinProgress * 100))%",
                     label: "protein",
-                    color: insights.proteinGoalHit ? DesignSystem.Colors.primary : DesignSystem.Colors.textSecondary
+                    color: insights.proteinGoalHit ? tc.primary : tc.textSecondary
                 )
 
                 // Purity trend (if available)
@@ -147,24 +150,13 @@ struct DailyInsightsCard: View {
                         icon: purityDiff <= 0 ? "arrow.down" : "arrow.up",
                         value: "\(abs(Int(purityDiff * 100)))%",
                         label: "vs usual",
-                        color: purityDiff <= 0 ? DesignSystem.Colors.primary : DesignSystem.Colors.warning
+                        color: purityDiff <= 0 ? tc.primary : tc.macroBarFat
                     )
                 }
             }
         }
         .padding(DesignSystem.Spacing.lg)
-        .background(DesignSystem.Colors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                .strokeBorder(DesignSystem.Colors.energy.opacity(0.3), lineWidth: 1.5)
-        )
-        .shadow(
-            color: DesignSystem.Shadows.card.color,
-            radius: DesignSystem.Shadows.card.radius,
-            x: DesignSystem.Shadows.card.x,
-            y: DesignSystem.Shadows.card.y
-        )
+        .pixelCard(borderColor: tc.macroBarCarbs.opacity(0.3), fillColor: tc.cardBackground)
         .scaleEffect(isVisible ? 1.0 : 0.95)
         .opacity(isVisible ? 1.0 : 0.0)
         .onAppear {
@@ -185,20 +177,22 @@ struct InsightStatPill: View {
     let label: String
     let color: Color
 
+    private var tc: ThemeColors { SettingsManager.shared.activeTheme.colors }
+
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.xs) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(PixelFont.bold(12))
                 .foregroundColor(color)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(value)
-                    .font(.system(size: DesignSystem.FontSizes.footnote, weight: .bold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(PixelFont.bold(14))
+                    .foregroundColor(tc.textPrimary)
 
                 Text(label)
-                    .font(.system(size: 10, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .font(PixelFont.regular(10))
+                    .foregroundColor(tc.textTertiary)
             }
         }
     }

@@ -88,11 +88,106 @@ enum DesignSystem {
 
         /// Green glow effect for achievements
         static let successGlow = primary.opacity(0.3)
+
+        // MARK: - Pixel Theme Palettes
+
+        // Parchment / Quest colors
+        static let parchmentFill = Color(hex: "#F5E6C8")
+        static let parchmentBorder = Color(hex: "#A0845C")
+        static let parchmentText = Color(hex: "#3D2213")
+        static let parchmentSecondary = Color(hex: "#7A6548")
+
+        // Gold / XP badge
+        static let goldHighlight = Color(hex: "#FFD700")
+        static let goldMid = Color(hex: "#F5A623")
+        static let goldDark = Color(hex: "#C8860B")
+        static let goldBorder = Color(hex: "#8B6914")
+
+        // Wood
+        static let woodDark = Color(hex: "#2E1A0E")
+        static let woodMid = Color(hex: "#4A2E1C")
+        static let woodFill = Color(hex: "#C4A070")
+        static let woodHighlight = Color(hex: "#D4B488")
+        static let woodShadow = Color(hex: "#B08850")
+        static let woodSeam = Color(hex: "#8B6B40")
+        static let woodBracket = Color(hex: "#3D2213")
+        static let woodNail = Color(hex: "#2E1A0E")
+
+        // Tab bar wood
+        static let tabWoodHighlight = Color(hex: "#A0723D")
+        static let tabWoodBody = Color(hex: "#8B5A2B")
+        static let tabWoodShadow = Color(hex: "#5D3A1A")
+        static let tabActive = Color(hex: "#FCD34D")
+        static let tabInactive = Color(hex: "#D2B48C")
+
+        // Indigo / Weekly stats
+        static let indigoBorder = Color(hex: "#4338CA")
+        static let indigoFill = Color(hex: "#EEF2FF")
+        static let indigoCardBorder = Color(hex: "#6366F1")
+        static let indigoCardFill = Color(hex: "#E0E7FF")
+        static let indigoText = Color(hex: "#312E81")
+        static let indigoLabel = Color(hex: "#4338CA")
+        static let indigoHighlight = Color(hex: "#818CF8")
+
+        // Bookmark red
+        static let bookmarkLight = Color(hex: "#EF4444")
+        static let bookmarkMid = Color(hex: "#DC2626")
+        static let bookmarkDark = Color(hex: "#991B1B")
+
+        // Segmented control
+        static let segInactiveFill = Color(hex: "#374151")
+        static let segInactiveText = Color(hex: "#D1D5DB")
+
+        // MARK: - 3-Band Gradient Builder
+
+        static func threeBand(light: Color, mid: Color, dark: Color, lightStop: CGFloat = 0.22, darkStop: CGFloat = 0.78) -> LinearGradient {
+            LinearGradient(
+                stops: [
+                    .init(color: light, location: 0),
+                    .init(color: light, location: lightStop),
+                    .init(color: mid, location: lightStop),
+                    .init(color: mid, location: darkStop),
+                    .init(color: dark, location: darkStop),
+                    .init(color: dark, location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+
+        // Pre-defined 3-band gradients
+        static let band3Green = threeBand(light: Color(hex: "#34D399"), mid: Color(hex: "#10B981"), dark: Color(hex: "#059669"))
+        static let band3DarkGreen = threeBand(light: Color(hex: "#059669"), mid: Color(hex: "#047857"), dark: Color(hex: "#064E3B"))
+        static let band3Emerald = threeBand(light: Color(hex: "#6EE7B7"), mid: Color(hex: "#34D399"), dark: Color(hex: "#10B981"))
+        static let band3Amber = threeBand(light: Color(hex: "#FBBF24"), mid: Color(hex: "#D97706"), dark: Color(hex: "#92400E"))
+        static let band3Orange = threeBand(light: Color(hex: "#FB923C"), mid: Color(hex: "#EA580C"), dark: Color(hex: "#C2410C"))
+        static let band3Gold = threeBand(light: Color(hex: "#FFD700"), mid: Color(hex: "#F5A623"), dark: Color(hex: "#C8860B"))
+        static let band3Indigo = threeBand(light: Color(hex: "#818CF8"), mid: Color(hex: "#6366F1"), dark: Color(hex: "#4338CA"))
+        static let band3Gray = threeBand(light: Color(hex: "#D1D5DB"), mid: Color(hex: "#9CA3AF"), dark: Color(hex: "#6B7280"))
+
+        // Button gradient (11% / 81% stops)
+        static let band3ButtonGreen = threeBand(light: Color(hex: "#34D399"), mid: Color(hex: "#10B981"), dark: Color(hex: "#047857"), lightStop: 0.11, darkStop: 0.81)
+
+        /// Auto-generate a 3-band gradient from a single color (highlight / body / shadow).
+        /// Uses brightness shifts instead of opacity so the shadow band stays opaque.
+        static func threeBandFrom(_ color: Color) -> LinearGradient {
+            threeBand(
+                light: color.opacity(0.7),
+                mid: color,
+                dark: color.adjustedBrightness(-0.25)
+            )
+        }
     }
 
     // MARK: - Typography
 
     enum Typography {
+
+        /// Pixel font for the RPG theme (Silkscreen)
+        static func pixel(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+            let name = weight == .bold ? "Silkscreen-Bold" : "Silkscreen-Regular"
+            return .custom(name, size: size)
+        }
 
         /// 34pt, bold - For large titles
         static func largeTitle(_ text: String) -> some View {
@@ -266,11 +361,11 @@ struct AppButton: View {
                 } else {
                     if let icon = icon {
                         Image(systemName: icon)
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(PixelFont.bold(17))
                     }
 
                     Text(title)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(PixelFont.bold(17))
                 }
             }
             .foregroundColor(foregroundColor)
@@ -278,10 +373,10 @@ struct AppButton: View {
             .frame(height: 52)
             .background(backgroundView)
             .overlay(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                    .stroke(borderColor, lineWidth: style == .secondary ? 2 : 0)
+                PixelCardShape()
+                    .stroke(style == .secondary ? DesignSystem.Colors.primary : Color(hex: "#047857"), lineWidth: 2)
             )
-            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+            .clipShape(PixelCardShape())
             .scaleEffect(isPressed ? 0.97 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
             .opacity(isDisabled ? 0.5 : 1.0)
@@ -309,14 +404,10 @@ struct AppButton: View {
     private var backgroundView: some View {
         switch style {
         case .primary:
-            DesignSystem.Colors.primaryGradient
+            DesignSystem.Colors.band3Green
         case .secondary:
             Color.clear
         }
-    }
-
-    private var borderColor: Color {
-        style == .secondary ? DesignSystem.Colors.primary : .clear
     }
 }
 
@@ -343,7 +434,7 @@ struct StatCard: View {
                         .frame(width: 40, height: 40)
 
                     Image(systemName: icon)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(PixelFont.bold(18))
                         .foregroundColor(iconColor)
                 }
 
@@ -352,12 +443,12 @@ struct StatCard: View {
 
             // Title
             Text(title)
-                .font(.system(size: 14, weight: .medium))
+                .font(PixelFont.regular(14))
                 .foregroundColor(DesignSystem.Colors.textSecondary)
 
             // Large value display
             Text(value)
-                .font(.system(size: 28, weight: .bold))
+                .font(PixelFont.bold(28))
                 .foregroundColor(DesignSystem.Colors.textPrimary)
 
             // Optional thin progress bar
@@ -379,18 +470,7 @@ struct StatCard: View {
             }
         }
         .padding(DesignSystem.Spacing.lg)
-        .background(DesignSystem.Colors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                .strokeBorder(DesignSystem.Colors.primary.opacity(0.25), lineWidth: 1.5)
-        )
-        .shadow(
-            color: DesignSystem.Shadows.card.color,
-            radius: DesignSystem.Shadows.card.radius,
-            x: DesignSystem.Shadows.card.x,
-            y: DesignSystem.Shadows.card.y
-        )
+        .pixelCard(borderColor: DesignSystem.Colors.primary.opacity(0.25), fillColor: DesignSystem.Colors.cardBackground)
     }
 }
 
@@ -485,10 +565,10 @@ struct XPBadge: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: "star.fill")
-                .font(.system(size: size.fontSize - 2, weight: .semibold))
+                .font(PixelFont.bold(size.fontSize - 2))
 
             Text("+\(xp) XP")
-                .font(.system(size: size.fontSize, weight: .semibold))
+                .font(PixelFont.bold(size.fontSize))
         }
         .foregroundColor(.white)
         .padding(size.padding)
@@ -501,7 +581,7 @@ struct XPBadge: View {
                 }
             }
         )
-        .clipShape(Capsule())
+        .clipShape(PixelPillShape())
     }
 }
 
@@ -523,19 +603,19 @@ struct EmptyStateView: View {
 
             // Large icon
             Image(systemName: icon)
-                .font(.system(size: 64, weight: .regular))
+                .font(PixelFont.regular(64))
                 .foregroundColor(DesignSystem.Colors.textTertiary)
                 .padding(.bottom, DesignSystem.Spacing.sm)
 
             // Clean typography hierarchy
             VStack(spacing: DesignSystem.Spacing.sm) {
                 Text(title)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(PixelFont.bold(22))
                     .foregroundColor(DesignSystem.Colors.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text(message)
-                    .font(.system(size: 16, weight: .regular))
+                    .font(PixelFont.regular(16))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DesignSystem.Spacing.xl)
@@ -607,7 +687,7 @@ struct AuthTextField: View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
             // Field label
             Text(label)
-                .font(.system(size: DesignSystem.FontSizes.subheadline, weight: .medium))
+                .font(PixelFont.regular(14))
                 .foregroundColor(DesignSystem.Colors.textSecondary)
 
             // Input field + optional reveal toggle
@@ -630,15 +710,14 @@ struct AuthTextField: View {
                 .padding(.vertical, DesignSystem.Spacing.md)
                 .frame(minHeight: 52)
                 .background(DesignSystem.Colors.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                .clipShape(PixelCardShape())
                 .overlay(
-                    // Border turns red when a validation error is present
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                    PixelCardShape()
                         .stroke(
                             errorMessage != nil
                                 ? DesignSystem.Colors.danger
                                 : DesignSystem.Colors.border,
-                            lineWidth: errorMessage != nil ? 1.5 : 1
+                            lineWidth: errorMessage != nil ? 2 : 1
                         )
                 )
                 .submitLabel(submitLabel)
@@ -669,7 +748,7 @@ struct AuthTextField: View {
                         .foregroundColor(DesignSystem.Colors.danger)
 
                     Text(error)
-                        .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
+                        .font(PixelFont.regular(12))
                         .foregroundColor(DesignSystem.Colors.danger)
                 }
                 // Announce the combined error message to VoiceOver
@@ -677,6 +756,213 @@ struct AuthTextField: View {
                 .accessibilityLabel(error)
             }
         }
+    }
+}
+
+// MARK: - Pixel Art Shapes
+
+/// Stair-step octagonal shape for cards (4-step × 3px = 12px chamfer)
+/// Draws the same polygon as the CSS clip-path from the HTML mockup.
+struct PixelCardShape: Shape {
+    var step: CGFloat = 3
+    var steps: Int = 4
+
+    func path(in rect: CGRect) -> Path {
+        let s = step
+        let w = rect.width
+        let h = rect.height
+        let c = s * CGFloat(steps) // 12pt chamfer
+
+        var p = Path()
+        // Top edge, left to right
+        p.move(to: CGPoint(x: c, y: 0))
+        p.addLine(to: CGPoint(x: w - c, y: 0))
+        // Top-right stair
+        p.addLine(to: CGPoint(x: w - 3*s, y: 0))
+        p.addLine(to: CGPoint(x: w - 3*s, y: s))
+        p.addLine(to: CGPoint(x: w - 2*s, y: s))
+        p.addLine(to: CGPoint(x: w - 2*s, y: 2*s))
+        p.addLine(to: CGPoint(x: w - s, y: 2*s))
+        p.addLine(to: CGPoint(x: w - s, y: 3*s))
+        p.addLine(to: CGPoint(x: w, y: 3*s))
+        p.addLine(to: CGPoint(x: w, y: c))
+        // Right edge
+        p.addLine(to: CGPoint(x: w, y: h - c))
+        // Bottom-right stair
+        p.addLine(to: CGPoint(x: w, y: h - 3*s))
+        p.addLine(to: CGPoint(x: w - s, y: h - 3*s))
+        p.addLine(to: CGPoint(x: w - s, y: h - 2*s))
+        p.addLine(to: CGPoint(x: w - 2*s, y: h - 2*s))
+        p.addLine(to: CGPoint(x: w - 2*s, y: h - s))
+        p.addLine(to: CGPoint(x: w - 3*s, y: h - s))
+        p.addLine(to: CGPoint(x: w - 3*s, y: h))
+        p.addLine(to: CGPoint(x: w - c, y: h))
+        // Bottom edge
+        p.addLine(to: CGPoint(x: c, y: h))
+        // Bottom-left stair
+        p.addLine(to: CGPoint(x: 3*s, y: h))
+        p.addLine(to: CGPoint(x: 3*s, y: h - s))
+        p.addLine(to: CGPoint(x: 2*s, y: h - s))
+        p.addLine(to: CGPoint(x: 2*s, y: h - 2*s))
+        p.addLine(to: CGPoint(x: s, y: h - 2*s))
+        p.addLine(to: CGPoint(x: s, y: h - 3*s))
+        p.addLine(to: CGPoint(x: 0, y: h - 3*s))
+        p.addLine(to: CGPoint(x: 0, y: h - c))
+        // Left edge
+        p.addLine(to: CGPoint(x: 0, y: c))
+        // Top-left stair
+        p.addLine(to: CGPoint(x: 0, y: 3*s))
+        p.addLine(to: CGPoint(x: s, y: 3*s))
+        p.addLine(to: CGPoint(x: s, y: 2*s))
+        p.addLine(to: CGPoint(x: 2*s, y: 2*s))
+        p.addLine(to: CGPoint(x: 2*s, y: s))
+        p.addLine(to: CGPoint(x: 3*s, y: s))
+        p.addLine(to: CGPoint(x: 3*s, y: 0))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Stair-step pill shape for smaller elements (3-step × 2px = 6px chamfer)
+struct PixelPillShape: Shape {
+    var step: CGFloat = 2
+    var steps: Int = 3
+
+    func path(in rect: CGRect) -> Path {
+        let s = step
+        let w = rect.width
+        let h = rect.height
+        let c = s * CGFloat(steps) // 6pt chamfer
+
+        var p = Path()
+        p.move(to: CGPoint(x: c, y: 0))
+        p.addLine(to: CGPoint(x: w - c, y: 0))
+        // Top-right
+        p.addLine(to: CGPoint(x: w - 2*s, y: 0))
+        p.addLine(to: CGPoint(x: w - 2*s, y: s))
+        p.addLine(to: CGPoint(x: w - s, y: s))
+        p.addLine(to: CGPoint(x: w - s, y: 2*s))
+        p.addLine(to: CGPoint(x: w, y: 2*s))
+        p.addLine(to: CGPoint(x: w, y: c))
+        // Right edge
+        p.addLine(to: CGPoint(x: w, y: h - c))
+        // Bottom-right
+        p.addLine(to: CGPoint(x: w, y: h - 2*s))
+        p.addLine(to: CGPoint(x: w - s, y: h - 2*s))
+        p.addLine(to: CGPoint(x: w - s, y: h - s))
+        p.addLine(to: CGPoint(x: w - 2*s, y: h - s))
+        p.addLine(to: CGPoint(x: w - 2*s, y: h))
+        p.addLine(to: CGPoint(x: w - c, y: h))
+        // Bottom edge
+        p.addLine(to: CGPoint(x: c, y: h))
+        // Bottom-left
+        p.addLine(to: CGPoint(x: 2*s, y: h))
+        p.addLine(to: CGPoint(x: 2*s, y: h - s))
+        p.addLine(to: CGPoint(x: s, y: h - s))
+        p.addLine(to: CGPoint(x: s, y: h - 2*s))
+        p.addLine(to: CGPoint(x: 0, y: h - 2*s))
+        p.addLine(to: CGPoint(x: 0, y: h - c))
+        // Left edge
+        p.addLine(to: CGPoint(x: 0, y: c))
+        // Top-left
+        p.addLine(to: CGPoint(x: 0, y: 2*s))
+        p.addLine(to: CGPoint(x: s, y: 2*s))
+        p.addLine(to: CGPoint(x: s, y: s))
+        p.addLine(to: CGPoint(x: 2*s, y: s))
+        p.addLine(to: CGPoint(x: 2*s, y: 0))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Pixel card container with stair-step octagonal border
+struct PixelCard<Content: View>: View {
+    var borderColor: Color = DesignSystem.Colors.primary
+    var fillColor: Color = DesignSystem.Colors.cardBackground
+    var fillGradient: LinearGradient? = nil
+    var step: CGFloat = 3
+    var steps: Int = 4
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        ZStack {
+            PixelCardShape(step: step, steps: steps)
+                .fill(borderColor)
+            PixelCardShape(step: step, steps: steps)
+                .fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
+                .padding(2)
+            content()
+        }
+    }
+}
+
+/// Pixel pill container with stair-step pill border
+struct PixelPill<Content: View>: View {
+    var borderColor: Color = DesignSystem.Colors.primary
+    var fillColor: Color = DesignSystem.Colors.cardBackground
+    var fillGradient: LinearGradient? = nil
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        ZStack {
+            PixelPillShape()
+                .fill(borderColor)
+            PixelPillShape()
+                .fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
+                .padding(2)
+            content()
+        }
+    }
+}
+
+// MARK: - PixelFont Convenience
+
+enum PixelFont {
+    static func bold(_ size: CGFloat) -> Font {
+        DesignSystem.Typography.pixel(size, weight: .bold)
+    }
+    static func regular(_ size: CGFloat) -> Font {
+        DesignSystem.Typography.pixel(size)
+    }
+}
+
+// MARK: - Pixel Shape View Modifiers
+
+extension View {
+    func pixelCard(
+        borderColor: Color = DesignSystem.Colors.primary,
+        fillColor: Color = DesignSystem.Colors.cardBackground,
+        fillGradient: LinearGradient? = nil
+    ) -> some View {
+        self
+            .background(
+                ZStack {
+                    PixelCardShape()
+                        .fill(borderColor)
+                    PixelCardShape()
+                        .fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
+                        .padding(2)
+                }
+            )
+            .clipShape(PixelCardShape())
+    }
+
+    func pixelPill(
+        borderColor: Color = DesignSystem.Colors.primary,
+        fillColor: Color = DesignSystem.Colors.cardBackground,
+        fillGradient: LinearGradient? = nil
+    ) -> some View {
+        self
+            .background(
+                ZStack {
+                    PixelPillShape()
+                        .fill(borderColor)
+                    PixelPillShape()
+                        .fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
+                        .padding(2)
+                }
+            )
+            .clipShape(PixelPillShape())
     }
 }
 
@@ -716,6 +1002,14 @@ extension Color {
     ///   - dark: Color for dark mode
     init(light: Color, dark: Color) {
         self.init(UIColor(light: UIColor(light), dark: UIColor(dark)))
+    }
+
+    /// Darken or lighten a color by adjusting its brightness.
+    /// Negative values darken, positive values lighten.
+    func adjustedBrightness(_ amount: Double) -> Color {
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(self).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        return Color(hue: Double(h), saturation: Double(s), brightness: max(0, min(1, Double(b) + amount)), opacity: Double(a))
     }
 }
 

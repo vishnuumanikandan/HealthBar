@@ -25,6 +25,9 @@ final class FoodLogViewModel {
     /// Barcode service for nutrition lookup
     private let barcodeService: BarcodeService
 
+    /// AI food recognition service for natural-language meal logging
+    private let aiService: AIFoodRecognitionService
+
     // MARK: - Data State
 
     /// Today's food entries
@@ -279,15 +282,47 @@ final class FoodLogViewModel {
     /// Show edit sheet
     var showingEditSheet: Bool = false
 
+    // MARK: - AI Recognition State
+
+    /// Controls visibility of the DescribeMealView sheet
+    var showingDescribeMeal: Bool = false
+
+    /// User's typed meal description
+    var mealDescriptionInput: String = ""
+
+    /// Whether an AI recognition request is in flight
+    var isRecognizing: Bool = false
+
+    /// Error or clarification message from the last recognition attempt
+    var recognitionError: String? = nil
+
+    /// Items returned by the AI recognition service (source of truth before review)
+    var recognizedItems: [RecognizedFoodItem] = []
+
+    /// Controls visibility of the RecognizedFoodsReviewView sheet
+    var showingRecognitionReview: Bool = false
+
+    /// In-flight recognition task (for cancellation)
+    private var recognitionTask: Task<Void, Never>? = nil
+
+    /// Timestamp of the last recognition request start (for rate limiting)
+    private var lastRecognitionStart: Date? = nil
+
     // MARK: - Initialization
 
     /// Initializes the view model with an app coordinator
     /// - Parameters:
     ///   - coordinator: The app coordinator for business logic
     ///   - barcodeService: Service for barcode nutrition lookup (defaults to new instance)
-    init(coordinator: AppCoordinator, barcodeService: BarcodeService = BarcodeService()) {
+    ///   - aiService: AI food recognition service (defaults to new instance)
+    init(
+        coordinator: AppCoordinator,
+        barcodeService: BarcodeService = BarcodeService(),
+        aiService: AIFoodRecognitionService = AIFoodRecognitionService()
+    ) {
         self.coordinator = coordinator
         self.barcodeService = barcodeService
+        self.aiService = aiService
     }
 
     // MARK: - Data Loading
@@ -1446,6 +1481,136 @@ final class FoodLogViewModel {
             #endif
         } catch {
             showToastMessage("Couldn't move item")
+        }
+    }
+
+    // MARK: - AI Meal Recognition
+
+    /// Opens the DescribeMealView sheet, pre-configured with the pending meal type.
+    func openDescribeMeal() {
+        formMealType = pendingMealType
+        mealDescriptionInput = ""
+        recognitionError = nil
+        recognizedItems = []
+        isRecognizing = false
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        showingDescribeMeal = true
+    }
+
+    /// Sends the meal description to the AI recognition service.
+    ///
+    /// Request lifecycle rules:
+    /// - Only one request active at a time (cancels prior).
+    /// - Minimum 1s between request starts (rate gate).
+    /// - Results are discarded if the task is cancelled or the sheet closed.
+    func recognizeMeal() async {
+        let trimmed = mealDescriptionInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        // Rate gate: ignore if less than 1s since last start
+        if let lastStart = lastRecognitionStart, Date().timeIntervalSince(lastStart) < 1.0 {
+            return
+        }
+
+        // Cancel any prior in-flight request
+        recognitionTask?.cancel()
+
+        lastRecognitionStart = Date()
+        isRecognizing = true
+        recognitionError = nil
+
+        let task = Task {
+            defer {
+                if !Task.isCancelled {
+                    isRecognizing = false
+                }
+                recognitionTask = nil
+            }
+
+            do {
+                let items = try await aiService.recognize(description: trimmed)
+
+                // Guard: only apply results if not cancelled and sheet still open
+                guard !Task.isCancelled, showingDescribeMeal else { return }
+
+                recognizedItems = items
+
+                // Close input sheet, then open review after animation
+                showingDescribeMeal = false
+                try await Task.sleep(for: .milliseconds(400))
+
+                guard !Task.isCancelled else { return }
+                showingRecognitionReview = true
+
+            } catch is CancellationError {
+                print("[AIFoodRecognition] Request cancelled")
+            } catch let error as AIFoodRecognitionError {
+                guard !Task.isCancelled, showingDescribeMeal else { return }
+                recognitionError = error.userMessage
+            } catch {
+                guard !Task.isCancelled, showingDescribeMeal else { return }
+                recognitionError = "Something went wrong. Try again or add food manually."
+            }
+        }
+
+        recognitionTask = task
+    }
+
+    /// Cancels any in-flight AI recognition request and resets loading state.
+    func cancelRecognition() {
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        isRecognizing = false
+    }
+
+    /// Logs the reviewed/edited recognized items through the existing addFoodEntry path.
+    ///
+    /// Each included item becomes one `FoodEntry` with `toxinScore: 30` (default)
+    /// and `mealType` from `formMealType`.
+    /// - Parameter items: The reviewed items to log.
+    func logRecognizedItems(_ items: [RecognizedFoodItem]) async {
+        guard !isSubmittingForm else { return }
+        isSubmittingForm = true
+
+        var totalXP = 0
+        var loggedCount = 0
+
+        for item in items {
+            do {
+                let result = try await coordinator.addFoodEntry(
+                    name: item.name,
+                    calories: item.calories,
+                    protein: item.protein,
+                    carbs: item.carbs,
+                    fat: item.fat,
+                    toxinScore: 30,
+                    date: selectedDate,
+                    mealType: formMealType
+                )
+                totalXP += result.xpEarned
+                loggedCount += 1
+            } catch {
+                print("[AIFoodRecognition] Failed to log '\(item.name)': \(error)")
+            }
+        }
+
+        isSubmittingForm = false
+
+        // Close review sheet and clear state
+        showingRecognitionReview = false
+        recognizedItems = []
+
+        // Refresh data
+        await loadTodaysData()
+        if !isViewingToday {
+            await loadEntriesForSelectedDate()
+        }
+
+        // Show success toast
+        if loggedCount > 0 {
+            let xpText = totalXP > 0 ? " (+\(totalXP) XP)" : ""
+            showToastMessage("\(loggedCount) item\(loggedCount == 1 ? "" : "s") logged\(xpText)")
         }
     }
 

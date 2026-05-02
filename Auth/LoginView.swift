@@ -35,6 +35,10 @@ struct LoginView: View {
     /// Shared ViewModel driving this screen and SignUpView.
     @Bindable var viewModel: AuthViewModel
 
+    /// When false (default), hides the navigation bar (LoginView is the root).
+    /// Set to true when pushed from SignUpView inside the guest sheet so the back button is visible.
+    var showNavBar: Bool = false
+
     // MARK: - Focus Routing
 
     private enum Field: Hashable {
@@ -75,7 +79,7 @@ struct LoginView: View {
         .onTapGesture {
             focusedField = nil
         }
-        .navigationBarHidden(true)
+        .navigationBarHidden(!showNavBar)
     }
 
     // MARK: - Header
@@ -84,31 +88,35 @@ struct LoginView: View {
         VStack(spacing: DesignSystem.Spacing.md) {
             // App icon mark
             ZStack {
-                Circle()
-                    .fill(DesignSystem.Colors.primaryGradient)
+                PixelCardShape()
+                    .fill(
+                        DesignSystem.Colors.threeBand(
+                            light: Color(hex: "#34D399"),
+                            mid: Color(hex: "#10B981"),
+                            dark: Color(hex: "#059669")
+                        )
+                    )
                     .frame(width: 84, height: 84)
+                    .overlay(
+                        PixelCardShape()
+                            .stroke(Color(hex: "#047857"), lineWidth: 2)
+                    )
 
                 Image(systemName: "heart.fill")
                     .font(.system(size: 38, weight: .semibold))
                     .foregroundColor(.white)
             }
-            .shadow(
-                color: DesignSystem.Shadows.successPulse.color,
-                radius: DesignSystem.Shadows.successPulse.radius,
-                x: DesignSystem.Shadows.successPulse.x,
-                y: DesignSystem.Shadows.successPulse.y
-            )
             .accessibilityHidden(true)
 
             // App name
             Text("HealthBar")
-                .font(.system(size: DesignSystem.FontSizes.largeTitle, weight: .bold))
+                .font(PixelFont.bold(34))
                 .foregroundColor(DesignSystem.Colors.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             // Tagline
             Text("Your health quest begins here.")
-                .font(.system(size: DesignSystem.FontSizes.callout, weight: .regular))
+                .font(PixelFont.regular(16))
                 .foregroundColor(DesignSystem.Colors.textSecondary)
                 .multilineTextAlignment(.center)
         }
@@ -159,7 +167,7 @@ struct LoginView: View {
                 .foregroundColor(DesignSystem.Colors.danger)
 
             Text(message)
-                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .regular))
+                .font(PixelFont.regular(14))
                 .foregroundColor(DesignSystem.Colors.danger)
                 .multilineTextAlignment(.leading)
 
@@ -167,9 +175,9 @@ struct LoginView: View {
         }
         .padding(DesignSystem.Spacing.md)
         .background(DesignSystem.Colors.danger.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+        .clipShape(PixelCardShape())
         .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+            PixelCardShape()
                 .stroke(DesignSystem.Colors.danger.opacity(0.3), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
@@ -194,49 +202,51 @@ struct LoginView: View {
             .accessibilityLabel(viewModel.isLoading ? "Logging in" : "Log In")
             .accessibilityHint("Double-tap to log into your HealthBar account")
 
-            // Navigate to SignUpView
-            NavigationLink(value: AuthDestination.signUp) {
-                HStack(spacing: DesignSystem.Spacing.xs) {
-                    Text("Don't have an account?")
-                        .font(.system(size: DesignSystem.FontSizes.callout, weight: .regular))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+            if !showNavBar {
+                // Navigate to SignUpView
+                NavigationLink(value: AuthDestination.signUp) {
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        Text("Don't have an account?")
+                            .font(PixelFont.regular(16))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
 
-                    Text("Sign Up")
-                        .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.primary)
+                        Text("Sign Up")
+                            .font(PixelFont.bold(16))
+                            .foregroundColor(DesignSystem.Colors.primary)
+                    }
                 }
-            }
-            .frame(minHeight: 44) // Minimum tap target
-            .accessibilityLabel("Don't have an account? Sign Up")
-            .accessibilityHint("Double-tap to create a new HealthBar account")
+                .frame(minHeight: 44)
+                .accessibilityLabel("Don't have an account? Sign Up")
+                .accessibilityHint("Double-tap to create a new HealthBar account")
 
-            // Divider
-            HStack(spacing: DesignSystem.Spacing.sm) {
-                Rectangle()
-                    .frame(height: 1)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary.opacity(0.25))
-                Text("or")
-                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                Rectangle()
-                    .frame(height: 1)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary.opacity(0.25))
-            }
-            .padding(.horizontal, DesignSystem.Spacing.md)
+                // Divider
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary.opacity(0.25))
+                    Text("or")
+                        .font(PixelFont.regular(12))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundStyle(DesignSystem.Colors.textSecondary.opacity(0.25))
+                }
+                .padding(.horizontal, DesignSystem.Spacing.md)
 
-            // Continue as Guest — full access, local data only, no account required
-            Button {
-                focusedField = nil
-                Task { await viewModel.continueAsGuest() }
-            } label: {
-                Text("Continue as Guest")
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                    .frame(minHeight: 44)
+                // Continue as Guest — full access, local data only, no account required
+                Button {
+                    focusedField = nil
+                    Task { await viewModel.continueAsGuest() }
+                } label: {
+                    Text("Continue as Guest")
+                        .font(PixelFont.regular(16))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .frame(minHeight: 44)
+                }
+                .disabled(viewModel.isLoading)
+                .accessibilityLabel("Continue as Guest")
+                .accessibilityHint("Double-tap to use HealthBar without an account. Data is stored locally only.")
             }
-            .disabled(viewModel.isLoading)
-            .accessibilityLabel("Continue as Guest")
-            .accessibilityHint("Double-tap to use HealthBar without an account. Data is stored locally only.")
         }
     }
 }

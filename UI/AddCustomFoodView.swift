@@ -19,6 +19,9 @@ struct AddCustomFoodView: View {
     let onSave: (CustomFood) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var settings = SettingsManager.shared
+
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     // MARK: - Form State
 
@@ -66,21 +69,22 @@ struct AddCustomFoodView: View {
                 advancedToggleSection
             }
             .scrollContentBackground(.hidden)
-            .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
+            .background(tc.primaryBackground.ignoresSafeArea())
             .navigationTitle(existingFood == nil ? "New Food" : "Edit Food")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(PixelFont.regular(16))
+                        .foregroundColor(tc.textSecondary)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if isSaving {
-                        ProgressView().tint(DesignSystem.Colors.primary)
+                        ProgressView().tint(tc.primary)
                     } else {
                         Button("Save") { save() }
-                            .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                            .foregroundColor(isValid ? DesignSystem.Colors.primary : DesignSystem.Colors.textTertiary)
+                            .font(PixelFont.bold(16))
+                            .foregroundColor(isValid ? tc.primary : tc.textTertiary)
                             .disabled(!isValid)
                     }
                 }
@@ -92,14 +96,16 @@ struct AddCustomFoodView: View {
     // MARK: - Sections
 
     private var nameSection: some View {
-        Section("Food Name") {
+        Section {
             TextField("e.g. Mom's Pasta, Protein Smoothie", text: $name)
-                .font(.system(size: DesignSystem.FontSizes.body))
+        } header: {
+            Text("Food Name")
+                .font(PixelFont.bold(14))
         }
     }
 
     private var nutritionSection: some View {
-        Section("Nutrition Per Serving") {
+        Section {
             LabeledContent("Calories") {
                 TextField("kcal", text: $caloriesText)
                     .keyboardType(.numberPad)
@@ -120,11 +126,14 @@ struct AddCustomFoodView: View {
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
             }
+        } header: {
+            Text("Nutrition Per Serving")
+                .font(PixelFont.bold(14))
         }
     }
 
     private var servingSizeSection: some View {
-        Section(header: Text("Serving Size"), footer: Text("The label describes one serving. The amount and unit are used to scale nutrition when you log different quantities.")) {
+        Section {
             LabeledContent("Label") {
                 TextField("e.g. 1 cup, 100g, 1 plate", text: $servingSizeName)
                     .multilineTextAlignment(.trailing)
@@ -138,11 +147,17 @@ struct AddCustomFoodView: View {
                 TextField("e.g. g, cup, oz, serving", text: $servingUnit)
                     .multilineTextAlignment(.trailing)
             }
+        } header: {
+            Text("Serving Size")
+                .font(PixelFont.bold(14))
+        } footer: {
+            Text("The label describes one serving. The amount and unit are used to scale nutrition when you log different quantities.")
+                .font(PixelFont.regular(12))
         }
     }
 
     private var advancedSection: some View {
-        Section("Advanced (Optional)") {
+        Section {
             LabeledContent("Fiber (g)") {
                 TextField("—", text: $fiberText)
                     .keyboardType(.decimalPad)
@@ -158,6 +173,9 @@ struct AddCustomFoodView: View {
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
             }
+        } header: {
+            Text("Advanced (Optional)")
+                .font(PixelFont.bold(14))
         }
     }
 
@@ -168,11 +186,11 @@ struct AddCustomFoodView: View {
             } label: {
                 HStack {
                     Image(systemName: showAdvanced ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.primary)
+                        .font(PixelFont.bold(13))
+                        .foregroundColor(tc.primary)
                     Text(showAdvanced ? "Hide Advanced Fields" : "Add Fiber, Sugar, Sodium")
-                        .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.primary)
+                        .font(PixelFont.regular(16))
+                        .foregroundColor(tc.primary)
                 }
             }
         }

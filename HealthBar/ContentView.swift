@@ -43,6 +43,10 @@ struct ContentView: View {
     /// Shared state for the Tools tab (carries TDEE from Calculator 1 → Calculator 8).
     @State private var toolsViewModel = ToolsViewModel()
 
+    /// Settings for theme-aware tab backgrounds.
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
+
     // MARK: - Onboarding State
 
     /// True when the current user has no completed UserProfile. Triggers fullScreenCover.
@@ -69,13 +73,16 @@ struct ContentView: View {
     // MARK: - Body
 
     var body: some View {
-        if authService.isLoggedIn {
-            mainTabView
-                .transition(.opacity)
-        } else {
-            authFlow
-                .transition(.opacity)
+        Group {
+            if authService.isLoggedIn {
+                mainTabView
+                    .transition(.opacity)
+            } else {
+                authFlow
+                    .transition(.opacity)
+            }
         }
+        .preferredColorScheme(.light)
     }
 
     // MARK: - Auth Flow
@@ -101,45 +108,42 @@ struct ContentView: View {
 
     @ViewBuilder
     private var mainTabView: some View {
-        TabView(selection: $selectedTab) {
-            // Home Tab
-            HomeView(
-                // Firebase UID now flows through as userId — no longer an email address
-                coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
-                selectedTab: $selectedTab
-            )
-            .tabItem {
-                Label("Home", systemImage: "house.fill")
+        VStack(spacing: 0) {
+            TabView(selection: $selectedTab) {
+                // Home Tab
+                HomeView(
+                    coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
+                    selectedTab: $selectedTab
+                )
+                .background(tc.primaryBackground.ignoresSafeArea())
+                .toolbar(.hidden, for: .tabBar)
+                .tag(0)
+
+                // Food Log Tab
+                FoodLogView(coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared))
+                    .background(tc.primaryBackground.ignoresSafeArea())
+                    .toolbar(.hidden, for: .tabBar)
+                    .tag(1)
+
+                // Tools Tab
+                ToolsView(toolsViewModel: toolsViewModel)
+                    .background(tc.primaryBackground.ignoresSafeArea())
+                    .toolbar(.hidden, for: .tabBar)
+                    .tag(2)
+
+                // Profile Tab
+                ProfileView(
+                    coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
+                    authService: FirebaseAuthService.shared,
+                    onLogout: { authViewModel.logout() },
+                    onCreateAccount: { showSignUpFromGuest = true }
+                )
+                .background(tc.primaryBackground.ignoresSafeArea())
+                .toolbar(.hidden, for: .tabBar)
+                .tag(3)
             }
-            .tag(0)
 
-            // Food Log Tab
-            FoodLogView(coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared))
-                .tabItem {
-                    Label("Food", systemImage: "fork.knife")
-                }
-                .tag(1)
-
-            // Tools Tab — fitness calculators (no data persistence needed)
-            ToolsView(toolsViewModel: toolsViewModel)
-                .tabItem {
-                    Label("Tools", systemImage: "wrench.and.screwdriver.fill")
-                }
-                .tag(2)
-
-            // Profile Tab — receives logout closure and guest state so it can
-            // end the session and show guest-mode UI without referencing
-            // FirebaseAuthService directly.
-            ProfileView(
-                coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
-                authService: FirebaseAuthService.shared,
-                onLogout: { authViewModel.logout() },
-                onCreateAccount: { showSignUpFromGuest = true }
-            )
-            .tabItem {
-                Label("Profile", systemImage: "person.fill")
-            }
-            .tag(3)
+            WoodenTabBar(selectedTab: $selectedTab)
         }
         .tint(DesignSystem.Colors.primary)
         .overlay(alignment: .top) {
@@ -155,7 +159,6 @@ struct ContentView: View {
                 authService: authService
             )
         }
-        // Sign-up sheet presented when a guest taps "Create Account" in ProfileView.
         .sheet(isPresented: $showSignUpFromGuest) {
             NavigationStack {
                 SignUpView(viewModel: authViewModel)
@@ -169,10 +172,6 @@ struct ContentView: View {
         } message: {
             Text(migrationError ?? "")
         }
-        // Re-runs whenever currentUserEmail changes:
-        //   nil → "guest"   (guest mode entered)
-        //   "guest" → uid   (migration completed, real auth active)
-        //   nil → uid       (normal login / account creation)
         .task(id: authService.currentUserEmail) {
             guard let email = authService.currentUserEmail, !email.isEmpty else {
                 showOnboarding = false
@@ -181,15 +180,11 @@ struct ContentView: View {
             let coordinator = AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared)
 
             if authService.isGuest {
-                // Guest mode: skip all Firestore operations, check onboarding locally.
                 let completed = await coordinator.checkOnboardingCompleted()
                 showOnboarding = !completed
                 return
             }
 
-            // Authenticated user: sync profile from Firestore, then check onboarding.
-            // If no local profile exists, block on Firestore fetch first.
-            // If local profile exists, sync Firestore in background — don't block UI.
             let localProfile = try? await coordinator.getUserProfile()
             if localProfile == nil {
                 try? await coordinator.syncUserProfileFromFirestore()
@@ -200,8 +195,11 @@ struct ContentView: View {
             let completed = await coordinator.checkOnboardingCompleted()
             showOnboarding = !completed
         }
-        // Watches for guest→auth migration signal. Fires when a guest user signs up
-        // and pendingMigrationUserId becomes non-nil.
+        .onChange(of: authService.isGuest) { _, isGuest in
+            if !isGuest && showSignUpFromGuest {
+                showSignUpFromGuest = false
+            }
+        }
         .onChange(of: authService.pendingMigrationUserId) { _, newUserId in
             guard let newUserId else { return }
             Task {
@@ -210,19 +208,75 @@ struct ContentView: View {
                     authService: FirebaseAuthService.shared
                 )
                 do {
-                    // Step 1–3: migrate SwiftData records from "guest" → real userId.
                     try await coordinator.migrateGuestData(to: newUserId)
-                    // Step 4: drop guest mode, adopt real identity.
                     authService.completeMigration(newUserId: newUserId)
-                    // Step 5: explicitly start Firestore sync (task(id: currentUserEmail)
-                    // will also re-fire, but belt+suspenders for the sync init).
                     coordinator.startFirestoreSyncForCurrentUser()
+                    showSignUpFromGuest = false
                 } catch {
-                    // Migration failed: keep guest mode, show error.
                     authService.cancelMigration()
                     migrationError = "Failed to migrate data. Please try again."
+                    showSignUpFromGuest = false
                 }
             }
+        }
+    }
+}
+
+// MARK: - Wooden Tab Bar
+
+/// Custom pixel-art wooden tab bar replacing the system tab bar.
+struct WoodenTabBar: View {
+    @Binding var selectedTab: Int
+    var theme: TimeOfDayTheme = SettingsManager.shared.activeTheme
+
+    private var tc: ThemeColors { theme.colors }
+
+    private let tabs: [(icon: String, label: String, tag: Int)] = [
+        ("house.fill", "Home", 0),
+        ("fork.knife", "Food", 1),
+        ("wrench.and.screwdriver.fill", "Tools", 2),
+        ("person.fill", "Profile", 3)
+    ]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(tabs, id: \.tag) { tab in
+                Button {
+                    selectedTab = tab.tag
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: 22))
+                        Text(tab.label)
+                            .font(DesignSystem.Typography.pixel(12))
+                    }
+                    .foregroundColor(selectedTab == tab.tag ? tc.tabActive : tc.tabInactive)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+        .background(
+            LinearGradient(
+                stops: [
+                    .init(color: tc.tabBarLight, location: 0),
+                    .init(color: tc.tabBarLight, location: 0.06),
+                    .init(color: tc.tabBarMid, location: 0.06),
+                    .init(color: tc.tabBarMid, location: 0.94),
+                    .init(color: tc.tabBarDark, location: 0.94),
+                    .init(color: tc.tabBarDark, location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea(edges: .bottom)
+        )
+        // Top border line
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(tc.tabBarDark)
+                .frame(height: 2)
         }
     }
 }

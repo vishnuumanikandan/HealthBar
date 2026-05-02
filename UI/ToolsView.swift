@@ -24,6 +24,9 @@ struct ToolsView: View {
 
     let toolsViewModel: ToolsViewModel
 
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
+
     // Grid columns
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
@@ -33,15 +36,22 @@ struct ToolsView: View {
                 LazyVGrid(columns: columns, spacing: DesignSystem.Spacing.md) {
                     ForEach(CalculatorCard.allCards) { card in
                         NavigationLink(destination: destinationView(for: card)) {
-                            CalculatorCardView(card: card)
+                            CalculatorCardView(card: card, tc: tc)
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
                 .padding(DesignSystem.Spacing.md)
             }
-            .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
-            .navigationTitle("Tools")
+            .background(tc.primaryBackground.ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Tools")
+                        .font(PixelFont.bold(20))
+                        .foregroundColor(tc.textPrimary)
+                }
+            }
         }
     }
 
@@ -87,38 +97,39 @@ struct CalculatorCard: Identifiable {
 private struct CalculatorCardView: View {
 
     let card: CalculatorCard
+    let tc: ThemeColors
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
             HStack {
-                ZStack {
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                        .fill(card.iconColor.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: card.icon)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(card.iconColor)
-                }
+                Image(systemName: card.icon)
+                    .font(PixelFont.regular(18))
+                    .foregroundColor(.white)
+                    .frame(width: 40, height: 40)
+                    .pixelPill(
+                        borderColor: card.iconColor.adjustedBrightness(-0.2),
+                        fillColor: .clear,
+                        fillGradient: DesignSystem.Colors.threeBandFrom(card.iconColor)
+                    )
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .font(PixelFont.bold(12))
+                    .foregroundColor(tc.textTertiary)
             }
 
             Text(card.title)
-                .font(.system(size: DesignSystem.FontSizes.callout, weight: .bold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(PixelFont.bold(16))
+                .foregroundColor(tc.textPrimary)
                 .lineLimit(1)
 
             Text(card.description)
-                .font(.system(size: DesignSystem.FontSizes.caption))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(PixelFont.regular(12))
+                .foregroundColor(tc.textSecondary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(DesignSystem.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DesignSystem.Colors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
+        .pixelCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.cardBackground)
     }
 }

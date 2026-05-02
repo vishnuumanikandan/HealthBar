@@ -109,6 +109,10 @@
 		BEF96B592F88515A00FB0F83 /* AccountInfoDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96B582F88515A00FB0F83 /* AccountInfoDTO.swift */; };
 		BEF96B5B2F88519800FB0F83 /* BadgeToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96B5A2F88519800FB0F83 /* BadgeToast.swift */; };
 		BEF96B5D2F8851B200FB0F83 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96B5C2F8851B200FB0F83 /* AccountView.swift */; };
+		BEF96D092FC8F45B00FB0F83 /* RecognizedFoodItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96D082FC8F45B00FB0F83 /* RecognizedFoodItem.swift */; };
+		BEF96D0B2FC8F47900FB0F83 /* AIFoodRecognitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96D0A2FC8F47900FB0F83 /* AIFoodRecognitionService.swift */; };
+		BEF96D0D2FC8F4A700FB0F83 /* RecognizedFoodsReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96D0C2FC8F4A700FB0F83 /* RecognizedFoodsReviewView.swift */; };
+		BEF96D0F2FC8F4B200FB0F83 /* DescribeMealView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96D0E2FC8F4B200FB0F83 /* DescribeMealView.swift */; };
 		CC110AB12F300000000000B1 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110AA12F300000000000B1 /* AuthService.swift */; };
 		CC110AB22F300000000000B2 /* LocalAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110AA22F300000000000B2 /* LocalAuthService.swift */; };
 		CC110AB32F300000000000B3 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110AA32F300000000000B3 /* AuthViewModel.swift */; };
@@ -126,6 +130,7 @@
 		CC550AB12F600000000000D1 /* CustomFoodDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC550AA12F600000000000D1 /* CustomFoodDTO.swift */; };
 		CC550AB22F600000000000D2 /* SavedMealDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC550AA22F600000000000D2 /* SavedMealDTO.swift */; };
 		CC550AB32F600000000000D3 /* SavedRecipeDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC550AA32F600000000000D3 /* SavedRecipeDTO.swift */; };
+		CC770AB12F500000000000E1 /* TimeOfDayTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC770AA12F500000000000E1 /* TimeOfDayTheme.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -225,6 +230,11 @@
 		BEF96B582F88515A00FB0F83 /* AccountInfoDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountInfoDTO.swift; sourceTree = "<group>"; };
 		BEF96B5A2F88519800FB0F83 /* BadgeToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeToast.swift; sourceTree = "<group>"; };
 		BEF96B5C2F8851B200FB0F83 /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
+		BEF96B5E2FA3258900FB0F83 /* pixelscreenhomeprompt.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = pixelscreenhomeprompt.md; sourceTree = "<group>"; };
+		BEF96D082FC8F45B00FB0F83 /* RecognizedFoodItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecognizedFoodItem.swift; sourceTree = "<group>"; };
+		BEF96D0A2FC8F47900FB0F83 /* AIFoodRecognitionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIFoodRecognitionService.swift; sourceTree = "<group>"; };
+		BEF96D0C2FC8F4A700FB0F83 /* RecognizedFoodsReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecognizedFoodsReviewView.swift; sourceTree = "<group>"; };
+		BEF96D0E2FC8F4B200FB0F83 /* DescribeMealView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DescribeMealView.swift; sourceTree = "<group>"; };
 		CC110AA12F300000000000B1 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		CC110AA22F300000000000B2 /* LocalAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAuthService.swift; sourceTree = "<group>"; };
 		CC110AA32F300000000000B3 /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
@@ -242,6 +252,7 @@
 		CC550AA12F600000000000D1 /* CustomFoodDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomFoodDTO.swift; sourceTree = "<group>"; };
 		CC550AA22F600000000000D2 /* SavedMealDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedMealDTO.swift; sourceTree = "<group>"; };
 		CC550AA32F600000000000D3 /* SavedRecipeDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedRecipeDTO.swift; sourceTree = "<group>"; };
+		CC770AA12F500000000000E1 /* TimeOfDayTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeOfDayTheme.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -324,6 +335,7 @@
 		1146B2292F1606E2004767C9 = {
 			isa = PBXGroup;
 			children = (
+				BEF96B5E2FA3258900FB0F83 /* pixelscreenhomeprompt.md */,
 				BEF96AAB2F7CC7F600FB0F83 /* Models */,
 				BE47B6812F6D16A0007F48F5 /* GoogleService-Info.plist */,
 				1111E0C12F24815D006EF76F /* --Info.plist */,
@@ -359,6 +371,7 @@
 			isa = PBXGroup;
 			children = (
 				1146B26B2F1F493D004767C9 /* DesignSystem.swift */,
+				CC770AA12F500000000000E1 /* TimeOfDayTheme.swift */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -366,6 +379,8 @@
 		1146B2612F1F37BD004767C9 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				BEF96D0E2FC8F4B200FB0F83 /* DescribeMealView.swift */,
+				BEF96D0C2FC8F4A700FB0F83 /* RecognizedFoodsReviewView.swift */,
 				BEF96B5C2F8851B200FB0F83 /* AccountView.swift */,
 				BEF96AC62F7CC87700FB0F83 /* OnboardingViewModel.swift */,
 				BEF96AC22F7CC86500FB0F83 /* OnboardingView.swift */,
@@ -428,6 +443,7 @@
 		1146B2652F1F37CE004767C9 /* Nutrition */ = {
 			isa = PBXGroup;
 			children = (
+				BEF96D0A2FC8F47900FB0F83 /* AIFoodRecognitionService.swift */,
 				BEF969932F7B493300FB0F83 /* FoodDatabase.swift */,
 				1111E0C72F248958006EF76F /* BarcodeService.swift */,
 				1146B2EA2F2343FF004767C9 /* NutritionManager.swift */,
@@ -472,6 +488,7 @@
 		BEF96AAB2F7CC7F600FB0F83 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				BEF96D082FC8F45B00FB0F83 /* RecognizedFoodItem.swift */,
 				BEF96B542F88511800FB0F83 /* BadgeDefinition.swift */,
 				BEF96B522F88510B00FB0F83 /* BadgeProgress.swift */,
 				BEF96ABE2F7CC81E00FB0F83 /* UserProfile.swift */,
@@ -707,6 +724,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BEF96D0D2FC8F4A700FB0F83 /* RecognizedFoodsReviewView.swift in Sources */,
 				1146B2ED2F234408004767C9 /* GamificationManager.swift in Sources */,
 				1146B2F22F23446A004767C9 /* HomeViewModel.swift in Sources */,
 				1111E1B02F32E133006EF76F /* MoodCheckView.swift in Sources */,
@@ -716,7 +734,9 @@
 				1111E1402F285EF3006EF76F /* AllQuestsCompleteView.swift in Sources */,
 				1111E1982F32DFEE006EF76F /* StreakMilestoneToast.swift in Sources */,
 				BEF96B532F88510B00FB0F83 /* BadgeProgress.swift in Sources */,
+				BEF96D0F2FC8F4B200FB0F83 /* DescribeMealView.swift in Sources */,
 				1146B26C2F1F493D004767C9 /* DesignSystem.swift in Sources */,
+				CC770AB12F500000000000E1 /* TimeOfDayTheme.swift in Sources */,
 				BEF9698E2F7B48B500FB0F83 /* AddCustomFoodView.swift in Sources */,
 				BE77873E2F70E62E00666EE3 /* ProfileView.swift in Sources */,
 				BEF96B552F88511800FB0F83 /* BadgeDefinition.swift in Sources */,
@@ -785,6 +805,7 @@
 				CC220AB12F400000000000C1 /* FirestoreService.swift in Sources */,
 				CC220AB22F400000000000C2 /* FoodEntryDTO.swift in Sources */,
 				CC220AB32F400000000000C3 /* FirestoreServiceImpl.swift in Sources */,
+				BEF96D092FC8F45B00FB0F83 /* RecognizedFoodItem.swift in Sources */,
 				CC220AB42F400000000000C4 /* DailyGoalDTO.swift in Sources */,
 				CC220AB52F400000000000C5 /* PersonalBaselineDTO.swift in Sources */,
 				CC220AB62F400000000000C6 /* FoodFingerprintDTO.swift in Sources */,
@@ -797,6 +818,7 @@
 				BEF96B572F88515200FB0F83 /* BadgeProgressDTO.swift in Sources */,
 				BEF969042F77A7E900FB0F83 /* FoodDatabaseView.swift in Sources */,
 				BEF969942F7B493300FB0F83 /* FoodDatabase.swift in Sources */,
+				BEF96D0B2FC8F47900FB0F83 /* AIFoodRecognitionService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

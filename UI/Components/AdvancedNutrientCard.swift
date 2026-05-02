@@ -15,6 +15,8 @@ struct AdvancedNutrientCard: View {
 
     // MARK: - Properties
 
+    private var tc: ThemeColors { SettingsManager.shared.activeTheme.colors }
+
     let icon: String
     let title: String
     let currentValue: Double
@@ -70,10 +72,10 @@ struct AdvancedNutrientCard: View {
     private var progressColor: Color {
         if isMaximumTarget {
             // For max targets (sugar, sodium, etc.), green when under, red when over
-            return progress > 1.0 ? DesignSystem.Colors.danger : DesignSystem.Colors.primary
+            return progress > 1.0 ? DesignSystem.Colors.danger : tc.primary
         } else {
             // For min targets (fiber, potassium), green when reached
-            return progress >= 1.0 ? DesignSystem.Colors.primary : iconColor
+            return progress >= 1.0 ? tc.primary : iconColor
         }
     }
 
@@ -84,12 +86,12 @@ struct AdvancedNutrientCard: View {
             // Icon and title row
             HStack(spacing: DesignSystem.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(PixelFont.bold(12))
                     .foregroundColor(iconColor)
 
                 Text(title)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(PixelFont.bold(11))
+                    .foregroundColor(tc.textSecondary)
                     .lineLimit(1)
 
                 Spacer()
@@ -98,25 +100,25 @@ struct AdvancedNutrientCard: View {
             // Value display
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text(currentValueText)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(PixelFont.bold(18))
+                    .foregroundColor(tc.textPrimary)
 
                 Text(unit)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .font(PixelFont.bold(10))
+                    .foregroundColor(tc.textTertiary)
 
                 Text("/")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .font(PixelFont.bold(10))
+                    .foregroundColor(tc.textTertiary)
 
                 Text(targetValueText)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .font(PixelFont.bold(10))
+                    .foregroundColor(tc.textTertiary)
 
                 if targetValue != nil {
                     Text(unit)
-                        .font(.system(size: 8, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .font(PixelFont.bold(8))
+                        .foregroundColor(tc.textTertiary)
                 }
             }
 
@@ -126,7 +128,7 @@ struct AdvancedNutrientCard: View {
                     ZStack(alignment: .leading) {
                         // Background
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(DesignSystem.Colors.border)
+                            .fill(tc.primary.opacity(0.3))
                             .frame(height: 3)
 
                         // Progress
@@ -141,11 +143,11 @@ struct AdvancedNutrientCard: View {
         }
         .padding(DesignSystem.Spacing.sm)
         .frame(minWidth: 0, maxWidth: .infinity)
-        .background(DesignSystem.Colors.cardBackground)
+        .background(tc.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
         .overlay(
             RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                .strokeBorder(DesignSystem.Colors.border.opacity(0.5), lineWidth: 1)
+                .strokeBorder(tc.primary.opacity(0.3).opacity(0.5), lineWidth: 1)
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
@@ -156,6 +158,8 @@ struct AdvancedNutrientCard: View {
 
 /// Responsive grid for displaying advanced nutrient mini cards
 struct AdvancedNutrientsGrid: View {
+
+    private var tc: ThemeColors { SettingsManager.shared.activeTheme.colors }
 
     let entries: [FoodEntry]
     let goal: DailyGoal?
@@ -203,7 +207,7 @@ struct AdvancedNutrientsGrid: View {
                 current: totalFiber,
                 target: goal?.fiberTarget,
                 unit: "g",
-                color: DesignSystem.Colors.primary,
+                color: tc.primary,
                 isMaxTarget: false
             ))
         }
@@ -215,7 +219,7 @@ struct AdvancedNutrientsGrid: View {
                 current: totalSugar,
                 target: goal?.sugarTarget,
                 unit: "g",
-                color: DesignSystem.Colors.warning,
+                color: tc.macroBarFat,
                 isMaxTarget: true
             ))
         }
@@ -227,7 +231,7 @@ struct AdvancedNutrientsGrid: View {
                 current: totalSodium,
                 target: goal?.sodiumTarget,
                 unit: "mg",
-                color: DesignSystem.Colors.secondary,
+                color: tc.primary,
                 isMaxTarget: true
             ))
         }
@@ -251,7 +255,7 @@ struct AdvancedNutrientsGrid: View {
                 current: totalCholesterol,
                 target: goal?.cholesterolTarget,
                 unit: "mg",
-                color: DesignSystem.Colors.energy,
+                color: tc.macroBarCarbs,
                 isMaxTarget: true
             ))
         }
@@ -263,7 +267,7 @@ struct AdvancedNutrientsGrid: View {
                 current: totalPotassium,
                 target: goal?.potassiumTarget,
                 unit: "mg",
-                color: DesignSystem.Colors.growth,
+                color: tc.primaryDark,
                 isMaxTarget: false
             ))
         }

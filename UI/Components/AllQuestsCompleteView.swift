@@ -17,6 +17,8 @@ struct AllQuestsCompleteView: View {
 
     // MARK: - Properties
 
+    private var tc: ThemeColors { SettingsManager.shared.activeTheme.colors }
+
     /// Total XP earned from quests today
     let totalXPFromQuests: Int
 
@@ -31,21 +33,21 @@ struct AllQuestsCompleteView: View {
         VStack(spacing: DesignSystem.Spacing.lg) {
             // Celebration emoji
             Text("🎉")
-                .font(.system(size: 64))
+                .font(PixelFont.regular(64))
                 .scaleEffect(emojiScale)
                 .animation(.spring(response: 0.5, dampingFraction: 0.6), value: emojiScale)
 
             // Title
             Text("Daily Quests Complete!")
-                .font(.system(size: DesignSystem.FontSizes.title2, weight: .bold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(PixelFont.bold(DesignSystem.FontSizes.title2))
+                .foregroundColor(tc.textPrimary)
                 .opacity(textOpacity)
                 .animation(.easeOut(duration: 0.4).delay(0.2), value: textOpacity)
 
             // Subtitle
             Text("New quests available tomorrow")
-                .font(.system(size: DesignSystem.FontSizes.callout, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(PixelFont.regular(DesignSystem.FontSizes.callout))
+                .foregroundColor(tc.textSecondary)
                 .opacity(textOpacity)
                 .animation(.easeOut(duration: 0.4).delay(0.3), value: textOpacity)
 
@@ -53,16 +55,16 @@ struct AllQuestsCompleteView: View {
             if totalXPFromQuests > 0 {
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     Image(systemName: "star.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.energy)
+                        .font(PixelFont.bold(16))
+                        .foregroundColor(tc.macroBarCarbs)
 
                     Text("+\(totalXPFromQuests) XP from quests")
-                        .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.energy)
+                        .font(PixelFont.bold(DesignSystem.FontSizes.footnote))
+                        .foregroundColor(tc.macroBarCarbs)
                 }
                 .padding(.horizontal, DesignSystem.Spacing.md)
                 .padding(.vertical, DesignSystem.Spacing.sm)
-                .background(DesignSystem.Colors.energy.opacity(0.15))
+                .background(tc.macroBarCarbs.opacity(0.15))
                 .clipShape(Capsule())
                 .opacity(textOpacity)
                 .animation(.easeOut(duration: 0.4).delay(0.4), value: textOpacity)
@@ -70,7 +72,7 @@ struct AllQuestsCompleteView: View {
         }
         .padding(DesignSystem.Spacing.xl)
         .frame(maxWidth: .infinity)
-        .background(DesignSystem.Colors.cardBackground)
+        .background(tc.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
         .shadow(
             color: DesignSystem.Shadows.card.color,

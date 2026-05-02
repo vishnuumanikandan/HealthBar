@@ -16,10 +16,11 @@ private enum UnitSystem: String, CaseIterable {
 
 // Reusable disclaimer at the bottom of every calculator
 private struct CalculatorDisclaimer: View {
+    private var tc: ThemeColors { SettingsManager.shared.activeTheme.colors }
     var body: some View {
         Text("These are estimates based on scientific formulas. Consult a healthcare professional for personalized advice.")
-            .font(.system(size: DesignSystem.FontSizes.caption))
-            .foregroundColor(DesignSystem.Colors.textTertiary)
+            .font(PixelFont.regular(12))
+            .foregroundColor(tc.textTertiary)
             .multilineTextAlignment(.center)
             .padding(.horizontal, DesignSystem.Spacing.md)
             .padding(.top, DesignSystem.Spacing.sm)
@@ -28,6 +29,7 @@ private struct CalculatorDisclaimer: View {
 
 // Reusable results card container
 private struct ResultCard<Content: View>: View {
+    private var tc: ThemeColors { SettingsManager.shared.activeTheme.colors }
     @ViewBuilder let content: Content
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
@@ -35,32 +37,32 @@ private struct ResultCard<Content: View>: View {
         }
         .padding(DesignSystem.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DesignSystem.Colors.secondaryBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+        .pixelCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.cardBackground)
     }
 }
 
 // Reusable result row
 private struct ResultRow: View {
+    private var tc: ThemeColors { SettingsManager.shared.activeTheme.colors }
     let label: String
     let value: String
     var highlight: Bool = false
     var body: some View {
         HStack {
             Text(label)
-                .font(.system(size: DesignSystem.FontSizes.callout,
-                              weight: highlight ? .semibold : .regular))
-                .foregroundColor(highlight ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
+                .font(highlight ? PixelFont.bold(16) : PixelFont.regular(16))
+                .foregroundColor(highlight ? tc.textPrimary : tc.textSecondary)
             Spacer()
             Text(value)
-                .font(.system(size: DesignSystem.FontSizes.callout, weight: .bold))
-                .foregroundColor(highlight ? DesignSystem.Colors.primary : DesignSystem.Colors.textPrimary)
+                .font(PixelFont.bold(16))
+                .foregroundColor(highlight ? tc.primary : tc.textPrimary)
         }
     }
 }
 
 // Reusable info sheet
 private struct InfoSheet: View {
+    private var tc: ThemeColors { SettingsManager.shared.activeTheme.colors }
     let title: String
     let bodyText: String
     @Environment(\.dismiss) private var dismiss
@@ -68,16 +70,21 @@ private struct InfoSheet: View {
         NavigationStack {
             ScrollView {
                 Text(bodyText)
-                    .font(.system(size: DesignSystem.FontSizes.callout))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(PixelFont.regular(16))
+                    .foregroundColor(tc.textPrimary)
                     .padding(DesignSystem.Spacing.lg)
             }
-            .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
-            .navigationTitle(title)
+            .background(tc.primaryBackground.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(title)
+                        .font(PixelFont.bold(20))
+                        .foregroundColor(tc.textPrimary)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
+                        .font(PixelFont.bold(16))
                 }
             }
         }
@@ -87,6 +94,7 @@ private struct InfoSheet: View {
 
 // Labeled numeric field
 private struct LabeledField: View {
+    private var tc: ThemeColors { SettingsManager.shared.activeTheme.colors }
     let label: String
     let placeholder: String
     @Binding var text: String
@@ -94,15 +102,15 @@ private struct LabeledField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
             Text(label)
-                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(PixelFont.regular(14))
+                .foregroundColor(tc.textSecondary)
             TextField(placeholder, text: $text)
                 .keyboardType(keyboard)
                 .font(.system(size: DesignSystem.FontSizes.body))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .foregroundColor(tc.textPrimary)
                 .padding(DesignSystem.Spacing.md)
-                .background(DesignSystem.Colors.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                .background(tc.cardBackground)
+                .clipShape(PixelCardShape())
         }
     }
 }
@@ -112,6 +120,9 @@ private struct LabeledField: View {
 struct TDEEView: View {
 
     let toolsViewModel: ToolsViewModel
+
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     @State private var units: UnitSystem = .imperial
     @State private var sex: String = "Male"
@@ -183,8 +194,8 @@ struct TDEEView: View {
 
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                     Text("Activity Level")
-                        .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(PixelFont.regular(14))
+                        .foregroundColor(tc.textSecondary)
                     Picker("Activity", selection: $activityIndex) {
                         ForEach(activityLabels.indices, id: \.self) { i in
                             Text(activityLabels[i]).tag(i)
@@ -192,13 +203,13 @@ struct TDEEView: View {
                     }
                     .pickerStyle(.wheel)
                     .frame(height: 120)
-                    .background(DesignSystem.Colors.cardBackground.clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)))
-                    .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                    .background(tc.cardBackground)
+                    .clipShape(PixelCardShape())
                 }
 
                 if let b = bmr, let t = tdee {
                     ResultCard {
-                        Text("Results").font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold)).foregroundColor(DesignSystem.Colors.textTertiary)
+                        Text("Results").font(PixelFont.bold(18)).foregroundColor(tc.textTertiary)
                         ResultRow(label: "Basal Metabolic Rate (BMR)", value: "\(Int(b)) cal/day")
                         Divider()
                         ResultRow(label: "Maintenance (TDEE)", value: "\(Int(t)) cal", highlight: true)
@@ -214,13 +225,17 @@ struct TDEEView: View {
             }
             .padding(DesignSystem.Spacing.lg)
         }
-        .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
-        .navigationTitle("TDEE Calculator")
+        .background(tc.primaryBackground.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("TDEE Calculator")
+                    .font(PixelFont.bold(20))
+                    .foregroundColor(tc.textPrimary)
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { showInfo = true } label: {
-                    Image(systemName: "info.circle").foregroundColor(DesignSystem.Colors.textSecondary)
+                    Image(systemName: "info.circle").foregroundColor(tc.textSecondary)
                 }
             }
         }
@@ -251,6 +266,9 @@ struct TDEEView: View {
 // MARK: - Calculator 2: Protein
 
 struct ProteinView: View {
+
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     @State private var units: UnitSystem = .imperial
     @State private var weightText: String = ""
@@ -313,7 +331,7 @@ struct ProteinView: View {
                 LabeledField(label: units == .imperial ? "Weight (lbs)" : "Weight (kg)", placeholder: units == .imperial ? "175" : "80", text: $weightText)
 
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                    Text("Goal").font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium)).foregroundColor(DesignSystem.Colors.textSecondary)
+                    Text("Goal").font(PixelFont.regular(14)).foregroundColor(tc.textSecondary)
                     Picker("Goal", selection: $goal) {
                         ForEach(goals, id: \.self) { Text($0).tag($0) }
                     }
@@ -321,7 +339,7 @@ struct ProteinView: View {
                 }
 
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                    Text("Activity Level").font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium)).foregroundColor(DesignSystem.Colors.textSecondary)
+                    Text("Activity Level").font(PixelFont.regular(14)).foregroundColor(tc.textSecondary)
                     Picker("Activity", selection: $activityLevel) {
                         ForEach(activityLevels, id: \.self) { Text($0).tag($0) }
                     }
@@ -330,7 +348,7 @@ struct ProteinView: View {
 
                 if let minG = dailyMinG, let maxG = dailyMaxG {
                     ResultCard {
-                        Text("Results").font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold)).foregroundColor(DesignSystem.Colors.textTertiary)
+                        Text("Results").font(PixelFont.bold(18)).foregroundColor(tc.textTertiary)
                         if Int(minG) == Int(maxG) {
                             ResultRow(label: "Daily Protein Target", value: "\(Int(minG))g", highlight: true)
                             ResultRow(label: "Per Meal (÷4)", value: "\(Int(minG / 4))g")
@@ -340,8 +358,8 @@ struct ProteinView: View {
                         }
                         Divider()
                         Text(note)
-                            .font(.system(size: DesignSystem.FontSizes.caption))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .font(PixelFont.regular(12))
+                            .foregroundColor(tc.textSecondary)
                     }
                 }
 
@@ -349,13 +367,17 @@ struct ProteinView: View {
             }
             .padding(DesignSystem.Spacing.lg)
         }
-        .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
-        .navigationTitle("Protein Calculator")
+        .background(tc.primaryBackground.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Protein Calculator")
+                    .font(PixelFont.bold(20))
+                    .foregroundColor(tc.textPrimary)
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { showInfo = true } label: {
-                    Image(systemName: "info.circle").foregroundColor(DesignSystem.Colors.textSecondary)
+                    Image(systemName: "info.circle").foregroundColor(tc.textSecondary)
                 }
             }
         }
@@ -377,6 +399,9 @@ struct ProteinView: View {
 // MARK: - Calculator 3: One Rep Max
 
 struct OneRepMaxView: View {
+
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     @State private var units: UnitSystem = .imperial
     @State private var weightText: String = ""
@@ -411,33 +436,33 @@ struct OneRepMaxView: View {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                     HStack {
                         Text("Reps Performed")
-                            .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .font(PixelFont.regular(14))
+                            .foregroundColor(tc.textSecondary)
                         Spacer()
                         Text("\(reps)")
-                            .font(.system(size: DesignSystem.FontSizes.callout, weight: .bold))
-                            .foregroundColor(reps > 10 ? DesignSystem.Colors.warning : DesignSystem.Colors.textPrimary)
+                            .font(PixelFont.bold(16))
+                            .foregroundColor(reps > 10 ? tc.macroBarFat : tc.textPrimary)
                     }
                     Stepper("", value: $reps, in: 1...12).labelsHidden()
                     if reps > 10 {
-                        Text("⚠️ Accuracy decreases above 10 reps")
-                            .font(.system(size: DesignSystem.FontSizes.caption))
-                            .foregroundColor(DesignSystem.Colors.warning)
+                        Text("Accuracy decreases above 10 reps")
+                            .font(PixelFont.regular(12))
+                            .foregroundColor(tc.macroBarFat)
                     }
                 }
 
                 if let rm = oneRM {
                     ResultCard {
                         Text("Estimated 1RM")
-                            .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                            .foregroundColor(DesignSystem.Colors.textTertiary)
+                            .font(PixelFont.bold(18))
+                            .foregroundColor(tc.textTertiary)
                         Text(String(format: "%.1f", rm) + (units == .imperial ? " lbs" : " kg"))
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                            .foregroundColor(DesignSystem.Colors.primary)
+                            .font(PixelFont.bold(22))
+                            .foregroundColor(tc.primary)
                         Divider()
                         Text("Percentage Table")
-                            .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                            .foregroundColor(DesignSystem.Colors.textTertiary)
+                            .font(PixelFont.bold(18))
+                            .foregroundColor(tc.textTertiary)
                         ForEach(percentages, id: \.pct) { entry in
                             ResultRow(
                                 label: "\(Int(entry.pct * 100))% — \(entry.label)",
@@ -451,13 +476,17 @@ struct OneRepMaxView: View {
             }
             .padding(DesignSystem.Spacing.lg)
         }
-        .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
-        .navigationTitle("One Rep Max")
+        .background(tc.primaryBackground.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("One Rep Max")
+                    .font(PixelFont.bold(20))
+                    .foregroundColor(tc.textPrimary)
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { showInfo = true } label: {
-                    Image(systemName: "info.circle").foregroundColor(DesignSystem.Colors.textSecondary)
+                    Image(systemName: "info.circle").foregroundColor(tc.textSecondary)
                 }
             }
         }
@@ -479,6 +508,9 @@ struct OneRepMaxView: View {
 // MARK: - Calculator 4: Muscle Gain Potential
 
 struct MuscleGainView: View {
+
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     @State private var units: UnitSystem = .imperial
     @State private var sex: String = "Male"
@@ -529,28 +561,28 @@ struct MuscleGainView: View {
 
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                     Text("Training Experience")
-                        .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(PixelFont.regular(14))
+                        .foregroundColor(tc.textSecondary)
                     Picker("Experience", selection: $experience) {
                         ForEach(experienceOptions, id: \.self) { Text($0).tag($0) }
                     }
                     .pickerStyle(.wheel)
                     .frame(height: 100)
-                    .background(DesignSystem.Colors.cardBackground.clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)))
-                    .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                    .background(tc.cardBackground)
+                    .clipShape(PixelCardShape())
                 }
 
                 if let maxMass = maxLeanMass {
                     let unitLabel = units == .imperial ? "lbs" : "kg"
                     let (annMin, annMax) = annualGainRange
                     ResultCard {
-                        Text("Results").font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold)).foregroundColor(DesignSystem.Colors.textTertiary)
+                        Text("Results").font(PixelFont.bold(18)).foregroundColor(tc.textTertiary)
                         ResultRow(label: "Max Natural Lean Mass", value: String(format: "%.1f \(unitLabel)", maxMass), highlight: true)
                         ResultRow(label: "Annual Gain Potential", value: String(format: "%.1f–%.1f \(unitLabel)/year", annMin, annMax))
                         Divider()
                         Text("Genetic variability is significant. These are statistical averages, not guarantees.")
-                            .font(.system(size: DesignSystem.FontSizes.caption))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .font(PixelFont.regular(12))
+                            .foregroundColor(tc.textSecondary)
                     }
                 }
 
@@ -558,13 +590,17 @@ struct MuscleGainView: View {
             }
             .padding(DesignSystem.Spacing.lg)
         }
-        .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
-        .navigationTitle("Muscle Gain Potential")
+        .background(tc.primaryBackground.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Muscle Gain Potential")
+                    .font(PixelFont.bold(20))
+                    .foregroundColor(tc.textPrimary)
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { showInfo = true } label: {
-                    Image(systemName: "info.circle").foregroundColor(DesignSystem.Colors.textSecondary)
+                    Image(systemName: "info.circle").foregroundColor(tc.textSecondary)
                 }
             }
         }
@@ -591,6 +627,9 @@ struct MuscleGainView: View {
 // MARK: - Calculator 5: Creatine
 
 struct CreatineView: View {
+
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     @State private var units: UnitSystem = .imperial
     @State private var weightText: String = ""
@@ -622,21 +661,21 @@ struct CreatineView: View {
                 Toggle(isOn: $useLoadingPhase) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Use Loading Phase")
-                            .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                            .font(PixelFont.regular(16))
+                            .foregroundColor(tc.textPrimary)
                         Text("Saturates muscles faster (5–7 days)")
-                            .font(.system(size: DesignSystem.FontSizes.caption))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .font(PixelFont.regular(12))
+                            .foregroundColor(tc.textSecondary)
                     }
                 }
-                .tint(DesignSystem.Colors.primary)
+                .tint(tc.primary)
                 .padding(DesignSystem.Spacing.md)
-                .background(DesignSystem.Colors.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                .background(tc.cardBackground)
+                .clipShape(PixelCardShape())
 
                 if let maint = maintenanceG {
                     ResultCard {
-                        Text("Results").font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold)).foregroundColor(DesignSystem.Colors.textTertiary)
+                        Text("Results").font(PixelFont.bold(18)).foregroundColor(tc.textTertiary)
                         ResultRow(label: "Maintenance Dose", value: String(format: "%.1fg/day", maint), highlight: true)
                         if useLoadingPhase, let perDose = loadingPerDoseG {
                             Divider()
@@ -646,8 +685,8 @@ struct CreatineView: View {
                         }
                         Divider()
                         Text("Loading is optional. The maintenance dose achieves the same result in 3–4 weeks. Use creatine monohydrate.")
-                            .font(.system(size: DesignSystem.FontSizes.caption))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .font(PixelFont.regular(12))
+                            .foregroundColor(tc.textSecondary)
                     }
                 }
 
@@ -655,13 +694,17 @@ struct CreatineView: View {
             }
             .padding(DesignSystem.Spacing.lg)
         }
-        .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
-        .navigationTitle("Creatine Calculator")
+        .background(tc.primaryBackground.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Creatine Calculator")
+                    .font(PixelFont.bold(20))
+                    .foregroundColor(tc.textPrimary)
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { showInfo = true } label: {
-                    Image(systemName: "info.circle").foregroundColor(DesignSystem.Colors.textSecondary)
+                    Image(systemName: "info.circle").foregroundColor(tc.textSecondary)
                 }
             }
         }
@@ -684,6 +727,9 @@ struct CreatineView: View {
 // MARK: - Calculator 6: Strength Standards
 
 struct StrengthStandardsView: View {
+
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     @State private var units: UnitSystem = .imperial
     @State private var sex: String = "Male"
@@ -730,7 +776,7 @@ struct StrengthStandardsView: View {
                 LabeledField(label: units == .imperial ? "Bodyweight (lbs)" : "Bodyweight (kg)", placeholder: units == .imperial ? "175" : "80", text: $bodyweightText)
 
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                    Text("Lift").font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium)).foregroundColor(DesignSystem.Colors.textSecondary)
+                    Text("Lift").font(PixelFont.regular(14)).foregroundColor(tc.textSecondary)
                     Picker("Lift", selection: $lift) {
                         ForEach(lifts, id: \.self) { Text($0).tag($0) }
                     }
@@ -744,8 +790,8 @@ struct StrengthStandardsView: View {
                     let row = sex == "Male" ? mults[0] : mults[1]
                     ResultCard {
                         Text("Standards for \(lift) (\(sex))")
-                            .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                            .foregroundColor(DesignSystem.Colors.textTertiary)
+                            .font(PixelFont.bold(18))
+                            .foregroundColor(tc.textTertiary)
                         ForEach(levels.indices, id: \.self) { i in
                             let target = bw * row[i]
                             let isCurrent = currentLevelIndex == i
@@ -753,17 +799,17 @@ struct StrengthStandardsView: View {
                                 HStack(spacing: DesignSystem.Spacing.xs) {
                                     if isCurrent {
                                         Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(DesignSystem.Colors.primary)
-                                            .font(.system(size: 14))
+                                            .foregroundColor(tc.primary)
+                                            .font(PixelFont.regular(14))
                                     }
                                     Text(levels[i])
-                                        .font(.system(size: DesignSystem.FontSizes.callout, weight: isCurrent ? .bold : .regular))
-                                        .foregroundColor(isCurrent ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
+                                        .font(isCurrent ? PixelFont.bold(16) : PixelFont.regular(16))
+                                        .foregroundColor(isCurrent ? tc.textPrimary : tc.textSecondary)
                                 }
                                 Spacer()
                                 Text("\(Int(target)) \(units == .imperial ? "lbs" : "kg") (\(String(format: "%.2f", row[i]))×)")
-                                    .font(.system(size: DesignSystem.FontSizes.callout, weight: isCurrent ? .bold : .regular))
-                                    .foregroundColor(isCurrent ? DesignSystem.Colors.primary : DesignSystem.Colors.textPrimary)
+                                    .font(isCurrent ? PixelFont.bold(16) : PixelFont.regular(16))
+                                    .foregroundColor(isCurrent ? tc.primary : tc.textPrimary)
                             }
                         }
                     }
@@ -773,13 +819,17 @@ struct StrengthStandardsView: View {
             }
             .padding(DesignSystem.Spacing.lg)
         }
-        .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
-        .navigationTitle("Strength Standards")
+        .background(tc.primaryBackground.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Strength Standards")
+                    .font(PixelFont.bold(20))
+                    .foregroundColor(tc.textPrimary)
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { showInfo = true } label: {
-                    Image(systemName: "info.circle").foregroundColor(DesignSystem.Colors.textSecondary)
+                    Image(systemName: "info.circle").foregroundColor(tc.textSecondary)
                 }
             }
         }
@@ -810,6 +860,9 @@ private struct BedtimeOption: Identifiable {
 }
 
 struct SleepToolkitView: View {
+
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     @State private var ageText: String = ""
     @State private var wakeTime: Date = {
@@ -859,8 +912,8 @@ struct SleepToolkitView: View {
                 // Sleep Duration Recommender
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
                     Text("Sleep Duration Recommender")
-                        .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .font(PixelFont.bold(18))
+                        .foregroundColor(tc.textPrimary)
                     LabeledField(label: "Age (years)", placeholder: "30", text: $ageText, keyboard: .numberPad)
                     if !ageText.isEmpty {
                         ResultCard {
@@ -869,28 +922,28 @@ struct SleepToolkitView: View {
                     }
                 }
 
-                Divider().background(DesignSystem.Colors.border)
+                Divider().background(tc.primary.opacity(0.3))
 
                 // Bedtime Calculator
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
                     Text("Bedtime Calculator")
-                        .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .font(PixelFont.bold(18))
+                        .foregroundColor(tc.textPrimary)
 
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                         Text("Wake-up Time")
-                            .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .font(PixelFont.regular(14))
+                            .foregroundColor(tc.textSecondary)
                         DatePicker("", selection: $wakeTime, displayedComponents: .hourAndMinute)
                             .labelsHidden()
                             .padding(DesignSystem.Spacing.sm)
-                            .background(DesignSystem.Colors.cardBackground)
-                            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                            .background(tc.cardBackground)
+                            .clipShape(PixelCardShape())
                     }
 
                     Text("Recommended bedtimes (includes 15 min to fall asleep):")
-                        .font(.system(size: DesignSystem.FontSizes.caption))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(PixelFont.regular(12))
+                        .foregroundColor(tc.textSecondary)
 
                     ResultCard {
                         ForEach(bedtimeOptions) { option in
@@ -899,29 +952,29 @@ struct SleepToolkitView: View {
                     }
                 }
 
-                Divider().background(DesignSystem.Colors.border)
+                Divider().background(tc.primary.opacity(0.3))
 
                 // Sleep Tips
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
                     Text("Sleep Tips")
-                        .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .font(PixelFont.bold(18))
+                        .foregroundColor(tc.textPrimary)
 
                     ForEach(tips, id: \.text) { tip in
                         HStack(alignment: .top, spacing: DesignSystem.Spacing.md) {
                             Image(systemName: tip.icon)
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.primary)
+                                .font(PixelFont.bold(16))
+                                .foregroundColor(tc.primary)
                                 .frame(width: 24)
                             Text(tip.text)
-                                .font(.system(size: DesignSystem.FontSizes.callout))
-                                .foregroundColor(DesignSystem.Colors.textPrimary)
+                                .font(PixelFont.regular(16))
+                                .foregroundColor(tc.textPrimary)
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer()
                         }
                         .padding(DesignSystem.Spacing.md)
-                        .background(DesignSystem.Colors.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                        .background(tc.cardBackground)
+                        .clipShape(PixelCardShape())
                     }
                 }
 
@@ -929,13 +982,17 @@ struct SleepToolkitView: View {
             }
             .padding(DesignSystem.Spacing.lg)
         }
-        .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
-        .navigationTitle("Sleep Toolkit")
+        .background(tc.primaryBackground.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Sleep Toolkit")
+                    .font(PixelFont.bold(20))
+                    .foregroundColor(tc.textPrimary)
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { showInfo = true } label: {
-                    Image(systemName: "info.circle").foregroundColor(DesignSystem.Colors.textSecondary)
+                    Image(systemName: "info.circle").foregroundColor(tc.textSecondary)
                 }
             }
         }
@@ -960,6 +1017,9 @@ struct SleepToolkitView: View {
 struct MacroView: View {
 
     let toolsViewModel: ToolsViewModel
+
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeTheme.colors }
 
     @State private var units: UnitSystem = .imperial
     @State private var tdeeText: String = ""
@@ -1024,27 +1084,27 @@ struct MacroView: View {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                     HStack {
                         Text("TDEE (cal/day)")
-                            .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .font(PixelFont.regular(14))
+                            .foregroundColor(tc.textSecondary)
                         if toolsViewModel.lastTDEE != nil && tdeeText.isEmpty {
                             Text("· Auto-filled")
-                                .font(.system(size: DesignSystem.FontSizes.caption))
-                                .foregroundColor(DesignSystem.Colors.primary)
+                                .font(PixelFont.regular(12))
+                                .foregroundColor(tc.primary)
                         }
                     }
                     TextField(toolsViewModel.lastTDEE.map { "\(Int($0))" } ?? "e.g. 2200", text: $tdeeText)
                         .keyboardType(.numberPad)
                         .font(.system(size: DesignSystem.FontSizes.body))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .foregroundColor(tc.textPrimary)
                         .padding(DesignSystem.Spacing.md)
-                        .background(DesignSystem.Colors.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
+                        .background(tc.cardBackground)
+                        .clipShape(PixelCardShape())
                 }
 
                 LabeledField(label: units == .imperial ? "Bodyweight (lbs)" : "Bodyweight (kg)", placeholder: units == .imperial ? "175" : "80", text: $bodyweightText)
 
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                    Text("Goal").font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium)).foregroundColor(DesignSystem.Colors.textSecondary)
+                    Text("Goal").font(PixelFont.regular(14)).foregroundColor(tc.textSecondary)
                     Picker("Goal", selection: $goal) {
                         ForEach(goals, id: \.self) { Text($0).tag($0) }
                     }
@@ -1052,7 +1112,7 @@ struct MacroView: View {
                 }
 
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                    Text("Diet Style").font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium)).foregroundColor(DesignSystem.Colors.textSecondary)
+                    Text("Diet Style").font(PixelFont.regular(14)).foregroundColor(tc.textSecondary)
                     Picker("Diet Style", selection: $dietStyle) {
                         ForEach(dietStyles, id: \.self) { Text($0).tag($0) }
                     }
@@ -1061,7 +1121,7 @@ struct MacroView: View {
 
                 if let r = result {
                     ResultCard {
-                        Text("Daily Macros").font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold)).foregroundColor(DesignSystem.Colors.textTertiary)
+                        Text("Daily Macros").font(PixelFont.bold(18)).foregroundColor(tc.textTertiary)
                         ResultRow(label: "Target Calories", value: "\(Int(r.targetCal)) cal")
                         Divider()
                         ResultRow(label: "Protein", value: "\(Int(r.proteinG))g (\(Int(r.proteinCal)) cal)", highlight: true)
@@ -1073,25 +1133,25 @@ struct MacroView: View {
                         if total > 0 {
                             GeometryReader { geo in
                                 HStack(spacing: 2) {
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(DesignSystem.Colors.primary)
+                                    Rectangle()
+                                        .fill(tc.primary)
                                         .frame(width: geo.size.width * CGFloat(r.proteinCal / total))
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(Color.orange)
+                                    Rectangle()
+                                        .fill(tc.macroBarCarbs)
                                         .frame(width: geo.size.width * CGFloat(r.carbsCal / total))
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(Color.purple)
+                                    Rectangle()
+                                        .fill(tc.macroBarFat)
                                         .frame(width: max(2, geo.size.width * CGFloat(r.fatCal / total)))
                                 }
                             }
                             .frame(height: 12)
                         }
                         HStack(spacing: DesignSystem.Spacing.md) {
-                            macroLegend(color: DesignSystem.Colors.primary, label: "Protein")
-                            macroLegend(color: .orange,                     label: "Carbs")
-                            macroLegend(color: .purple,                     label: "Fat")
+                            macroLegend(color: tc.primary, label: "Protein")
+                            macroLegend(color: tc.macroBarCarbs,             label: "Carbs")
+                            macroLegend(color: tc.macroBarFat,               label: "Fat")
                         }
-                        .font(.system(size: DesignSystem.FontSizes.caption))
+                        .font(PixelFont.regular(12))
                     }
                 }
 
@@ -1099,13 +1159,17 @@ struct MacroView: View {
             }
             .padding(DesignSystem.Spacing.lg)
         }
-        .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
-        .navigationTitle("Macro Calculator")
+        .background(tc.primaryBackground.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Macro Calculator")
+                    .font(PixelFont.bold(20))
+                    .foregroundColor(tc.textPrimary)
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { showInfo = true } label: {
-                    Image(systemName: "info.circle").foregroundColor(DesignSystem.Colors.textSecondary)
+                    Image(systemName: "info.circle").foregroundColor(tc.textSecondary)
                 }
             }
         }
@@ -1132,8 +1196,8 @@ struct MacroView: View {
 
     private func macroLegend(color: Color, label: String) -> some View {
         HStack(spacing: 4) {
-            RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 10, height: 10)
-            Text(label).foregroundColor(DesignSystem.Colors.textSecondary)
+            Rectangle().fill(color).frame(width: 10, height: 10)
+            Text(label).foregroundColor(tc.textSecondary)
         }
     }
 }
