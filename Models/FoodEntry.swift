@@ -48,6 +48,15 @@ final class FoodEntry {
     /// Timestamp when this entry was created (for sorting and audit purposes)
     var createdAt: Date
 
+    /// Scopes this record to an authenticated user.
+    /// Defaults to "legacy" so pre-migration records remain valid without crashing.
+    /// Legacy records are invisible to all real authenticated users — this is intentional.
+    ///
+    /// TODO: Replace currentUserEmail with a stable Firebase UID once Firebase is
+    /// integrated in Phase 3. Never persist this as a permanent identifier — always
+    /// read it live from AuthService at query time.
+    var userId: String = "legacy"
+
     /// Whether this food is marked as a favorite for quick re-logging
     /// When toggled, applies to ALL entries with matching FoodFingerprint
     /// Uses inline default for SwiftData lightweight migration support
@@ -84,6 +93,16 @@ final class FoodEntry {
 
     /// Potassium content in milligrams (optional)
     var potassium: Double? = nil
+
+    // MARK: - Meal Bundle (for logging saved meal templates)
+
+    /// Shared UUID string across all FoodEntries logged from the same SavedMeal in one session.
+    /// nil for individually-logged foods.
+    var mealBundleId: String? = nil
+
+    /// Display name of the SavedMeal this entry belongs to.
+    /// nil for individually-logged foods.
+    var mealBundleName: String? = nil
 
     /// Initializes a new food entry with complete nutritional data
     /// - Parameters:

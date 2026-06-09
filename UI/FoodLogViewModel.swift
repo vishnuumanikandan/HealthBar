@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import ImageIO
 
 /// ViewModel for the Food Log feature
 ///
@@ -18,11 +19,15 @@ final class FoodLogViewModel {
 
     // MARK: - Properties
 
-    /// Reference to the app coordinator for data operations
-    private let coordinator: AppCoordinator
+    /// Reference to the app coordinator for data operations.
+    /// Internal so FoodDatabaseViewModel can share the same coordinator.
+    let coordinator: AppCoordinator
 
     /// Barcode service for nutrition lookup
     private let barcodeService: BarcodeService
+
+    /// AI food recognition service for natural-language meal logging
+    private let aiService: AIFoodRecognitionService
 
     // MARK: - Data State
 
@@ -49,31 +54,31 @@ final class FoodLogViewModel {
     /// Whether toast is currently visible
     var showToast: Bool = false
 
-    // MARK: - Computed Totals (Raw Data Only)
+    // MARK: - Computed Totals (always reflects selected date via displayedEntries)
 
-    /// Total calories consumed today
+    /// Total calories for the currently viewed date
     var totalCalories: Int {
-        todaysSummary?.totalCalories ?? 0
+        displayedEntries.reduce(0) { $0 + $1.calories }
     }
 
-    /// Total protein consumed today (in grams)
+    /// Total protein for the currently viewed date (in grams)
     var totalProtein: Double {
-        todaysSummary?.totalProtein ?? 0.0
+        displayedEntries.reduce(0.0) { $0 + $1.protein }
     }
 
-    /// Total carbs consumed today (in grams)
+    /// Total carbs for the currently viewed date (in grams)
     var totalCarbs: Double {
-        todaysSummary?.totalCarbs ?? 0.0
+        displayedEntries.reduce(0.0) { $0 + $1.carbs }
     }
 
-    /// Total fat consumed today (in grams)
+    /// Total fat for the currently viewed date (in grams)
     var totalFat: Double {
-        todaysSummary?.totalFat ?? 0.0
+        displayedEntries.reduce(0.0) { $0 + $1.fat }
     }
 
-    /// Total toxin score for today
+    /// Total toxin score for the currently viewed date
     var totalToxinScore: Int {
-        todaysSummary?.totalToxinScore ?? 0
+        displayedEntries.reduce(0) { $0 + $1.toxinScore }
     }
 
     // MARK: - Progress Calculations
@@ -104,11 +109,38 @@ final class FoodLogViewModel {
 
     /// Formatted calorie text for center of ring
     var calorieText: String {
-        guard let goal = currentGoal else {
-            return "\(totalCalories)"
-        }
-        return "\(totalCalories)\n/ \(goal.calorieTarget)"
+        "\(totalCalories)"
     }
+
+    // MARK: - Date Navigation State
+
+    /// The date currently being viewed (start of day)
+    var selectedDate: Date = Calendar.current.startOfDay(for: Date())
+
+    /// Entries displayed for the currently viewed date
+    var displayedEntries: [FoodEntry] = []
+
+    /// Loading state for non-today date entries
+    var isLoadingDateEntries: Bool = false
+
+    // MARK: - Meal Section & Sheet Chain State
+
+    /// The meal type context when opening the add food flow from a section
+    var pendingMealType: MealType = .uncategorized
+
+    /// Controls visibility of the 3-choice AddFoodChoiceSheet
+    var showingAddFoodChoice: Bool = false
+
+    /// Controls visibility of the Food Database full-screen sheet
+    var showingFoodDatabase: Bool = false
+
+    /// Bridge flag: when true, FoodLogView opens AddFoodFormView after a sheet dismiss animation
+    var shouldOpenAddFoodForm: Bool = false
+
+    // MARK: - Form Meal Type
+
+    /// The meal type used when submitting the add food form
+    var formMealType: MealType = .uncategorized
 
     // MARK: - UI State
 
@@ -117,6 +149,9 @@ final class FoodLogViewModel {
 
     /// Controls visibility of add food sheet
     var showingAddFood: Bool = false
+
+    /// When true, the next addFoodEntry call also persists the food to My Foods (CustomFood)
+    var pendingSaveToMyFoods: Bool = false
 
     /// Error message to display
     var errorMessage: String?
@@ -248,15 +283,61 @@ final class FoodLogViewModel {
     /// Show edit sheet
     var showingEditSheet: Bool = false
 
+    // MARK: - AI Recognition State
+
+    /// Controls visibility of the DescribeMealView sheet
+    var showingDescribeMeal: Bool = false
+
+    /// User's typed meal description
+    var mealDescriptionInput: String = ""
+
+    /// Whether an AI recognition request is in flight
+    var isRecognizing: Bool = false
+
+    /// Error or clarification message from the last recognition attempt
+    var recognitionError: String? = nil
+
+    /// Items returned by the AI recognition service (source of truth before review)
+    var recognizedItems: [RecognizedFoodItem] = []
+
+    /// Controls visibility of the RecognizedFoodsReviewView sheet
+    var showingRecognitionReview: Bool = false
+
+    /// In-flight recognition task (for cancellation)
+    private var recognitionTask: Task<Void, Never>? = nil
+
+    /// Timestamp of the last recognition request start (for rate limiting)
+    private var lastRecognitionStart: Date? = nil
+
+    // MARK: - Describe Meal Photo State (isolated from manual AddFoodForm photo)
+
+    /// Finalized JPEG data for the describe-meal photo (ready for API + persistence)
+    var describeMealPhotoData: Data? = nil
+
+    /// Whether photo is being processed (downsample + compress)
+    var isAttachingDescribeMealPhoto: Bool = false
+
+    /// Controls camera picker for describe-meal flow
+    var showingDescribeMealCameraPicker: Bool = false
+
+    /// Controls photo library picker for describe-meal flow
+    var showingDescribeMealPhotoPicker: Bool = false
+
     // MARK: - Initialization
 
     /// Initializes the view model with an app coordinator
     /// - Parameters:
     ///   - coordinator: The app coordinator for business logic
     ///   - barcodeService: Service for barcode nutrition lookup (defaults to new instance)
-    init(coordinator: AppCoordinator, barcodeService: BarcodeService = BarcodeService()) {
+    ///   - aiService: AI food recognition service (defaults to new instance)
+    init(
+        coordinator: AppCoordinator,
+        barcodeService: BarcodeService = BarcodeService(),
+        aiService: AIFoodRecognitionService = AIFoodRecognitionService()
+    ) {
         self.coordinator = coordinator
         self.barcodeService = barcodeService
+        self.aiService = aiService
     }
 
     // MARK: - Data Loading
@@ -274,6 +355,11 @@ final class FoodLogViewModel {
             todaysSummary = summary
             todaysEntries = summary.entries
             currentGoal = summary.goal
+
+            // Keep displayedEntries in sync when viewing today
+            if isViewingToday {
+                displayedEntries = todaysEntries
+            }
 
             isLoading = false
         } catch {
@@ -331,8 +417,10 @@ final class FoodLogViewModel {
                 carbs: carbs,
                 fat: fat,
                 toxinScore: toxinScore,
+                date: selectedDate,
                 photoData: photoData,
                 barcodeUPC: barcodeUPC,
+                mealType: formMealType,
                 fiber: fiber,
                 sugar: sugar,
                 sodium: sodium,
@@ -345,8 +433,44 @@ final class FoodLogViewModel {
             lastAddedFoodName = name
             lastEarnedXP = result.xpEarned
 
-            // Reload data to get updated summary
+            // Persist to My Foods when coming from MyFoods "Add New Food" button
+            if pendingSaveToMyFoods {
+                pendingSaveToMyFoods = false
+                let customFood = CustomFood(
+                    name: name,
+                    calories: calories,
+                    protein: protein,
+                    carbs: carbs,
+                    fat: fat,
+                    toxinScore: toxinScore,
+                    fiber: fiber,
+                    sugar: sugar,
+                    sodium: sodium
+                )
+                try? await coordinator.addCustomFood(customFood)
+            }
+
+            // Persist barcode-scanned foods to My Foods automatically
+            if let _ = barcodeUPC {
+                let customFood = CustomFood(
+                    name: name,
+                    calories: calories,
+                    protein: protein,
+                    carbs: carbs,
+                    fat: fat,
+                    toxinScore: toxinScore,
+                    fiber: fiber,
+                    sugar: sugar,
+                    sodium: sodium
+                )
+                try? await coordinator.addCustomFood(customFood)
+            }
+
+            // Reload data — always refresh today's summary; if viewing another date also reload those entries
             await loadTodaysData()
+            if !isViewingToday {
+                await loadEntriesForSelectedDate()
+            }
 
             // Show success message
             showSuccessMessage = true
@@ -402,8 +526,9 @@ final class FoodLogViewModel {
             }
         }
 
-        // Remove from UI list immediately
+        // Remove from UI lists immediately
         todaysEntries.removeAll { $0.id == entry.id }
+        displayedEntries.removeAll { $0.id == entry.id }
 
         // Store for potential undo
         recentlyDeleted = entry
@@ -475,6 +600,8 @@ final class FoodLogViewModel {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 todaysEntries.append(entry)
                 todaysEntries.sort { $0.date > $1.date }
+                displayedEntries.append(entry)
+                displayedEntries.sort { $0.date > $1.date }
             }
 
             // Success feedback
@@ -636,6 +763,97 @@ final class FoodLogViewModel {
         todaysEntries.isEmpty
     }
 
+    // MARK: - Date Navigation Computed Properties
+
+    /// Whether the selected date is today
+    var isViewingToday: Bool {
+        Calendar.current.isDateInToday(selectedDate)
+    }
+
+    /// Whether the selected date is in the future
+    var isViewingFuture: Bool {
+        selectedDate > Calendar.current.startOfDay(for: Date())
+    }
+
+    /// Whether the user can navigate back (limit: 7 days)
+    var canNavigateBack: Bool {
+        let limit = Calendar.current.date(byAdding: .day, value: -7, to: Calendar.current.startOfDay(for: Date()))!
+        return selectedDate > limit
+    }
+
+    /// Whether the user can navigate forward (limit: 4 days ahead)
+    var canNavigateForward: Bool {
+        let limit = Calendar.current.date(byAdding: .day, value: 4, to: Calendar.current.startOfDay(for: Date()))!
+        return selectedDate < limit
+    }
+
+    /// Display label for the date navigator: "Today", "Yesterday", or "Mon, Feb 10"
+    var selectedDateDisplayLabel: String {
+        let cal = Calendar.current
+        if cal.isDateInToday(selectedDate) { return "Today" }
+        if cal.isDateInYesterday(selectedDate) { return "Yesterday" }
+        let f = DateFormatter()
+        f.dateFormat = "EEE, MMM d"
+        return f.string(from: selectedDate)
+    }
+
+    /// Entries for a specific MealType within the currently displayed date
+    func entries(for mealType: MealType) -> [FoodEntry] {
+        displayedEntries.filter { $0.mealType == mealType }
+    }
+
+    /// Unique manually-entered foods (no barcode) for the Food Database My Foods tab
+    var myFoods: [FoodEntry] {
+        recentFoods.filter { $0.barcodeUPC == nil || $0.barcodeUPC!.isEmpty }
+    }
+
+    // MARK: - Date Navigation Methods
+
+    /// Navigates to the previous day (up to 7 days back)
+    func navigateToPreviousDay() {
+        guard canNavigateBack else { return }
+        selectedDate = Calendar.current.date(byAdding: .day, value: -1, to: selectedDate)!
+        Task { await loadEntriesForSelectedDate() }
+    }
+
+    /// Navigates to the next day (up to 4 days ahead)
+    func navigateToNextDay() {
+        guard canNavigateForward else { return }
+        selectedDate = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate)!
+        Task { await loadEntriesForSelectedDate() }
+    }
+
+    /// Loads entries for the currently selected date.
+    /// If today: syncs from todaysEntries. Otherwise fetches from coordinator.
+    func loadEntriesForSelectedDate() async {
+        if isViewingToday {
+            displayedEntries = todaysEntries
+            return
+        }
+        if isViewingFuture {
+            displayedEntries = []
+            return
+        }
+        isLoadingDateEntries = true
+        displayedEntries = (try? await coordinator.getEntriesForDate(selectedDate)) ?? []
+        isLoadingDateEntries = false
+    }
+
+    /// Opens the 3-choice AddFood sheet pre-configured for a meal section
+    func openAddFoodChoice(for mealType: MealType) {
+        pendingMealType = mealType
+        formMealType = mealType
+        showingAddFoodChoice = true
+    }
+
+    /// Opens AddFoodFormView after a 400ms delay (allows sheet dismiss animation to complete)
+    func openAddFoodFormAfterDelay() {
+        Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            shouldOpenAddFoodForm = true
+        }
+    }
+
     // MARK: - Form Management
 
     /// Resets all form fields to their default values
@@ -646,6 +864,7 @@ final class FoodLogViewModel {
         formCarbs = ""
         formFat = ""
         formToxinScore = 30.0
+        formMealType = .uncategorized
         formValidationErrors = [:]
         isSubmittingForm = false
 
@@ -1099,7 +1318,7 @@ final class FoodLogViewModel {
         }
 
         do {
-            let result = try await coordinator.quickLogFood(entry)
+            let result = try await coordinator.quickLogFood(entry, mealType: .uncategorized)
 
             // Haptic feedback
             #if os(iOS)
@@ -1156,6 +1375,61 @@ final class FoodLogViewModel {
         }
     }
 
+    /// Quick-logs a food entry to a specific date and meal type (used by Food Database)
+    func quickLog(_ entry: FoodEntry, date: Date, mealType: MealType) async {
+        // Finalize any pending undo first
+        if let pending = recentlyDeleted {
+            deletionTask?.cancel()
+            if !isQuickLogUndo {
+                await permanentlyDelete(pending)
+            }
+            recentlyDeleted = nil
+            deletionTask = nil
+        }
+
+        do {
+            let result = try await coordinator.quickLogFood(entry, date: date, mealType: mealType)
+
+            #if os(iOS)
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+            #endif
+
+            recentlyDeleted = result.entry
+            isQuickLogUndo = true
+            undoMessage = "\(entry.name) logged"
+            showUndoToast = true
+
+            // Reload to reflect the new entry
+            await loadTodaysData()
+            if !isViewingToday {
+                await loadEntriesForSelectedDate()
+            }
+
+            if result.xpEarned > 0 { lastEarnedXP = result.xpEarned }
+
+            deletionTask = Task {
+                do {
+                    try await Task.sleep(for: .seconds(5))
+                    if !Task.isCancelled {
+                        await MainActor.run {
+                            showUndoToast = false
+                            recentlyDeleted = nil
+                            deletionTask = nil
+                            isQuickLogUndo = false
+                        }
+                    }
+                } catch {}
+            }
+        } catch {
+            #if os(iOS)
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.error)
+            #endif
+            showToastMessage("Couldn't log — try again")
+        }
+    }
+
     /// Toggles favorite status for a food
     ///
     /// Applies to ALL entries with matching fingerprint.
@@ -1188,11 +1462,292 @@ final class FoodLogViewModel {
         entry.isFavorite
     }
 
+    // MARK: - Bundle Operations
+
+    /// Deletes all food entries belonging to the given bundle.
+    func deleteBundle(bundleId: String) async {
+        let bundleEntries = displayedEntries.filter { $0.mealBundleId == bundleId }
+        for entry in bundleEntries {
+            try? await coordinator.deleteFoodEntry(entry)
+        }
+        await loadTodaysData()
+        if !isViewingToday {
+            await loadEntriesForSelectedDate()
+        }
+        #if os(iOS)
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+        #endif
+    }
+
+    // MARK: - Drag and Drop
+
+    /// Reassigns a food entry to a new meal type (used for drag-and-drop).
+    func updateMealType(of entry: FoodEntry, to mealType: MealType) async {
+        do {
+            try await coordinator.updateMealType(of: entry, to: mealType)
+            await loadTodaysData()
+            if !isViewingToday {
+                await loadEntriesForSelectedDate()
+            }
+            #if os(iOS)
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+            #endif
+        } catch {
+            showToastMessage("Couldn't move item")
+        }
+    }
+
+    // MARK: - AI Meal Recognition
+
+    /// Opens the DescribeMealView sheet, pre-configured with the pending meal type.
+    func openDescribeMeal() {
+        formMealType = pendingMealType
+        mealDescriptionInput = ""
+        recognitionError = nil
+        recognizedItems = []
+        isRecognizing = false
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        describeMealPhotoData = nil
+        isAttachingDescribeMealPhoto = false
+        showingDescribeMeal = true
+    }
+
+    /// Sends the meal description (and optional photo) to the AI recognition service.
+    ///
+    /// Request lifecycle rules:
+    /// - Only one request active at a time (cancels prior).
+    /// - Minimum 1s between request starts (rate gate).
+    /// - Results are discarded if the task is cancelled or the sheet closed.
+    func recognizeMeal() async {
+        let trimmed = mealDescriptionInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasText = !trimmed.isEmpty
+        let hasImage = describeMealPhotoData != nil
+        guard hasText || hasImage else { return }
+
+        // Rate gate: ignore if less than 1s since last start
+        if let lastStart = lastRecognitionStart, Date().timeIntervalSince(lastStart) < 1.0 {
+            return
+        }
+
+        // Cancel any prior in-flight request
+        recognitionTask?.cancel()
+
+        lastRecognitionStart = Date()
+        isRecognizing = true
+        recognitionError = nil
+
+        // Capture photo data before entering the task (avoid cross-actor access)
+        let imageData = describeMealPhotoData
+
+        let task = Task {
+            defer {
+                if !Task.isCancelled {
+                    isRecognizing = false
+                }
+                recognitionTask = nil
+            }
+
+            do {
+                let items = try await aiService.recognize(
+                    description: hasText ? trimmed : nil,
+                    imageData: imageData
+                )
+
+                // Guard: only apply results if not cancelled and sheet still open
+                guard !Task.isCancelled, showingDescribeMeal else { return }
+
+                recognizedItems = items
+
+                // Close input sheet, then open review after animation
+                showingDescribeMeal = false
+                try await Task.sleep(for: .milliseconds(400))
+
+                guard !Task.isCancelled else { return }
+                showingRecognitionReview = true
+
+            } catch is CancellationError {
+                print("[AIFoodRecognition] Request cancelled")
+            } catch let error as AIFoodRecognitionError {
+                guard !Task.isCancelled, showingDescribeMeal else { return }
+                recognitionError = error.userMessage
+            } catch {
+                guard !Task.isCancelled, showingDescribeMeal else { return }
+                recognitionError = "Something went wrong. Try again or add food manually."
+            }
+        }
+
+        recognitionTask = task
+    }
+
+    /// Cancels any in-flight AI recognition request and resets loading state.
+    func cancelRecognition() {
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        isRecognizing = false
+        describeMealPhotoData = nil
+    }
+
+    // MARK: - Describe Meal Photo Handling
+
+    /// Processes an image for the describe-meal flow using an off-MainActor pipeline:
+    /// 1. Downsample during decode (longest edge ≤ 1568px) — never fully decodes original.
+    /// 2. Normalize orientation (physically rotate pixels upright).
+    /// 3. Iteratively compress to JPEG < 1MB.
+    ///
+    /// Only the final JPEG `Data` is published to `describeMealPhotoData` on MainActor.
+    func attachDescribeMealPhoto(_ image: UIImage) async {
+        isAttachingDescribeMealPhoto = true
+
+        do {
+            let jpegData = try await Self.processImageForRecognition(image)
+            describeMealPhotoData = jpegData
+            print("[AIFoodRecognition] Photo attached — \(jpegData.count) bytes")
+
+            #if os(iOS)
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+            #endif
+        } catch {
+            print("[AIFoodRecognition] Photo processing failed: \(error)")
+            recognitionError = "Couldn't process the photo. You can still analyze with text."
+            describeMealPhotoData = nil
+        }
+
+        isAttachingDescribeMealPhoto = false
+    }
+
+    /// Clears the describe-meal photo.
+    func clearDescribeMealPhoto() {
+        describeMealPhotoData = nil
+
+        #if os(iOS)
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
+        #endif
+    }
+
+    /// Off-MainActor image processing pipeline.
+    /// Downsample → normalize orientation → JPEG compress to < 1MB.
+    private static nonisolated func processImageForRecognition(_ image: UIImage) throws -> Data {
+        let maxDimension: CGFloat = 1568
+        let maxBytes = 1_000_000
+
+        // Step 1: Get JPEG data from the UIImage to create a CGImageSource for downsampling.
+        // This avoids holding the full-resolution decoded bitmap.
+        guard let sourceData = image.jpegData(compressionQuality: 1.0) else {
+            throw ImageProcessingError.encodingFailed
+        }
+
+        guard let source = CGImageSourceCreateWithData(sourceData as CFData, nil) else {
+            throw ImageProcessingError.encodingFailed
+        }
+
+        // Determine if downsampling is needed
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true, // normalizes orientation
+            kCGImageSourceThumbnailMaxPixelSize: maxDimension
+        ]
+
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            throw ImageProcessingError.encodingFailed
+        }
+
+        // Step 2: The thumbnail is already orientation-normalized via kCGImageSourceCreateThumbnailWithTransform.
+        // Create a UIImage from the CGImage (orientation .up since pixels are physically rotated).
+        let normalizedImage = UIImage(cgImage: cgImage, scale: 1.0, orientation: .up)
+
+        // Step 3: Iterative JPEG compression to < 1MB
+        var quality: CGFloat = 0.7
+        guard var data = normalizedImage.jpegData(compressionQuality: quality) else {
+            throw ImageProcessingError.encodingFailed
+        }
+
+        while data.count > maxBytes && quality > 0.1 {
+            quality -= 0.1
+            if let compressed = normalizedImage.jpegData(compressionQuality: quality) {
+                data = compressed
+            } else {
+                break
+            }
+        }
+
+        guard data.count <= maxBytes else {
+            throw ImageProcessingError.tooLarge
+        }
+
+        return data
+    }
+
+    private enum ImageProcessingError: Error {
+        case encodingFailed
+        case tooLarge
+    }
+
+    /// Logs the reviewed/edited recognized items through the existing addFoodEntry path.
+    ///
+    /// Each included item becomes one `FoodEntry` with `toxinScore: 30` (default)
+    /// and `mealType` from `formMealType`. When a describe-meal photo was used,
+    /// it is attached to every entry created from this recognition.
+    /// - Parameter items: The reviewed items to log.
+    func logRecognizedItems(_ items: [RecognizedFoodItem]) async {
+        guard !isSubmittingForm else { return }
+        isSubmittingForm = true
+
+        // Capture photo data for logging (attach meal photo to each entry)
+        let mealPhoto = describeMealPhotoData
+
+        var totalXP = 0
+        var loggedCount = 0
+
+        for item in items {
+            do {
+                let result = try await coordinator.addFoodEntry(
+                    name: item.name,
+                    calories: item.calories,
+                    protein: item.protein,
+                    carbs: item.carbs,
+                    fat: item.fat,
+                    toxinScore: 30,
+                    date: selectedDate,
+                    photoData: mealPhoto,
+                    mealType: formMealType
+                )
+                totalXP += result.xpEarned
+                loggedCount += 1
+            } catch {
+                print("[AIFoodRecognition] Failed to log '\(item.name)': \(error)")
+            }
+        }
+
+        isSubmittingForm = false
+
+        // Close review sheet and clear state
+        showingRecognitionReview = false
+        recognizedItems = []
+        describeMealPhotoData = nil
+
+        // Refresh data
+        await loadTodaysData()
+        if !isViewingToday {
+            await loadEntriesForSelectedDate()
+        }
+
+        // Show success toast
+        if loggedCount > 0 {
+            let xpText = totalXP > 0 ? " (+\(totalXP) XP)" : ""
+            showToastMessage("\(loggedCount) item\(loggedCount == 1 ? "" : "s") logged\(xpText)")
+        }
+    }
+
     // MARK: - Toast Management
 
     /// Shows a toast message that auto-dismisses after 1.5 seconds
     /// - Parameter message: The message to display
-    private func showToastMessage(_ message: String) {
+    func showToastMessage(_ message: String) {
         toastMessage = message
         showToast = true
 

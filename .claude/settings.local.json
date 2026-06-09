@@ -6,7 +6,19 @@
       "Bash(swift build:*)",
       "Bash(xcrun simctl shutdown:*)",
       "Bash(xcrun simctl erase:*)",
-      "Bash(xcodebuild:*)"
+      "Bash(xcodebuild:*)",
+      "Bash(awk 'NR>=263,NR<=420' /Users/vishnumanikandan/Desktop/repos/HealthBar/HealthBar.xcodeproj/project.pbxproj)",
+      "Bash(cat \"/Users/vishnumanikandan/Downloads/AppIcons \\(1\\)/Assets.xcassets/AppIcon.appiconset/Contents.json\")",
+      "Bash(python3 -c \":*)",
+      "Bash(unzip -o -j /Users/vishnumanikandan/Downloads/Silkscreen.zip \"Silkscreen-Regular.ttf\" \"Silkscreen-Bold.ttf\" -d /Users/vishnumanikandan/Desktop/repos/HealthBar/HealthBar/Resources/Fonts/)",
+      "Bash(xcrun simctl list devices available)",
+      "Bash(pip3 install fonttools)",
+      "Bash(plutil -p /Users/vishnumanikandan/Library/Developer/Xcode/DerivedData/HealthBar-crijuhrcpcqglteqynufghkgduiw/Build/Products/Debug-iphonesimulator/HealthBar1.app/Info.plist)",
+      "Bash(ls /Users/vishnumanikandan/Desktop/repos/HealthBar/HealthBar/*Info*)",
+      "Bash(ls /Users/vishnumanikandan/Desktop/repos/HealthBar/*Info*)",
+      "Bash(__NEW_LINE_426470e21d6d0964__ echo \"\")",
+      "Skill(impeccable)",
+      "Skill(impeccable:*)"
     ]
   }
 }

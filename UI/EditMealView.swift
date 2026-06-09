@@ -32,6 +32,10 @@ struct EditMealView: View {
     /// Dismiss action
     @Environment(\.dismiss) private var dismiss
 
+    /// Theme support
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
     // MARK: - Form State
 
     @State private var foodName: String = ""
@@ -81,8 +85,8 @@ struct EditMealView: View {
                     VStack(spacing: DesignSystem.Spacing.md) {
                         HStack {
                             Text("Nutrition Info")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(DesignSystem.Colors.textPrimary)
+                                .font(AppFont.bold(18))
+                                .foregroundColor(tc.textPrimary)
                             Spacer()
                         }
 
@@ -90,7 +94,7 @@ struct EditMealView: View {
                         numberInputField(
                             title: "Calories",
                             icon: "flame.fill",
-                            iconColor: DesignSystem.Colors.energy,
+                            iconColor: tc.macroBarCarbs,
                             placeholder: "0",
                             text: $calories,
                             unit: "cal",
@@ -101,7 +105,7 @@ struct EditMealView: View {
                         numberInputField(
                             title: "Protein",
                             icon: "leaf.fill",
-                            iconColor: DesignSystem.Colors.primary,
+                            iconColor: tc.primary,
                             placeholder: "0",
                             text: $protein,
                             unit: "g",
@@ -112,7 +116,7 @@ struct EditMealView: View {
                         numberInputField(
                             title: "Carbs",
                             icon: "flame.fill",
-                            iconColor: DesignSystem.Colors.warning,
+                            iconColor: tc.macroBarFat,
                             placeholder: "0",
                             text: $carbs,
                             unit: "g",
@@ -123,7 +127,7 @@ struct EditMealView: View {
                         numberInputField(
                             title: "Fat",
                             icon: "drop.fill",
-                            iconColor: DesignSystem.Colors.secondary,
+                            iconColor: tc.primary,
                             placeholder: "0",
                             text: $fat,
                             unit: "g",
@@ -142,7 +146,7 @@ struct EditMealView: View {
                 }
                 .padding(DesignSystem.Spacing.lg)
             }
-            .background(DesignSystem.Colors.primaryBackground)
+            .background(tc.primaryBackground)
             .navigationTitle("Edit Meal")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -194,22 +198,23 @@ struct EditMealView: View {
     private var headerSection: some View {
         VStack(spacing: DesignSystem.Spacing.sm) {
             ZStack {
-                Circle()
-                    .fill(DesignSystem.Colors.secondary.opacity(0.15))
+                AdaptiveCardShapeStyle()
+                    .fill(DesignSystem.Colors.adaptiveGradientFrom(tc.primary))
                     .frame(width: DesignSystem.Sizes.thumbnailLarge, height: DesignSystem.Sizes.thumbnailLarge)
+                    .overlay(AdaptiveCardShapeStyle().stroke(tc.primary.adjustedBrightness(-0.2), lineWidth: 2))
 
                 Image(systemName: "pencil.circle.fill")
-                    .font(.system(size: 40, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.secondary)
+                    .font(AppFont.regular(40))
+                    .foregroundColor(.white)
             }
 
             Text("Edit Meal")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(AppFont.bold(24))
+                .foregroundColor(tc.textPrimary)
 
             Text("Update the details for this entry")
-                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(AppFont.regular(DesignSystem.FontSizes.footnote))
+                .foregroundColor(tc.textSecondary)
                 .multilineTextAlignment(.center)
         }
         .padding(.bottom, DesignSystem.Spacing.md)
@@ -219,8 +224,8 @@ struct EditMealView: View {
     private var photoCaptureSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
             Text("Photo (Optional)")
-                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(AppFont.bold(DesignSystem.FontSizes.footnote))
+                .foregroundColor(tc.textSecondary)
 
             Button {
                 showingPhotoSourceSheet = true
@@ -233,11 +238,7 @@ struct EditMealView: View {
                             .scaledToFill()
                             .frame(height: 200)
                             .frame(maxWidth: .infinity)
-                            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                                    .strokeBorder(DesignSystem.Colors.primary.opacity(0.25), lineWidth: 1.5)
-                            )
+                            .adaptiveCard(borderColor: tc.primary.opacity(0.25), fillColor: .clear)
                             .overlay(
                                 // Remove button in top-right corner
                                 VStack {
@@ -247,10 +248,10 @@ struct EditMealView: View {
                                             removePhoto()
                                         } label: {
                                             Image(systemName: "xmark.circle.fill")
-                                                .font(.system(size: 24, weight: .semibold))
+                                                .font(AppFont.bold(24))
                                                 .foregroundColor(.white)
                                                 .background(
-                                                    Circle()
+                                                    AdaptiveCardShapeStyle()
                                                         .fill(Color.black.opacity(0.5))
                                                         .frame(width: 32, height: 32)
                                                 )
@@ -261,32 +262,24 @@ struct EditMealView: View {
                                 }
                             )
                     } else {
-                        // Show placeholder with dashed border
+                        // Show placeholder
                         VStack(spacing: DesignSystem.Spacing.md) {
                             Image(systemName: "camera.fill")
-                                .font(.system(size: 48, weight: .regular))
-                                .foregroundColor(DesignSystem.Colors.textTertiary)
+                                .font(AppFont.regular(48))
+                                .foregroundColor(tc.textTertiary)
 
                             Text("Add Photo")
-                                .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                .font(AppFont.regular(DesignSystem.FontSizes.callout))
+                                .foregroundColor(tc.textSecondary)
                         }
                         .frame(height: 200)
                         .frame(maxWidth: .infinity)
-                        .background(DesignSystem.Colors.secondaryBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                                .strokeBorder(
-                                    DesignSystem.Colors.border,
-                                    style: StrokeStyle(lineWidth: 2, dash: [8, 4])
-                                )
-                        )
+                        .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
                     }
 
                     // Processing overlay
                     if isProcessingPhoto {
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
+                        AdaptiveCardShapeStyle()
                             .fill(Color.black.opacity(0.5))
                             .overlay(
                                 ProgressView()
@@ -312,16 +305,16 @@ struct EditMealView: View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
             HStack(spacing: DesignSystem.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(AppFont.regular(DesignSystem.FontSizes.footnote))
+                    .foregroundColor(tc.textSecondary)
 
                 Text(title)
-                    .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(AppFont.bold(DesignSystem.FontSizes.footnote))
+                    .foregroundColor(tc.textSecondary)
 
                 if let errorMessage = errorMessage {
                     Text("• \(errorMessage)")
-                        .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
+                        .font(AppFont.regular(DesignSystem.FontSizes.caption))
                         .foregroundColor(DesignSystem.Colors.danger)
                 }
             }
@@ -329,12 +322,7 @@ struct EditMealView: View {
             TextField(placeholder, text: text)
                 .font(.system(size: DesignSystem.FontSizes.body, weight: .regular))
                 .padding(DesignSystem.Spacing.md)
-                .background(DesignSystem.Colors.secondaryBackground)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                        .stroke(errorMessage != nil ? DesignSystem.Colors.danger : DesignSystem.Colors.border, lineWidth: 1)
-                )
+                .adaptiveCard(borderColor: errorMessage != nil ? DesignSystem.Colors.danger : tc.primary.opacity(0.3), fillColor: tc.cardBackground)
         }
     }
 
@@ -352,19 +340,20 @@ struct EditMealView: View {
             HStack(spacing: DesignSystem.Spacing.md) {
                 // Icon
                 ZStack {
-                    Circle()
-                        .fill(iconColor.opacity(0.15))
+                    AdaptivePillShapeStyle()
+                        .fill(DesignSystem.Colors.adaptiveGradientFrom(iconColor))
                         .frame(width: DesignSystem.Sizes.iconCircle, height: DesignSystem.Sizes.iconCircle)
+                        .overlay(AdaptivePillShapeStyle().stroke(iconColor.adjustedBrightness(-0.2), lineWidth: 2))
 
                     Image(systemName: icon)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(iconColor)
+                        .font(AppFont.bold(18))
+                        .foregroundColor(.white)
                 }
 
                 // Title
                 Text(title)
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(AppFont.regular(DesignSystem.FontSizes.callout))
+                    .foregroundColor(tc.textPrimary)
                     .frame(width: 80, alignment: .leading)
 
                 Spacer()
@@ -380,23 +369,18 @@ struct EditMealView: View {
                         .frame(width: 80)
 
                     Text(unit)
-                        .font(.system(size: DesignSystem.FontSizes.footnote, weight: .regular))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(AppFont.regular(DesignSystem.FontSizes.footnote))
+                        .foregroundColor(tc.textSecondary)
                 }
                 .padding(.horizontal, DesignSystem.Spacing.md)
                 .padding(.vertical, DesignSystem.Spacing.sm)
-                .background(DesignSystem.Colors.secondaryBackground)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                        .stroke(errorMessage != nil ? DesignSystem.Colors.danger : DesignSystem.Colors.border, lineWidth: 1)
-                )
+                .adaptiveCard(borderColor: errorMessage != nil ? DesignSystem.Colors.danger : tc.primary.opacity(0.3), fillColor: tc.cardBackground)
             }
 
             // Error message
             if let errorMessage = errorMessage {
                 Text(errorMessage)
-                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
+                    .font(AppFont.regular(DesignSystem.FontSizes.caption))
                     .foregroundColor(DesignSystem.Colors.danger)
                     .padding(.leading, DesignSystem.Sizes.iconCircle + DesignSystem.Spacing.md)
             }
@@ -409,18 +393,18 @@ struct EditMealView: View {
             HStack {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                     Text("Toxin Score")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .font(AppFont.bold(16))
+                        .foregroundColor(tc.textPrimary)
 
                     Text("Lower is better (0-100)")
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(AppFont.regular(12))
+                        .foregroundColor(tc.textSecondary)
                 }
 
                 Spacer()
 
                 Text("\(Int(toxinScore))")
-                    .font(.system(size: 24, weight: .bold))
+                    .font(AppFont.bold(24))
                     .foregroundColor(toxinScoreColor)
             }
 
@@ -429,32 +413,25 @@ struct EditMealView: View {
 
             HStack {
                 Text("Clean")
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .font(AppFont.regular(12))
+                    .foregroundColor(tc.primary)
 
                 Spacer()
 
                 Text("Processed")
-                    .font(.system(size: 12, weight: .regular))
+                    .font(AppFont.regular(12))
                     .foregroundColor(DesignSystem.Colors.danger)
             }
         }
         .padding(DesignSystem.Spacing.md)
-        .background(DesignSystem.Colors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-        .shadow(
-            color: DesignSystem.Shadows.card.color,
-            radius: DesignSystem.Shadows.card.radius,
-            x: DesignSystem.Shadows.card.x,
-            y: DesignSystem.Shadows.card.y
-        )
+        .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
     }
 
     /// Helper text
     private var helperText: some View {
         Text("Changing nutrition may affect favorites")
-            .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
-            .foregroundColor(DesignSystem.Colors.textTertiary)
+            .font(AppFont.regular(DesignSystem.FontSizes.caption))
+            .foregroundColor(tc.textTertiary)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
     }
@@ -476,8 +453,8 @@ struct EditMealView: View {
                 dismiss()
             } label: {
                 Text("Cancel")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(AppFont.regular(17))
+                    .foregroundColor(tc.textSecondary)
             }
         }
         .padding(.top, DesignSystem.Spacing.md)
@@ -488,9 +465,9 @@ struct EditMealView: View {
     /// Color for toxin score
     private var toxinScoreColor: Color {
         if toxinScore < 30 {
-            return DesignSystem.Colors.primary
+            return tc.primary
         } else if toxinScore < 60 {
-            return DesignSystem.Colors.warning
+            return tc.macroBarFat
         } else {
             return DesignSystem.Colors.danger
         }

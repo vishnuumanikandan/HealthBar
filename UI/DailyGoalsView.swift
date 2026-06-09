@@ -22,6 +22,7 @@ struct DailyGoalsView: View {
     @State private var viewModel: DailyGoalsViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
 
     // MARK: - Initialization
 
@@ -35,7 +36,7 @@ struct DailyGoalsView: View {
         NavigationStack {
             ZStack {
                 // Background
-                DesignSystem.Colors.primaryBackground
+                tc.primaryBackground
                     .ignoresSafeArea()
 
                 if viewModel.isLoading {
@@ -58,6 +59,7 @@ struct DailyGoalsView: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .font(AppFont.regular(17))
                 }
             }
             .task {
@@ -74,8 +76,8 @@ struct DailyGoalsView: View {
             ProgressView()
                 .scaleEffect(1.5)
             Text("Loading goals...")
-                .font(.system(size: DesignSystem.FontSizes.callout, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(AppFont.regular(16))
+                .foregroundColor(tc.textSecondary)
         }
     }
 
@@ -95,7 +97,7 @@ struct DailyGoalsView: View {
                 goalInputField(
                     title: "Daily Calorie Target",
                     icon: "flame.fill",
-                    iconColor: DesignSystem.Colors.energy,
+                    iconColor: tc.macroBarCarbs,
                     placeholder: "2000",
                     text: $viewModel.calorieTargetString,
                     unit: "kcal",
@@ -106,7 +108,7 @@ struct DailyGoalsView: View {
                 goalInputField(
                     title: "Protein Target",
                     icon: "leaf.fill",
-                    iconColor: DesignSystem.Colors.primary,
+                    iconColor: tc.primary,
                     placeholder: "150",
                     text: $viewModel.proteinTargetString,
                     unit: "g",
@@ -117,7 +119,7 @@ struct DailyGoalsView: View {
                 goalInputField(
                     title: "Carbs Target",
                     icon: "bolt.fill",
-                    iconColor: DesignSystem.Colors.warning,
+                    iconColor: tc.macroBarFat,
                     placeholder: "200",
                     text: $viewModel.carbTargetString,
                     unit: "g",
@@ -128,7 +130,7 @@ struct DailyGoalsView: View {
                 goalInputField(
                     title: "Fat Target",
                     icon: "drop.fill",
-                    iconColor: DesignSystem.Colors.secondary,
+                    iconColor: tc.primary,
                     placeholder: "65",
                     text: $viewModel.fatTargetString,
                     unit: "g",
@@ -139,7 +141,7 @@ struct DailyGoalsView: View {
                 goalInputField(
                     title: "Purity Target",
                     icon: "sparkles",
-                    iconColor: DesignSystem.Colors.growth,
+                    iconColor: tc.primaryDark,
                     placeholder: "50",
                     text: $viewModel.purityTargetString,
                     unit: "score",
@@ -165,22 +167,23 @@ struct DailyGoalsView: View {
     private var headerSection: some View {
         VStack(spacing: DesignSystem.Spacing.sm) {
             ZStack {
-                Circle()
-                    .fill(DesignSystem.Colors.primary.opacity(0.15))
+                AdaptiveCardShapeStyle()
+                    .fill(DesignSystem.Colors.adaptiveGradientFrom(tc.primary))
                     .frame(width: DesignSystem.Sizes.thumbnailLarge, height: DesignSystem.Sizes.thumbnailLarge)
+                    .overlay(AdaptiveCardShapeStyle().stroke(SettingsManager.shared.isCleanUI ? .clear : tc.primary.adjustedBrightness(-0.2), lineWidth: SettingsManager.shared.isCleanUI ? 0 : 2))
 
                 Image(systemName: "target")
-                    .font(.system(size: 40, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .font(AppFont.regular(40))
+                    .foregroundColor(.white)
             }
 
             Text("Set Your Goals")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(AppFont.bold(24))
+                .foregroundColor(tc.textPrimary)
 
             Text("Customize your daily nutrition targets")
-                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(AppFont.regular(14))
+                .foregroundColor(tc.textSecondary)
                 .multilineTextAlignment(.center)
         }
         .padding(.bottom, DesignSystem.Spacing.md)
@@ -190,18 +193,17 @@ struct DailyGoalsView: View {
     private func errorBanner(_ message: String) -> some View {
         HStack(spacing: DesignSystem.Spacing.sm) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 16, weight: .semibold))
+                .font(AppFont.bold(16))
                 .foregroundColor(DesignSystem.Colors.danger)
 
             Text(message)
-                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
+                .font(AppFont.regular(14))
                 .foregroundColor(DesignSystem.Colors.danger)
 
             Spacer()
         }
         .padding(DesignSystem.Spacing.md)
-        .background(DesignSystem.Colors.danger.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+        .adaptiveCard(borderColor: DesignSystem.Colors.danger.opacity(0.4), fillColor: DesignSystem.Colors.danger.opacity(0.1))
     }
 
     /// Goal input field component
@@ -218,18 +220,19 @@ struct DailyGoalsView: View {
             // Title row
             HStack(spacing: DesignSystem.Spacing.sm) {
                 ZStack {
-                    Circle()
-                        .fill(iconColor.opacity(0.15))
+                    AdaptivePillShapeStyle()
+                        .fill(DesignSystem.Colors.adaptiveGradientFrom(iconColor))
                         .frame(width: 32, height: 32)
+                        .overlay(AdaptivePillShapeStyle().stroke(SettingsManager.shared.isCleanUI ? .clear : iconColor.adjustedBrightness(-0.2), lineWidth: SettingsManager.shared.isCleanUI ? 0 : 2))
 
                     Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(iconColor)
+                        .font(AppFont.bold(14))
+                        .foregroundColor(.white)
                 }
 
                 Text(title)
-                    .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(AppFont.bold(17))
+                    .foregroundColor(tc.textPrimary)
 
                 Spacer()
             }
@@ -245,21 +248,16 @@ struct DailyGoalsView: View {
                     .frame(maxWidth: .infinity)
 
                 Text(unit)
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(AppFont.regular(16))
+                    .foregroundColor(tc.textSecondary)
             }
             .padding(DesignSystem.Spacing.md)
-            .background(DesignSystem.Colors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                    .strokeBorder(DesignSystem.Colors.border, lineWidth: 1)
-            )
+            .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
 
             // Helper text
             Text(helperText)
-                .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textTertiary)
+                .font(AppFont.regular(12))
+                .foregroundColor(tc.textTertiary)
                 .padding(.leading, DesignSystem.Spacing.xs)
         }
     }
@@ -270,26 +268,26 @@ struct DailyGoalsView: View {
             // Section header
             HStack(spacing: DesignSystem.Spacing.sm) {
                 Image(systemName: "chart.bar.doc.horizontal")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.secondary)
+                    .font(AppFont.bold(18))
+                    .foregroundColor(tc.primary)
 
                 Text("Advanced Nutrition Goals")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(AppFont.bold(18))
+                    .foregroundColor(tc.textPrimary)
 
                 Spacer()
             }
             .padding(.top, DesignSystem.Spacing.sm)
 
             Text("Optional targets for detailed tracking. Leave blank to skip.")
-                .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textTertiary)
+                .font(AppFont.regular(12))
+                .foregroundColor(tc.textTertiary)
 
             // Fiber (minimum target)
             optionalGoalInputField(
                 title: "Fiber Target",
                 icon: "leaf.fill",
-                iconColor: DesignSystem.Colors.primary,
+                iconColor: tc.primary,
                 placeholder: "25",
                 text: $viewModel.fiberTargetString,
                 unit: "g",
@@ -300,7 +298,7 @@ struct DailyGoalsView: View {
             optionalGoalInputField(
                 title: "Sugar Limit",
                 icon: "cube.fill",
-                iconColor: DesignSystem.Colors.warning,
+                iconColor: tc.macroBarFat,
                 placeholder: "50",
                 text: $viewModel.sugarTargetString,
                 unit: "g",
@@ -311,7 +309,7 @@ struct DailyGoalsView: View {
             optionalGoalInputField(
                 title: "Sodium Limit",
                 icon: "drop.fill",
-                iconColor: DesignSystem.Colors.secondary,
+                iconColor: tc.primary,
                 placeholder: "2300",
                 text: $viewModel.sodiumTargetString,
                 unit: "mg",
@@ -333,7 +331,7 @@ struct DailyGoalsView: View {
             optionalGoalInputField(
                 title: "Cholesterol Limit",
                 icon: "heart.circle.fill",
-                iconColor: DesignSystem.Colors.energy,
+                iconColor: tc.macroBarCarbs,
                 placeholder: "300",
                 text: $viewModel.cholesterolTargetString,
                 unit: "mg",
@@ -344,7 +342,7 @@ struct DailyGoalsView: View {
             optionalGoalInputField(
                 title: "Potassium Target",
                 icon: "bolt.fill",
-                iconColor: DesignSystem.Colors.growth,
+                iconColor: tc.primaryDark,
                 placeholder: "4700",
                 text: $viewModel.potassiumTargetString,
                 unit: "mg",
@@ -352,8 +350,7 @@ struct DailyGoalsView: View {
             )
         }
         .padding(DesignSystem.Spacing.md)
-        .background(DesignSystem.Colors.secondaryBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
+        .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
     }
 
     /// Optional goal input field (smaller, for advanced nutrients)
@@ -370,13 +367,13 @@ struct DailyGoalsView: View {
             // Title row
             HStack(spacing: DesignSystem.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(AppFont.bold(14))
                     .foregroundColor(iconColor)
                     .frame(width: 20)
 
                 Text(title)
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(AppFont.regular(16))
+                    .foregroundColor(tc.textPrimary)
 
                 Spacer()
 
@@ -392,24 +389,19 @@ struct DailyGoalsView: View {
                         .frame(width: 60)
 
                     Text(unit)
-                        .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(AppFont.regular(14))
+                        .foregroundColor(tc.textSecondary)
                         .frame(width: 25, alignment: .leading)
                 }
                 .padding(.horizontal, DesignSystem.Spacing.sm)
                 .padding(.vertical, DesignSystem.Spacing.xs)
-                .background(DesignSystem.Colors.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                        .strokeBorder(DesignSystem.Colors.border, lineWidth: 1)
-                )
+                .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
             }
 
             // Helper text
             Text(helperText)
-                .font(.system(size: 10, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textTertiary)
+                .font(AppFont.regular(10))
+                .foregroundColor(tc.textTertiary)
                 .padding(.leading, 28)
         }
     }
@@ -418,37 +410,54 @@ struct DailyGoalsView: View {
     private var warningText: some View {
         HStack(spacing: DesignSystem.Spacing.sm) {
             Image(systemName: "info.circle.fill")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.warning)
+                .font(AppFont.regular(16))
+                .foregroundColor(tc.macroBarFat)
 
             Text("Changes apply immediately and will affect today's progress")
-                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.warning)
+                .font(AppFont.regular(14))
+                .foregroundColor(tc.macroBarFat)
         }
         .padding(DesignSystem.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DesignSystem.Colors.warning.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+        .adaptiveCard(borderColor: tc.macroBarFat.opacity(0.3), fillColor: tc.macroBarFat.opacity(0.1))
     }
 
     /// Action buttons
     private var actionButtons: some View {
         VStack(spacing: DesignSystem.Spacing.md) {
-            AppButton(
-                title: "Save Goals",
-                style: .primary,
-                action: saveGoals,
-                isLoading: viewModel.isSaving,
-                isDisabled: !viewModel.isFormValid || viewModel.isSaving,
-                icon: "checkmark.circle.fill"
-            )
+            Button {
+                saveGoals()
+            } label: {
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    if viewModel.isSaving {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(AppFont.bold(17))
+                        Text("Save Goals")
+                            .font(AppFont.bold(17))
+                    }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .adaptiveCard(
+                    borderColor: tc.buttonBorder,
+                    fillColor: .clear,
+                    fillGradient: DesignSystem.Colors.adaptiveGradient(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(!viewModel.isFormValid || viewModel.isSaving)
+            .opacity(!viewModel.isFormValid || viewModel.isSaving ? 0.5 : 1.0)
 
             Button {
                 dismiss()
             } label: {
                 Text("Cancel")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(AppFont.regular(17))
+                    .foregroundColor(tc.textSecondary)
             }
         }
         .padding(.top, DesignSystem.Spacing.md)
@@ -461,18 +470,16 @@ struct DailyGoalsView: View {
 
             HStack(spacing: DesignSystem.Spacing.sm) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(AppFont.bold(18))
                     .foregroundColor(.white)
 
                 Text("Goals updated!")
-                    .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
+                    .font(AppFont.bold(17))
                     .foregroundColor(.white)
             }
             .padding(.horizontal, DesignSystem.Spacing.lg)
             .padding(.vertical, DesignSystem.Spacing.md)
-            .background(DesignSystem.Colors.primary)
-            .clipShape(Capsule())
-            .shadow(color: DesignSystem.Colors.primary.opacity(0.3), radius: 8, y: 4)
+            .adaptivePill(borderColor: tc.primary, fillColor: tc.primary)
             .padding(.bottom, DesignSystem.Spacing.xl)
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))

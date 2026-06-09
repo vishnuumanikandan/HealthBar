@@ -39,6 +39,9 @@ struct AddFoodFormView: View {
     /// Show purity score info sheet
     @State private var showingPurityScoreInfo = false
 
+    /// Theme colors shorthand
+    private var tc: ThemeColors { settings.activeColors }
+
     // MARK: - Body
 
     var body: some View {
@@ -47,6 +50,9 @@ struct AddFoodFormView: View {
                 VStack(spacing: DesignSystem.Spacing.lg) {
                     // Header
                     headerSection
+
+                    // Meal type picker
+                    mealTypePickerSection
 
                     // Photo capture section
                     photoCaptureSection
@@ -67,18 +73,17 @@ struct AddFoodFormView: View {
                     VStack(spacing: DesignSystem.Spacing.md) {
                         HStack {
                             Text("Nutrition Info")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(DesignSystem.Colors.textPrimary)
+                                .font(AppFont.bold(18))
+                                .foregroundColor(tc.textPrimary)
 
                             // Show "per 100g" label if barcode was scanned
                             if viewModel.scannedBarcode != nil {
                                 Text("(per 100g from barcode)")
-                                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
-                                    .foregroundColor(DesignSystem.Colors.warning)
+                                    .font(AppFont.regular(12))
+                                    .foregroundColor(tc.macroBarFat)
                                     .padding(.horizontal, DesignSystem.Spacing.sm)
                                     .padding(.vertical, 4)
-                                    .background(DesignSystem.Colors.warning.opacity(0.15))
-                                    .clipShape(Capsule())
+                                    .adaptivePill(borderColor: tc.macroBarFat.opacity(0.3), fillColor: tc.macroBarFat.opacity(0.15))
                             }
 
                             Spacer()
@@ -91,56 +96,54 @@ struct AddFoodFormView: View {
                                     // Serving size input
                                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                                         Text("Serving Size (grams)")
-                                            .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                                            .font(AppFont.bold(14))
+                                            .foregroundColor(tc.textSecondary)
 
                                         TextField("100", text: $viewModel.servingSize)
                                             .font(.system(size: DesignSystem.FontSizes.body, weight: .medium))
                                             .keyboardType(.decimalPad)
                                             .textFieldStyle(.plain)
                                             .padding(DesignSystem.Spacing.md)
-                                            .background(DesignSystem.Colors.cardBackground)
-                                            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                                                    .strokeBorder(DesignSystem.Colors.border, lineWidth: 1)
-                                            )
+                                            .background(tc.cardBackground)
+                                            .clipShape(AdaptiveCardShapeStyle())
                                     }
                                     .frame(maxWidth: .infinity)
 
                                     // Calculate button
                                     VStack(spacing: DesignSystem.Spacing.xs) {
                                         Text(" ")
-                                            .font(.system(size: DesignSystem.FontSizes.footnote))
+                                            .font(AppFont.regular(14))
 
                                         Button {
                                             viewModel.applyServingSize()
                                         } label: {
                                             Text("Calculate")
-                                                .font(.system(size: 14, weight: .semibold))
+                                                .font(AppFont.bold(14))
                                                 .foregroundColor(.white)
                                                 .padding(.horizontal, DesignSystem.Spacing.md)
                                                 .padding(.vertical, DesignSystem.Spacing.md)
-                                                .background(DesignSystem.Colors.secondary)
-                                                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                                                .adaptiveCard(
+                                                    borderColor: tc.buttonBorder,
+                                                    fillColor: .clear,
+                                                    fillGradient: DesignSystem.Colors.adaptiveGradient(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)
+                                                )
                                         }
                                     }
                                 }
 
                                 Text("Enter grams consumed, then tap Calculate to adjust nutrition values")
-                                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
-                                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                                    .font(AppFont.regular(12))
+                                    .foregroundColor(tc.textTertiary)
                             }
                             .padding(DesignSystem.Spacing.md)
-                            .background(DesignSystem.Colors.secondary.opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                            .adaptiveCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.primary.opacity(0.1))
                         }
 
                         // Calories
                         numberInputField(
                             title: "Calories",
                             icon: "flame.fill",
-                            iconColor: DesignSystem.Colors.energy,
+                            iconColor: tc.macroBarCarbs,
                             placeholder: "0",
                             text: $viewModel.formCalories,
                             unit: "cal",
@@ -151,7 +154,7 @@ struct AddFoodFormView: View {
                         numberInputField(
                             title: "Protein",
                             icon: "leaf.fill",
-                            iconColor: DesignSystem.Colors.primary,
+                            iconColor: tc.primary,
                             placeholder: "0",
                             text: $viewModel.formProtein,
                             unit: "g",
@@ -162,7 +165,7 @@ struct AddFoodFormView: View {
                         numberInputField(
                             title: "Carbs",
                             icon: "flame.fill",
-                            iconColor: DesignSystem.Colors.warning,
+                            iconColor: tc.macroBarFat,
                             placeholder: "0",
                             text: $viewModel.formCarbs,
                             unit: "g",
@@ -173,7 +176,7 @@ struct AddFoodFormView: View {
                         numberInputField(
                             title: "Fat",
                             icon: "drop.fill",
-                            iconColor: DesignSystem.Colors.secondary,
+                            iconColor: tc.primary,
                             placeholder: "0",
                             text: $viewModel.formFat,
                             unit: "g",
@@ -194,7 +197,7 @@ struct AddFoodFormView: View {
                 }
                 .padding(DesignSystem.Spacing.lg)
             }
-            .background(DesignSystem.Colors.primaryBackground)
+            .background(tc.primaryBackground)
             .navigationTitle("Add Food")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -252,8 +255,8 @@ struct AddFoodFormView: View {
     private var photoCaptureSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
             Text("Photo (Optional)")
-                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(AppFont.bold(14))
+                .foregroundColor(tc.textSecondary)
 
             Button {
                 showingPhotoSourceSheet = true
@@ -266,11 +269,7 @@ struct AddFoodFormView: View {
                             .scaledToFill()
                             .frame(height: 200)
                             .frame(maxWidth: .infinity)
-                            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                                    .strokeBorder(DesignSystem.Colors.primary.opacity(0.25), lineWidth: 1.5)
-                            )
+                            .adaptiveCard(borderColor: tc.primary.opacity(0.25), fillColor: .clear)
                             .overlay(
                                 // Remove button in top-right corner
                                 VStack {
@@ -280,7 +279,7 @@ struct AddFoodFormView: View {
                                             viewModel.removePhoto()
                                         } label: {
                                             Image(systemName: "xmark.circle.fill")
-                                                .font(.system(size: 24, weight: .semibold))
+                                                .font(AppFont.bold(24))
                                                 .foregroundColor(.white)
                                                 .background(
                                                     Circle()
@@ -297,29 +296,21 @@ struct AddFoodFormView: View {
                         // Show placeholder with dashed border
                         VStack(spacing: DesignSystem.Spacing.md) {
                             Image(systemName: "camera.fill")
-                                .font(.system(size: 48, weight: .regular))
-                                .foregroundColor(DesignSystem.Colors.textTertiary)
+                                .font(AppFont.regular(48))
+                                .foregroundColor(tc.textTertiary)
 
                             Text("Add Photo")
-                                .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                .font(AppFont.regular(16))
+                                .foregroundColor(tc.textSecondary)
                         }
                         .frame(height: 200)
                         .frame(maxWidth: .infinity)
-                        .background(DesignSystem.Colors.secondaryBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                                .strokeBorder(
-                                    DesignSystem.Colors.border,
-                                    style: StrokeStyle(lineWidth: 2, dash: [8, 4])
-                                )
-                        )
+                        .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
                     }
 
                     // Processing overlay
                     if viewModel.isProcessingPhoto {
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
+                        AdaptiveCardShapeStyle()
                             .fill(Color.black.opacity(0.5))
                             .overlay(
                                 ProgressView()
@@ -338,25 +329,63 @@ struct AddFoodFormView: View {
     private var headerSection: some View {
         VStack(spacing: DesignSystem.Spacing.sm) {
             ZStack {
-                Circle()
-                    .fill(DesignSystem.Colors.primary.opacity(0.15))
+                AdaptivePillShapeStyle()
+                    .fill(DesignSystem.Colors.adaptiveGradientFrom(tc.primary))
                     .frame(width: DesignSystem.Sizes.thumbnailLarge, height: DesignSystem.Sizes.thumbnailLarge)
+                    .overlay(AdaptivePillShapeStyle().stroke(tc.primary.adjustedBrightness(-0.2), lineWidth: 2))
 
                 Image(systemName: "fork.knife.circle.fill")
-                    .font(.system(size: 40, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .font(AppFont.regular(40))
+                    .foregroundColor(.white)
             }
 
             Text("Log Your Meal")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(AppFont.bold(24))
+                .foregroundColor(tc.textPrimary)
 
             Text("Enter the nutritional information for your meal")
-                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(AppFont.regular(14))
+                .foregroundColor(tc.textSecondary)
                 .multilineTextAlignment(.center)
         }
         .padding(.bottom, DesignSystem.Spacing.md)
+    }
+
+    /// Meal type picker — horizontal pill row bound to viewModel.formMealType
+    private var mealTypePickerSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            Text("Meal Type")
+                .font(AppFont.bold(14))
+                .foregroundColor(tc.textSecondary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    ForEach(MealType.allCases, id: \.self) { type in
+                        Button {
+                            viewModel.formMealType = type
+                        } label: {
+                            HStack(spacing: DesignSystem.Spacing.xs) {
+                                Image(systemName: type.icon)
+                                    .font(AppFont.bold(12))
+                                Text(type.displayName)
+                                    .font(AppFont.regular(12))
+                            }
+                            .foregroundColor(viewModel.formMealType == type ? .white : type.color)
+                            .padding(.horizontal, DesignSystem.Spacing.md)
+                            .padding(.vertical, DesignSystem.Spacing.sm)
+                            .adaptivePill(
+                                borderColor: type.color.opacity(0.5),
+                                fillColor: viewModel.formMealType == type
+                                    ? type.color
+                                    : type.color.opacity(0.15)
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+        }
     }
 
     /// Generic input section with optional error message
@@ -370,16 +399,16 @@ struct AddFoodFormView: View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
             HStack(spacing: DesignSystem.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(AppFont.regular(14))
+                    .foregroundColor(tc.textSecondary)
 
                 Text(title)
-                    .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(AppFont.regular(14))
+                    .foregroundColor(tc.textSecondary)
 
                 if let errorMessage = errorMessage {
                     Text("• \(errorMessage)")
-                        .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
+                        .font(AppFont.regular(12))
                         .foregroundColor(DesignSystem.Colors.danger)
                 }
             }
@@ -387,12 +416,7 @@ struct AddFoodFormView: View {
             TextField(placeholder, text: text)
                 .font(.system(size: DesignSystem.FontSizes.body, weight: .regular))
                 .padding(DesignSystem.Spacing.md)
-                .background(DesignSystem.Colors.secondaryBackground)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                        .stroke(errorMessage != nil ? DesignSystem.Colors.danger : DesignSystem.Colors.border, lineWidth: 1)
-                )
+                .adaptiveCard(borderColor: errorMessage != nil ? DesignSystem.Colors.danger : tc.primary.opacity(0.3), fillColor: tc.cardBackground)
                 .onChange(of: text.wrappedValue) { oldValue, newValue in
                     viewModel.validateField("foodName")
                 }
@@ -413,19 +437,20 @@ struct AddFoodFormView: View {
             HStack(spacing: DesignSystem.Spacing.md) {
                 // Icon
                 ZStack {
-                    Circle()
-                        .fill(iconColor.opacity(0.15))
+                    AdaptivePillShapeStyle()
+                        .fill(DesignSystem.Colors.adaptiveGradientFrom(iconColor))
                         .frame(width: DesignSystem.Sizes.iconCircle, height: DesignSystem.Sizes.iconCircle)
+                        .overlay(AdaptivePillShapeStyle().stroke(iconColor.adjustedBrightness(-0.2), lineWidth: 2))
 
                     Image(systemName: icon)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(iconColor)
+                        .font(AppFont.bold(18))
+                        .foregroundColor(.white)
                 }
 
                 // Title
                 Text(title)
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .font(AppFont.regular(16))
+                    .foregroundColor(tc.textPrimary)
                     .frame(width: 80, alignment: .leading)
 
                 Spacer()
@@ -441,23 +466,18 @@ struct AddFoodFormView: View {
                         .frame(width: 80)
 
                     Text(unit)
-                        .font(.system(size: DesignSystem.FontSizes.footnote, weight: .regular))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(AppFont.regular(14))
+                        .foregroundColor(tc.textSecondary)
                 }
                 .padding(.horizontal, DesignSystem.Spacing.md)
                 .padding(.vertical, DesignSystem.Spacing.sm)
-                .background(DesignSystem.Colors.secondaryBackground)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                        .stroke(errorMessage != nil ? DesignSystem.Colors.danger : DesignSystem.Colors.border, lineWidth: 1)
-                )
+                .adaptiveCard(borderColor: errorMessage != nil ? DesignSystem.Colors.danger : tc.primary.opacity(0.3), fillColor: tc.cardBackground)
             }
 
             // Error message
             if let errorMessage = errorMessage {
                 Text(errorMessage)
-                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
+                    .font(AppFont.regular(12))
                     .foregroundColor(DesignSystem.Colors.danger)
                     .padding(.leading, DesignSystem.Sizes.iconCircle + DesignSystem.Spacing.md)
             }
@@ -476,30 +496,30 @@ struct AddFoodFormView: View {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                     HStack(spacing: DesignSystem.Spacing.xs) {
                         Text("Purity Score")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                            .font(AppFont.bold(16))
+                            .foregroundColor(tc.textPrimary)
 
                         // Info button (44x44pt touch target)
                         Button {
                             showingPurityScoreInfo = true
                         } label: {
                             Image(systemName: "info.circle")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.textTertiary)
+                                .font(AppFont.regular(14))
+                                .foregroundColor(tc.textTertiary)
                         }
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                     }
 
                     Text("Lower is better (0-100)")
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(AppFont.regular(12))
+                        .foregroundColor(tc.textSecondary)
                 }
 
                 Spacer()
 
                 Text("\(Int(viewModel.formToxinScore))")
-                    .font(.system(size: 24, weight: .bold))
+                    .font(AppFont.bold(24))
                     .foregroundColor(toxinScoreColor)
             }
 
@@ -510,25 +530,18 @@ struct AddFoodFormView: View {
             // Labels
             HStack {
                 Text("Clean")
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .font(AppFont.regular(12))
+                    .foregroundColor(tc.primary)
 
                 Spacer()
 
                 Text("Processed")
-                    .font(.system(size: 12, weight: .regular))
+                    .font(AppFont.regular(12))
                     .foregroundColor(DesignSystem.Colors.danger)
             }
         }
         .padding(DesignSystem.Spacing.md)
-        .background(DesignSystem.Colors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-        .shadow(
-            color: DesignSystem.Shadows.card.color,
-            radius: DesignSystem.Shadows.card.radius,
-            x: DesignSystem.Shadows.card.x,
-            y: DesignSystem.Shadows.card.y
-        )
+        .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
         .sheet(isPresented: $showingPurityScoreInfo) {
             PurityScoreInfoSheet()
         }
@@ -538,8 +551,8 @@ struct AddFoodFormView: View {
     private var barcodeScanSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
             Text("Quick Entry")
-                .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .font(AppFont.bold(14))
+                .foregroundColor(tc.textSecondary)
 
             Button {
                 viewModel.showBarcodeScanner()
@@ -547,44 +560,34 @@ struct AddFoodFormView: View {
                 HStack(spacing: DesignSystem.Spacing.md) {
                     // Barcode icon
                     ZStack {
-                        Circle()
-                            .fill(DesignSystem.Colors.secondary.opacity(0.15))
+                        AdaptivePillShapeStyle()
+                            .fill(DesignSystem.Colors.adaptiveGradientFrom(tc.primary))
                             .frame(width: DesignSystem.Sizes.iconCircle, height: DesignSystem.Sizes.iconCircle)
+                            .overlay(AdaptivePillShapeStyle().stroke(tc.primary.adjustedBrightness(-0.2), lineWidth: 2))
 
                         Image(systemName: "barcode.viewfinder")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundColor(DesignSystem.Colors.secondary)
+                            .font(AppFont.bold(20))
+                            .foregroundColor(.white)
                     }
 
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                         Text("Scan Barcode")
-                            .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                            .font(AppFont.bold(17))
+                            .foregroundColor(tc.textPrimary)
 
                         Text("Auto-fill nutrition from product database")
-                            .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .font(AppFont.regular(12))
+                            .foregroundColor(tc.textSecondary)
                     }
 
                     Spacer()
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .font(AppFont.bold(14))
+                        .foregroundColor(tc.textTertiary)
                 }
                 .padding(DesignSystem.Spacing.md)
-                .background(DesignSystem.Colors.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                        .strokeBorder(DesignSystem.Colors.secondary.opacity(0.25), lineWidth: 1.5)
-                )
-                .shadow(
-                    color: DesignSystem.Shadows.card.color,
-                    radius: DesignSystem.Shadows.card.radius / 2,
-                    x: DesignSystem.Shadows.card.x,
-                    y: DesignSystem.Shadows.card.y
-                )
+                .adaptiveCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.cardBackground)
             }
             .buttonStyle(PlainButtonStyle())
 
@@ -595,44 +598,34 @@ struct AddFoodFormView: View {
                 HStack(spacing: DesignSystem.Spacing.md) {
                     // Keyboard icon
                     ZStack {
-                        Circle()
-                            .fill(DesignSystem.Colors.secondary.opacity(0.15))
+                        AdaptivePillShapeStyle()
+                            .fill(DesignSystem.Colors.adaptiveGradientFrom(tc.primary))
                             .frame(width: DesignSystem.Sizes.iconCircle, height: DesignSystem.Sizes.iconCircle)
+                            .overlay(AdaptivePillShapeStyle().stroke(tc.primary.adjustedBrightness(-0.2), lineWidth: 2))
 
                         Image(systemName: "keyboard")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundColor(DesignSystem.Colors.secondary)
+                            .font(AppFont.bold(20))
+                            .foregroundColor(.white)
                     }
 
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                         Text("Enter Barcode Manually")
-                            .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                            .font(AppFont.bold(17))
+                            .foregroundColor(tc.textPrimary)
 
                         Text("Type barcode number when camera isn't available")
-                            .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .font(AppFont.regular(12))
+                            .foregroundColor(tc.textSecondary)
                     }
 
                     Spacer()
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .font(AppFont.bold(14))
+                        .foregroundColor(tc.textTertiary)
                 }
                 .padding(DesignSystem.Spacing.md)
-                .background(DesignSystem.Colors.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                        .strokeBorder(DesignSystem.Colors.secondary.opacity(0.25), lineWidth: 1.5)
-                )
-                .shadow(
-                    color: DesignSystem.Shadows.card.color,
-                    radius: DesignSystem.Shadows.card.radius / 2,
-                    x: DesignSystem.Shadows.card.x,
-                    y: DesignSystem.Shadows.card.y
-                )
+                .adaptiveCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.cardBackground)
             }
             .buttonStyle(PlainButtonStyle())
 
@@ -643,8 +636,8 @@ struct AddFoodFormView: View {
                         .scaleEffect(0.8)
 
                     Text("Looking up nutrition...")
-                        .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(AppFont.regular(14))
+                        .foregroundColor(tc.textSecondary)
                 }
                 .padding(.top, DesignSystem.Spacing.xs)
             }
@@ -653,12 +646,12 @@ struct AddFoodFormView: View {
             if let error = viewModel.barcodeError {
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.warning)
+                        .font(AppFont.bold(12))
+                        .foregroundColor(tc.macroBarFat)
 
                     Text(error)
-                        .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
-                        .foregroundColor(DesignSystem.Colors.warning)
+                        .font(AppFont.regular(12))
+                        .foregroundColor(tc.macroBarFat)
                 }
                 .padding(.top, DesignSystem.Spacing.xs)
             }
@@ -667,12 +660,12 @@ struct AddFoodFormView: View {
             if let barcode = viewModel.scannedBarcode, viewModel.barcodeError == nil, !viewModel.isLoadingBarcodeNutrition {
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.primary)
+                        .font(AppFont.bold(12))
+                        .foregroundColor(tc.primary)
 
                     Text("Scanned: \(barcode)")
-                        .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(AppFont.regular(12))
+                        .foregroundColor(tc.textSecondary)
 
                     Spacer()
 
@@ -680,8 +673,8 @@ struct AddFoodFormView: View {
                         viewModel.clearBarcodeData()
                     } label: {
                         Text("Clear")
-                            .font(.system(size: DesignSystem.FontSizes.caption, weight: .semibold))
-                            .foregroundColor(DesignSystem.Colors.primary)
+                            .font(AppFont.bold(12))
+                            .foregroundColor(tc.primary)
                     }
                 }
                 .padding(.top, DesignSystem.Spacing.xs)
@@ -705,8 +698,8 @@ struct AddFoodFormView: View {
                 dismiss()
             } label: {
                 Text("Cancel")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(AppFont.regular(17))
+                    .foregroundColor(tc.textSecondary)
             }
         }
         .padding(.top, DesignSystem.Spacing.md)
@@ -725,26 +718,21 @@ struct AddFoodFormView: View {
             } label: {
                 HStack(spacing: DesignSystem.Spacing.md) {
                     Image(systemName: "chart.bar.doc.horizontal")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.secondary)
+                        .font(AppFont.bold(18))
+                        .foregroundColor(tc.primary)
 
                     Text("Advanced Nutrition")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .font(AppFont.bold(18))
+                        .foregroundColor(tc.textPrimary)
 
                     Spacer()
 
                     Image(systemName: viewModel.isAdvancedNutritionExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .font(AppFont.bold(14))
+                        .foregroundColor(tc.textTertiary)
                 }
                 .padding(DesignSystem.Spacing.md)
-                .background(DesignSystem.Colors.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                        .strokeBorder(DesignSystem.Colors.border, lineWidth: 1)
-                )
+                .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
             }
             .buttonStyle(PlainButtonStyle())
 
@@ -755,7 +743,7 @@ struct AddFoodFormView: View {
                     advancedNutrientField(
                         title: "Fiber",
                         icon: "leaf.fill",
-                        iconColor: DesignSystem.Colors.primary,
+                        iconColor: tc.primary,
                         placeholder: "0",
                         text: $viewModel.formFiber,
                         unit: "g"
@@ -765,7 +753,7 @@ struct AddFoodFormView: View {
                     advancedNutrientField(
                         title: "Sugar",
                         icon: "cube.fill",
-                        iconColor: DesignSystem.Colors.warning,
+                        iconColor: tc.macroBarFat,
                         placeholder: "0",
                         text: $viewModel.formSugar,
                         unit: "g"
@@ -775,7 +763,7 @@ struct AddFoodFormView: View {
                     advancedNutrientField(
                         title: "Sodium",
                         icon: "drop.fill",
-                        iconColor: DesignSystem.Colors.secondary,
+                        iconColor: tc.primary,
                         placeholder: "0",
                         text: $viewModel.formSodium,
                         unit: "mg"
@@ -795,7 +783,7 @@ struct AddFoodFormView: View {
                     advancedNutrientField(
                         title: "Cholesterol",
                         icon: "heart.circle.fill",
-                        iconColor: DesignSystem.Colors.energy,
+                        iconColor: tc.macroBarCarbs,
                         placeholder: "0",
                         text: $viewModel.formCholesterol,
                         unit: "mg"
@@ -805,15 +793,14 @@ struct AddFoodFormView: View {
                     advancedNutrientField(
                         title: "Potassium",
                         icon: "bolt.fill",
-                        iconColor: DesignSystem.Colors.growth,
+                        iconColor: tc.primaryDark,
                         placeholder: "0",
                         text: $viewModel.formPotassium,
                         unit: "mg"
                     )
                 }
                 .padding(DesignSystem.Spacing.md)
-                .background(DesignSystem.Colors.secondaryBackground)
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+                .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
@@ -831,19 +818,20 @@ struct AddFoodFormView: View {
         HStack(spacing: DesignSystem.Spacing.md) {
             // Icon
             ZStack {
-                Circle()
-                    .fill(iconColor.opacity(0.15))
+                AdaptivePillShapeStyle()
+                    .fill(DesignSystem.Colors.adaptiveGradientFrom(iconColor))
                     .frame(width: 32, height: 32)
+                    .overlay(AdaptivePillShapeStyle().stroke(iconColor.adjustedBrightness(-0.2), lineWidth: 2))
 
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(iconColor)
+                    .font(AppFont.bold(14))
+                    .foregroundColor(.white)
             }
 
             // Title
             Text(title)
-                .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(AppFont.regular(16))
+                .foregroundColor(tc.textPrimary)
                 .frame(width: 80, alignment: .leading)
 
             Spacer()
@@ -859,18 +847,13 @@ struct AddFoodFormView: View {
                     .frame(width: 60)
 
                 Text(unit)
-                    .font(.system(size: DesignSystem.FontSizes.footnote, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .font(AppFont.regular(14))
+                    .foregroundColor(tc.textSecondary)
                     .frame(width: 25, alignment: .leading)
             }
             .padding(.horizontal, DesignSystem.Spacing.sm)
             .padding(.vertical, DesignSystem.Spacing.xs)
-            .background(DesignSystem.Colors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                    .stroke(DesignSystem.Colors.border, lineWidth: 1)
-            )
+            .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
         }
     }
 
@@ -879,11 +862,11 @@ struct AddFoodFormView: View {
     /// Color for toxin score (green to red gradient)
     private var toxinScoreColor: Color {
         if viewModel.formToxinScore < 30 {
-            return DesignSystem.Colors.primary
+            return tc.primary
         } else if viewModel.formToxinScore < 60 {
-            return DesignSystem.Colors.warning
+            return tc.macroBarFat
         } else {
-            return DesignSystem.Colors.danger
+            return DesignSystem.Colors.danger  // universal red — keep as-is
         }
     }
 
@@ -910,31 +893,34 @@ struct ManualBarcodeEntryView: View {
     @Bindable var viewModel: FoodLogViewModel
     @Environment(\.dismiss) private var dismiss
     @FocusState private var isFocused: Bool
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: DesignSystem.Spacing.xl) {
                 // Icon
                 ZStack {
-                    Circle()
-                        .fill(DesignSystem.Colors.secondary.opacity(0.15))
+                    AdaptivePillShapeStyle()
+                        .fill(DesignSystem.Colors.adaptiveGradientFrom(tc.primary))
                         .frame(width: 80, height: 80)
+                        .overlay(AdaptivePillShapeStyle().stroke(tc.primary.adjustedBrightness(-0.2), lineWidth: 2))
 
                     Image(systemName: "keyboard")
-                        .font(.system(size: 40, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.secondary)
+                        .font(AppFont.bold(40))
+                        .foregroundColor(.white)
                 }
                 .padding(.top, DesignSystem.Spacing.xl)
 
                 // Instructions
                 VStack(spacing: DesignSystem.Spacing.sm) {
                     Text("Enter Barcode Number")
-                        .font(.system(size: DesignSystem.FontSizes.title2, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .font(AppFont.bold(22))
+                        .foregroundColor(tc.textPrimary)
 
                     Text("Enter the UPC or EAN barcode from the product packaging")
-                        .font(.system(size: DesignSystem.FontSizes.callout, weight: .regular))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .font(AppFont.regular(16))
+                        .foregroundColor(tc.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, DesignSystem.Spacing.xl)
                 }
@@ -946,18 +932,13 @@ struct ManualBarcodeEntryView: View {
                         .keyboardType(.numberPad)
                         .textFieldStyle(.plain)
                         .padding(DesignSystem.Spacing.md)
-                        .background(DesignSystem.Colors.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                                .strokeBorder(DesignSystem.Colors.border, lineWidth: 1)
-                        )
+                        .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
                         .focused($isFocused)
 
                     // Helper text
                     Text("Note: Nutrition shown is per 100g, not per serving")
-                        .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
-                        .foregroundColor(DesignSystem.Colors.warning)
+                        .font(AppFont.regular(12))
+                        .foregroundColor(tc.macroBarFat)
                         .padding(.top, DesignSystem.Spacing.sm)
                 }
                 .padding(.horizontal, DesignSystem.Spacing.xl)
@@ -982,14 +963,14 @@ struct ManualBarcodeEntryView: View {
                         dismiss()
                     } label: {
                         Text("Cancel")
-                            .font(.system(size: 17, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .font(AppFont.regular(17))
+                            .foregroundColor(tc.textSecondary)
                     }
                 }
                 .padding(.horizontal, DesignSystem.Spacing.xl)
                 .padding(.bottom, DesignSystem.Spacing.xl)
             }
-            .background(DesignSystem.Colors.primaryBackground)
+            .background(tc.primaryBackground)
             .navigationTitle("Enter Barcode")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1012,12 +993,12 @@ struct ManualBarcodeEntryView: View {
         } label: {
             HStack(spacing: DesignSystem.Spacing.xs) {
                 Text(barcode)
-                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .font(AppFont.regular(12))
+                    .foregroundColor(tc.primary)
 
                 Text("(\(product))")
-                    .font(.system(size: DesignSystem.FontSizes.caption, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .font(AppFont.regular(12))
+                    .foregroundColor(tc.textTertiary)
             }
         }
     }

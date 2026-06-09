@@ -7,9 +7,22 @@
 
 import SwiftUI
 import SwiftData
+import FirebaseCore
+
+class AppDelegate: NSObject, UIApplicationDelegate {
+  func application(_ application: UIApplication,
+                   didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+    FirebaseApp.configure()
+
+    return true
+  }
+}
 
 @main
 struct HealthBarApp: App {
+    // register app delegate for Firebase setup
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+
     // SwiftData container for persistence
     let modelContainer: ModelContainer
 
@@ -22,7 +35,12 @@ struct HealthBarApp: App {
                 UserProgress.self,
                 DailyQuest.self,
                 PersonalBaseline.self,
-                MoodEntry.self
+                MoodEntry.self,
+                CustomFood.self,
+                SavedMeal.self,
+                SavedRecipe.self,
+                UserProfile.self,
+                BadgeProgress.self
             ])
 
             let modelConfiguration = ModelConfiguration(

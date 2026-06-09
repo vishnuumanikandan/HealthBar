@@ -88,11 +88,124 @@ enum DesignSystem {
 
         /// Green glow effect for achievements
         static let successGlow = primary.opacity(0.3)
+
+        // MARK: - Pixel Theme Palettes
+
+        // Parchment / Quest colors
+        static let parchmentFill = Color(hex: "#F5E6C8")
+        static let parchmentBorder = Color(hex: "#A0845C")
+        static let parchmentText = Color(hex: "#3D2213")
+        static let parchmentSecondary = Color(hex: "#7A6548")
+
+        // Gold / XP badge
+        static let goldHighlight = Color(hex: "#FFD700")
+        static let goldMid = Color(hex: "#F5A623")
+        static let goldDark = Color(hex: "#C8860B")
+        static let goldBorder = Color(hex: "#8B6914")
+
+        // Wood
+        static let woodDark = Color(hex: "#2E1A0E")
+        static let woodMid = Color(hex: "#4A2E1C")
+        static let woodFill = Color(hex: "#C4A070")
+        static let woodHighlight = Color(hex: "#D4B488")
+        static let woodShadow = Color(hex: "#B08850")
+        static let woodSeam = Color(hex: "#8B6B40")
+        static let woodBracket = Color(hex: "#3D2213")
+        static let woodNail = Color(hex: "#2E1A0E")
+
+        // Tab bar wood
+        static let tabWoodHighlight = Color(hex: "#A0723D")
+        static let tabWoodBody = Color(hex: "#8B5A2B")
+        static let tabWoodShadow = Color(hex: "#5D3A1A")
+        static let tabActive = Color(hex: "#FCD34D")
+        static let tabInactive = Color(hex: "#D2B48C")
+
+        // Indigo / Weekly stats
+        static let indigoBorder = Color(hex: "#4338CA")
+        static let indigoFill = Color(hex: "#EEF2FF")
+        static let indigoCardBorder = Color(hex: "#6366F1")
+        static let indigoCardFill = Color(hex: "#E0E7FF")
+        static let indigoText = Color(hex: "#312E81")
+        static let indigoLabel = Color(hex: "#4338CA")
+        static let indigoHighlight = Color(hex: "#818CF8")
+
+        // Bookmark red
+        static let bookmarkLight = Color(hex: "#EF4444")
+        static let bookmarkMid = Color(hex: "#DC2626")
+        static let bookmarkDark = Color(hex: "#991B1B")
+
+        // Segmented control
+        static let segInactiveFill = Color(hex: "#374151")
+        static let segInactiveText = Color(hex: "#D1D5DB")
+
+        // MARK: - 3-Band Gradient Builder
+
+        static func threeBand(light: Color, mid: Color, dark: Color, lightStop: CGFloat = 0.22, darkStop: CGFloat = 0.78) -> LinearGradient {
+            LinearGradient(
+                stops: [
+                    .init(color: light, location: 0),
+                    .init(color: light, location: lightStop),
+                    .init(color: mid, location: lightStop),
+                    .init(color: mid, location: darkStop),
+                    .init(color: dark, location: darkStop),
+                    .init(color: dark, location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+
+        // Pre-defined 3-band gradients
+        static let band3Green = threeBand(light: Color(hex: "#34D399"), mid: Color(hex: "#10B981"), dark: Color(hex: "#059669"))
+        static let band3DarkGreen = threeBand(light: Color(hex: "#059669"), mid: Color(hex: "#047857"), dark: Color(hex: "#064E3B"))
+        static let band3Emerald = threeBand(light: Color(hex: "#6EE7B7"), mid: Color(hex: "#34D399"), dark: Color(hex: "#10B981"))
+        static let band3Amber = threeBand(light: Color(hex: "#FBBF24"), mid: Color(hex: "#D97706"), dark: Color(hex: "#92400E"))
+        static let band3Orange = threeBand(light: Color(hex: "#FB923C"), mid: Color(hex: "#EA580C"), dark: Color(hex: "#C2410C"))
+        static let band3Gold = threeBand(light: Color(hex: "#FFD700"), mid: Color(hex: "#F5A623"), dark: Color(hex: "#C8860B"))
+        static let band3Indigo = threeBand(light: Color(hex: "#818CF8"), mid: Color(hex: "#6366F1"), dark: Color(hex: "#4338CA"))
+        static let band3Gray = threeBand(light: Color(hex: "#D1D5DB"), mid: Color(hex: "#9CA3AF"), dark: Color(hex: "#6B7280"))
+
+        // Button gradient (11% / 81% stops)
+        static let band3ButtonGreen = threeBand(light: Color(hex: "#34D399"), mid: Color(hex: "#10B981"), dark: Color(hex: "#047857"), lightStop: 0.11, darkStop: 0.81)
+
+        /// Auto-generate a 3-band gradient from a single color (highlight / body / shadow).
+        /// Uses brightness shifts instead of opacity so the shadow band stays opaque.
+        static func threeBandFrom(_ color: Color) -> LinearGradient {
+            threeBand(
+                light: color.opacity(0.7),
+                mid: color,
+                dark: color.adjustedBrightness(-0.25)
+            )
+        }
+
+        // MARK: - Adaptive Gradient Helpers (Clean vs RPG)
+
+        /// Returns a 3-band gradient in RPG mode, or a solid fill in clean mode.
+        static func adaptiveGradient(light: Color, mid: Color, dark: Color, lightStop: CGFloat = 0.22, darkStop: CGFloat = 0.78) -> LinearGradient {
+            if SettingsManager.shared.isCleanUI {
+                return LinearGradient(colors: [mid], startPoint: .top, endPoint: .bottom)
+            }
+            return threeBand(light: light, mid: mid, dark: dark, lightStop: lightStop, darkStop: darkStop)
+        }
+
+        /// Returns a 3-band auto-gradient in RPG mode, or a solid fill in clean mode.
+        static func adaptiveGradientFrom(_ color: Color) -> LinearGradient {
+            if SettingsManager.shared.isCleanUI {
+                return LinearGradient(colors: [color], startPoint: .top, endPoint: .bottom)
+            }
+            return threeBandFrom(color)
+        }
     }
 
     // MARK: - Typography
 
     enum Typography {
+
+        /// Pixel font for the RPG theme (Silkscreen)
+        static func pixel(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+            let name = weight == .bold ? "Silkscreen-Bold" : "Silkscreen-Regular"
+            return .custom(name, size: size)
+        }
 
         /// 34pt, bold - For large titles
         static func largeTitle(_ text: String) -> some View {
@@ -266,11 +379,11 @@ struct AppButton: View {
                 } else {
                     if let icon = icon {
                         Image(systemName: icon)
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(AppFont.bold(17))
                     }
 
                     Text(title)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(AppFont.bold(17))
                 }
             }
             .foregroundColor(foregroundColor)
@@ -278,10 +391,10 @@ struct AppButton: View {
             .frame(height: 52)
             .background(backgroundView)
             .overlay(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                    .stroke(borderColor, lineWidth: style == .secondary ? 2 : 0)
+                AdaptiveCardShapeStyle()
+                    .stroke(style == .secondary ? DesignSystem.Colors.primary : (SettingsManager.shared.isCleanUI ? DesignSystem.Colors.primary : Color(hex: "#047857")), lineWidth: SettingsManager.shared.isCleanUI ? 0 : 2)
             )
-            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+            .clipShape(AdaptiveCardShapeStyle())
             .scaleEffect(isPressed ? 0.97 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
             .opacity(isDisabled ? 0.5 : 1.0)
@@ -309,14 +422,14 @@ struct AppButton: View {
     private var backgroundView: some View {
         switch style {
         case .primary:
-            DesignSystem.Colors.primaryGradient
+            if SettingsManager.shared.isCleanUI {
+                LinearGradient(colors: [DesignSystem.Colors.primary], startPoint: .top, endPoint: .bottom)
+            } else {
+                DesignSystem.Colors.band3Green
+            }
         case .secondary:
             Color.clear
         }
-    }
-
-    private var borderColor: Color {
-        style == .secondary ? DesignSystem.Colors.primary : .clear
     }
 }
 
@@ -343,7 +456,7 @@ struct StatCard: View {
                         .frame(width: 40, height: 40)
 
                     Image(systemName: icon)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(AppFont.bold(18))
                         .foregroundColor(iconColor)
                 }
 
@@ -352,12 +465,12 @@ struct StatCard: View {
 
             // Title
             Text(title)
-                .font(.system(size: 14, weight: .medium))
+                .font(AppFont.regular(14))
                 .foregroundColor(DesignSystem.Colors.textSecondary)
 
             // Large value display
             Text(value)
-                .font(.system(size: 28, weight: .bold))
+                .font(AppFont.bold(28))
                 .foregroundColor(DesignSystem.Colors.textPrimary)
 
             // Optional thin progress bar
@@ -379,18 +492,7 @@ struct StatCard: View {
             }
         }
         .padding(DesignSystem.Spacing.lg)
-        .background(DesignSystem.Colors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                .strokeBorder(DesignSystem.Colors.primary.opacity(0.25), lineWidth: 1.5)
-        )
-        .shadow(
-            color: DesignSystem.Shadows.card.color,
-            radius: DesignSystem.Shadows.card.radius,
-            x: DesignSystem.Shadows.card.x,
-            y: DesignSystem.Shadows.card.y
-        )
+        .adaptiveCard(borderColor: DesignSystem.Colors.primary.opacity(0.25), fillColor: DesignSystem.Colors.cardBackground)
     }
 }
 
@@ -415,16 +517,20 @@ struct ProgressRing: View {
             // Background ring (muted)
             Circle()
                 .stroke(
-                    DesignSystem.Colors.border,
+                    SettingsManager.shared.activeColors.ringEmpty,
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
                 .frame(width: size, height: size)
 
-            // Progress ring (green gradient)
+            // Progress ring (gradient)
             Circle()
                 .trim(from: 0, to: normalizedProgress)
                 .stroke(
-                    DesignSystem.Colors.primaryGradient,
+                    LinearGradient(
+                        colors: [SettingsManager.shared.activeColors.xpFillLight, SettingsManager.shared.activeColors.ringFilled],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
                 .frame(width: size, height: size)
@@ -436,13 +542,13 @@ struct ProgressRing: View {
                 if let centerText = centerText {
                     Text(centerText)
                         .font(.system(size: size * 0.22, weight: .bold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .foregroundColor(SettingsManager.shared.activeColors.textPrimary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 } else if showPercentage {
                     Text("\(Int(normalizedProgress * 100))%")
                         .font(.system(size: size * 0.22, weight: .bold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .foregroundColor(SettingsManager.shared.activeColors.textPrimary)
                 }
             }
             .frame(maxWidth: size - lineWidth * 2) // Constrain text width to ring interior
@@ -485,10 +591,10 @@ struct XPBadge: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: "star.fill")
-                .font(.system(size: size.fontSize - 2, weight: .semibold))
+                .font(AppFont.bold(size.fontSize - 2))
 
             Text("+\(xp) XP")
-                .font(.system(size: size.fontSize, weight: .semibold))
+                .font(AppFont.bold(size.fontSize))
         }
         .foregroundColor(.white)
         .padding(size.padding)
@@ -501,7 +607,7 @@ struct XPBadge: View {
                 }
             }
         )
-        .clipShape(Capsule())
+        .clipShape(AdaptivePillShapeStyle())
     }
 }
 
@@ -523,19 +629,19 @@ struct EmptyStateView: View {
 
             // Large icon
             Image(systemName: icon)
-                .font(.system(size: 64, weight: .regular))
+                .font(AppFont.regular(64))
                 .foregroundColor(DesignSystem.Colors.textTertiary)
                 .padding(.bottom, DesignSystem.Spacing.sm)
 
             // Clean typography hierarchy
             VStack(spacing: DesignSystem.Spacing.sm) {
                 Text(title)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(AppFont.bold(22))
                     .foregroundColor(DesignSystem.Colors.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text(message)
-                    .font(.system(size: 16, weight: .regular))
+                    .font(AppFont.regular(16))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DesignSystem.Spacing.xl)
@@ -556,6 +662,484 @@ struct EmptyStateView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(DesignSystem.Colors.primaryBackground)
+    }
+}
+
+// MARK: 6. AuthTextField
+
+/// Styled text field for authentication screens (login and sign-up).
+///
+/// Supports email and secure (password) variants with:
+/// - An inline error message beneath the field for per-field validation failures
+/// - An eye toggle button to reveal/hide password text
+/// - Keyboard return-key routing via `submitLabel` and `onSubmit`
+/// - Full VoiceOver support and Dynamic Type compatibility
+/// - Minimum 44×44 pt tap target on the reveal toggle
+struct AuthTextField: View {
+
+    // MARK: - Configuration
+
+    /// Visible label shown above the input field.
+    let label: String
+
+    /// Placeholder text shown when the field is empty.
+    let placeholder: String
+
+    /// Two-way binding to the text value (owned by AuthViewModel).
+    @Binding var text: String
+
+    /// When `true`, renders a `SecureField` with a reveal toggle.
+    var isSecure: Bool = false
+
+    /// Per-field validation error message. When non-nil, the field border turns
+    /// red and the message appears beneath the field.
+    var errorMessage: String? = nil
+
+    /// The submit/return key label shown on the software keyboard.
+    var submitLabel: SubmitLabel = .done
+
+    /// Called when the user taps the keyboard return/submit key.
+    /// Use this to route focus to the next field or trigger submission.
+    var onSubmit: (() -> Void)? = nil
+
+    // MARK: - Private State
+
+    /// Whether the secure field is currently showing plain text.
+    @State private var isRevealed: Bool = false
+
+    // MARK: - Body
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            // Field label
+            Text(label)
+                .font(AppFont.regular(14))
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+
+            // Input field + optional reveal toggle
+            ZStack(alignment: .trailing) {
+                Group {
+                    if isSecure && !isRevealed {
+                        SecureField(placeholder, text: $text)
+                    } else {
+                        TextField(placeholder, text: $text)
+                            .keyboardType(isSecure ? .default : .emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                }
+                .font(.system(size: DesignSystem.FontSizes.body, weight: .regular))
+                .foregroundColor(DesignSystem.Colors.textPrimary)
+                // Indent right edge when the reveal toggle is present to avoid overlap
+                .padding(.leading, DesignSystem.Spacing.md)
+                .padding(.trailing, isSecure ? 52 : DesignSystem.Spacing.md)
+                .padding(.vertical, DesignSystem.Spacing.md)
+                .frame(minHeight: 52)
+                .background(DesignSystem.Colors.cardBackground)
+                .clipShape(AdaptiveCardShapeStyle())
+                .overlay(
+                    AdaptiveCardShapeStyle()
+                        .stroke(
+                            errorMessage != nil
+                                ? DesignSystem.Colors.danger
+                                : DesignSystem.Colors.border,
+                            lineWidth: errorMessage != nil ? 2 : 1
+                        )
+                )
+                .submitLabel(submitLabel)
+                .onSubmit { onSubmit?() }
+                .accessibilityLabel(label)
+
+                // Reveal / hide toggle (password fields only)
+                if isSecure {
+                    Button {
+                        isRevealed.toggle()
+                    } label: {
+                        Image(systemName: isRevealed ? "eye.slash.fill" : "eye.fill")
+                            .font(.system(size: 16, weight: .regular))
+                            .foregroundColor(DesignSystem.Colors.textTertiary)
+                            // 44×44 pt minimum tap target (HIG requirement)
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel(isRevealed ? "Hide password" : "Show password")
+                    .padding(.trailing, DesignSystem.Spacing.xs)
+                }
+            }
+
+            // Inline field-level error message
+            if let error = errorMessage {
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(DesignSystem.Colors.danger)
+
+                    Text(error)
+                        .font(AppFont.regular(12))
+                        .foregroundColor(DesignSystem.Colors.danger)
+                }
+                // Announce the combined error message to VoiceOver
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(error)
+            }
+        }
+    }
+}
+
+// MARK: - Pixel Art Shapes
+
+/// Stair-step octagonal shape for cards (4-step × 3px = 12px chamfer)
+/// Draws the same polygon as the CSS clip-path from the HTML mockup.
+struct PixelCardShape: Shape {
+    var step: CGFloat = 3
+    var steps: Int = 4
+
+    func path(in rect: CGRect) -> Path {
+        let s = step
+        let w = rect.width
+        let h = rect.height
+        let c = s * CGFloat(steps) // 12pt chamfer
+
+        var p = Path()
+        // Top edge, left to right
+        p.move(to: CGPoint(x: c, y: 0))
+        p.addLine(to: CGPoint(x: w - c, y: 0))
+        // Top-right stair
+        p.addLine(to: CGPoint(x: w - 3*s, y: 0))
+        p.addLine(to: CGPoint(x: w - 3*s, y: s))
+        p.addLine(to: CGPoint(x: w - 2*s, y: s))
+        p.addLine(to: CGPoint(x: w - 2*s, y: 2*s))
+        p.addLine(to: CGPoint(x: w - s, y: 2*s))
+        p.addLine(to: CGPoint(x: w - s, y: 3*s))
+        p.addLine(to: CGPoint(x: w, y: 3*s))
+        p.addLine(to: CGPoint(x: w, y: c))
+        // Right edge
+        p.addLine(to: CGPoint(x: w, y: h - c))
+        // Bottom-right stair
+        p.addLine(to: CGPoint(x: w, y: h - 3*s))
+        p.addLine(to: CGPoint(x: w - s, y: h - 3*s))
+        p.addLine(to: CGPoint(x: w - s, y: h - 2*s))
+        p.addLine(to: CGPoint(x: w - 2*s, y: h - 2*s))
+        p.addLine(to: CGPoint(x: w - 2*s, y: h - s))
+        p.addLine(to: CGPoint(x: w - 3*s, y: h - s))
+        p.addLine(to: CGPoint(x: w - 3*s, y: h))
+        p.addLine(to: CGPoint(x: w - c, y: h))
+        // Bottom edge
+        p.addLine(to: CGPoint(x: c, y: h))
+        // Bottom-left stair
+        p.addLine(to: CGPoint(x: 3*s, y: h))
+        p.addLine(to: CGPoint(x: 3*s, y: h - s))
+        p.addLine(to: CGPoint(x: 2*s, y: h - s))
+        p.addLine(to: CGPoint(x: 2*s, y: h - 2*s))
+        p.addLine(to: CGPoint(x: s, y: h - 2*s))
+        p.addLine(to: CGPoint(x: s, y: h - 3*s))
+        p.addLine(to: CGPoint(x: 0, y: h - 3*s))
+        p.addLine(to: CGPoint(x: 0, y: h - c))
+        // Left edge
+        p.addLine(to: CGPoint(x: 0, y: c))
+        // Top-left stair
+        p.addLine(to: CGPoint(x: 0, y: 3*s))
+        p.addLine(to: CGPoint(x: s, y: 3*s))
+        p.addLine(to: CGPoint(x: s, y: 2*s))
+        p.addLine(to: CGPoint(x: 2*s, y: 2*s))
+        p.addLine(to: CGPoint(x: 2*s, y: s))
+        p.addLine(to: CGPoint(x: 3*s, y: s))
+        p.addLine(to: CGPoint(x: 3*s, y: 0))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Stair-step pill shape for smaller elements (3-step × 2px = 6px chamfer)
+struct PixelPillShape: Shape {
+    var step: CGFloat = 2
+    var steps: Int = 3
+
+    func path(in rect: CGRect) -> Path {
+        let s = step
+        let w = rect.width
+        let h = rect.height
+        let c = s * CGFloat(steps) // 6pt chamfer
+
+        var p = Path()
+        p.move(to: CGPoint(x: c, y: 0))
+        p.addLine(to: CGPoint(x: w - c, y: 0))
+        // Top-right
+        p.addLine(to: CGPoint(x: w - 2*s, y: 0))
+        p.addLine(to: CGPoint(x: w - 2*s, y: s))
+        p.addLine(to: CGPoint(x: w - s, y: s))
+        p.addLine(to: CGPoint(x: w - s, y: 2*s))
+        p.addLine(to: CGPoint(x: w, y: 2*s))
+        p.addLine(to: CGPoint(x: w, y: c))
+        // Right edge
+        p.addLine(to: CGPoint(x: w, y: h - c))
+        // Bottom-right
+        p.addLine(to: CGPoint(x: w, y: h - 2*s))
+        p.addLine(to: CGPoint(x: w - s, y: h - 2*s))
+        p.addLine(to: CGPoint(x: w - s, y: h - s))
+        p.addLine(to: CGPoint(x: w - 2*s, y: h - s))
+        p.addLine(to: CGPoint(x: w - 2*s, y: h))
+        p.addLine(to: CGPoint(x: w - c, y: h))
+        // Bottom edge
+        p.addLine(to: CGPoint(x: c, y: h))
+        // Bottom-left
+        p.addLine(to: CGPoint(x: 2*s, y: h))
+        p.addLine(to: CGPoint(x: 2*s, y: h - s))
+        p.addLine(to: CGPoint(x: s, y: h - s))
+        p.addLine(to: CGPoint(x: s, y: h - 2*s))
+        p.addLine(to: CGPoint(x: 0, y: h - 2*s))
+        p.addLine(to: CGPoint(x: 0, y: h - c))
+        // Left edge
+        p.addLine(to: CGPoint(x: 0, y: c))
+        // Top-left
+        p.addLine(to: CGPoint(x: 0, y: 2*s))
+        p.addLine(to: CGPoint(x: s, y: 2*s))
+        p.addLine(to: CGPoint(x: s, y: s))
+        p.addLine(to: CGPoint(x: 2*s, y: s))
+        p.addLine(to: CGPoint(x: 2*s, y: 0))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Pixel card container with stair-step octagonal border
+struct PixelCard<Content: View>: View {
+    var borderColor: Color = DesignSystem.Colors.primary
+    var fillColor: Color = DesignSystem.Colors.cardBackground
+    var fillGradient: LinearGradient? = nil
+    var step: CGFloat = 3
+    var steps: Int = 4
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        ZStack {
+            PixelCardShape(step: step, steps: steps)
+                .fill(borderColor)
+            PixelCardShape(step: step, steps: steps)
+                .fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
+                .padding(2)
+            content()
+        }
+    }
+}
+
+/// Pixel pill container with stair-step pill border
+struct PixelPill<Content: View>: View {
+    var borderColor: Color = DesignSystem.Colors.primary
+    var fillColor: Color = DesignSystem.Colors.cardBackground
+    var fillGradient: LinearGradient? = nil
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        ZStack {
+            PixelPillShape()
+                .fill(borderColor)
+            PixelPillShape()
+                .fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
+                .padding(2)
+            content()
+        }
+    }
+}
+
+// MARK: - PixelFont Convenience
+
+enum PixelFont {
+    static func bold(_ size: CGFloat) -> Font {
+        DesignSystem.Typography.pixel(size, weight: .bold)
+    }
+    static func regular(_ size: CGFloat) -> Font {
+        DesignSystem.Typography.pixel(size)
+    }
+}
+
+// MARK: - Pixel Shape View Modifiers
+
+extension View {
+    func pixelCard(
+        borderColor: Color = DesignSystem.Colors.primary,
+        fillColor: Color = DesignSystem.Colors.cardBackground,
+        fillGradient: LinearGradient? = nil
+    ) -> some View {
+        self
+            .background(
+                ZStack {
+                    PixelCardShape()
+                        .fill(borderColor)
+                    PixelCardShape()
+                        .fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
+                        .padding(2)
+                }
+            )
+            .clipShape(PixelCardShape())
+    }
+
+    func pixelPill(
+        borderColor: Color = DesignSystem.Colors.primary,
+        fillColor: Color = DesignSystem.Colors.cardBackground,
+        fillGradient: LinearGradient? = nil
+    ) -> some View {
+        self
+            .background(
+                ZStack {
+                    PixelPillShape()
+                        .fill(borderColor)
+                    PixelPillShape()
+                        .fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
+                        .padding(2)
+                }
+            )
+            .clipShape(PixelPillShape())
+    }
+}
+
+// MARK: - AppFont Convenience
+
+/// Adaptive font that returns pixel font (Silkscreen) in RPG mode
+/// or system font (SF Pro Rounded) in Clean mode.
+enum AppFont {
+    static func bold(_ size: CGFloat) -> Font {
+        if SettingsManager.shared.isCleanUI {
+            return .system(size: size, weight: .bold, design: .rounded)
+        }
+        return DesignSystem.Typography.pixel(size, weight: .bold)
+    }
+
+    static func regular(_ size: CGFloat) -> Font {
+        if SettingsManager.shared.isCleanUI {
+            return .system(size: size, weight: .regular, design: .rounded)
+        }
+        return DesignSystem.Typography.pixel(size)
+    }
+
+    /// Serif font used exclusively for the "HealthBar" app title in clean mode.
+    /// In RPG mode, returns pixel bold as usual.
+    static func serifTitle(_ size: CGFloat) -> Font {
+        if SettingsManager.shared.isCleanUI {
+            return .system(size: size, weight: .regular, design: .serif)
+        }
+        return DesignSystem.Typography.pixel(size, weight: .bold)
+    }
+}
+
+// MARK: - Adaptive Shape View Modifiers
+
+extension View {
+    /// Adaptive card: PixelCardShape in RPG, RoundedRectangle(16) in Clean.
+    func adaptiveCard(
+        borderColor: Color = DesignSystem.Colors.primary,
+        fillColor: Color = DesignSystem.Colors.cardBackground,
+        fillGradient: LinearGradient? = nil,
+        cornerRadius: CGFloat = 16
+    ) -> some View {
+        Group {
+            if SettingsManager.shared.isCleanUI {
+                self
+                    .background(
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(borderColor.opacity(SettingsManager.shared.isCleanDark ? 0.08 : 0.06), lineWidth: 0.5)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            } else {
+                self.pixelCard(borderColor: borderColor, fillColor: fillColor, fillGradient: fillGradient)
+            }
+        }
+    }
+
+    /// Adaptive pill: PixelPillShape in RPG, Capsule in Clean.
+    func adaptivePill(
+        borderColor: Color = DesignSystem.Colors.primary,
+        fillColor: Color = DesignSystem.Colors.cardBackground,
+        fillGradient: LinearGradient? = nil
+    ) -> some View {
+        Group {
+            if SettingsManager.shared.isCleanUI {
+                self
+                    .background(
+                        Capsule()
+                            .fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
+                    )
+                    .clipShape(Capsule())
+            } else {
+                self.pixelPill(borderColor: borderColor, fillColor: fillColor, fillGradient: fillGradient)
+            }
+        }
+    }
+}
+
+// MARK: - Adaptive Container Views
+
+/// Adaptive card container. PixelCard in RPG, rounded card in Clean.
+struct AdaptiveCard<Content: View>: View {
+    var borderColor: Color = DesignSystem.Colors.primary
+    var fillColor: Color = DesignSystem.Colors.cardBackground
+    var fillGradient: LinearGradient? = nil
+    var cornerRadius: CGFloat = 16
+    @ViewBuilder let content: () -> Content
+
+    private var isClean: Bool { SettingsManager.shared.isCleanUI }
+
+    var body: some View {
+        if isClean {
+            ZStack {
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(borderColor.opacity(SettingsManager.shared.isCleanDark ? 0.08 : 0.06), lineWidth: 0.5)
+                    )
+                content()
+            }
+        } else {
+            PixelCard(borderColor: borderColor, fillColor: fillColor, fillGradient: fillGradient) {
+                content()
+            }
+        }
+    }
+}
+
+/// Adaptive pill container. PixelPill in RPG, capsule in Clean.
+struct AdaptivePill<Content: View>: View {
+    var borderColor: Color = DesignSystem.Colors.primary
+    var fillColor: Color = DesignSystem.Colors.cardBackground
+    var fillGradient: LinearGradient? = nil
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if SettingsManager.shared.isCleanUI {
+            ZStack {
+                Capsule().fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
+                content()
+            }
+        } else {
+            PixelPill(borderColor: borderColor, fillColor: fillColor, fillGradient: fillGradient) {
+                content()
+            }
+        }
+    }
+}
+
+// MARK: - Adaptive Shape Types
+
+/// Adaptive Shape for .clipShape() and .overlay() usages.
+struct AdaptiveCardShapeStyle: Shape {
+    var cornerRadius: CGFloat = 16
+
+    func path(in rect: CGRect) -> Path {
+        SettingsManager.shared.isCleanUI
+            ? RoundedRectangle(cornerRadius: cornerRadius).path(in: rect)
+            : PixelCardShape().path(in: rect)
+    }
+}
+
+struct AdaptivePillShapeStyle: Shape {
+    func path(in rect: CGRect) -> Path {
+        SettingsManager.shared.isCleanUI
+            ? Capsule().path(in: rect)
+            : PixelPillShape().path(in: rect)
     }
 }
 
@@ -595,6 +1179,14 @@ extension Color {
     ///   - dark: Color for dark mode
     init(light: Color, dark: Color) {
         self.init(UIColor(light: UIColor(light), dark: UIColor(dark)))
+    }
+
+    /// Darken or lighten a color by adjusting its brightness.
+    /// Negative values darken, positive values lighten.
+    func adjustedBrightness(_ amount: Double) -> Color {
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(self).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        return Color(hue: Double(h), saturation: Double(s), brightness: max(0, min(1, Double(b) + amount)), opacity: Double(a))
     }
 }
 

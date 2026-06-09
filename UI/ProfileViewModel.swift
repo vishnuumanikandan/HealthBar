@@ -20,6 +20,10 @@ final class ProfileViewModel {
     /// The app coordinator (handles all business logic)
     private let coordinator: AppCoordinator
 
+    /// Auth service — read-only, used to suppress false errors for new accounts
+    /// and to read guest state for display name fallback logic.
+    private var authService: any AuthService
+
     // MARK: - UI State
 
     /// Current user progress data
@@ -27,6 +31,9 @@ final class ProfileViewModel {
 
     /// Current daily goal data
     var currentGoal: DailyGoal?
+
+    /// The user's completed health profile (nil if not yet set up or not found).
+    var existingProfile: UserProfile?
 
     /// Loading state for UI
     var isLoading = false
@@ -60,19 +67,53 @@ final class ProfileViewModel {
         return "\(formatter.string(from: NSNumber(value: progress.totalXP)) ?? "0") XP"
     }
 
-    /// User's initials for avatar placeholder
-    var userInitials: String {
-        // For now, return a default since we don't have user name
-        // In Phase 2+, this would use actual user data
-        return "U"
+    /// Display name with fallback chain: UserProfile.displayName → Firebase Auth → "User"
+    var displayName: String {
+        if let name = existingProfile?.displayName, !name.isEmpty { return name }
+        if let name = FirebaseAuthService.shared.currentUserDisplayName, !name.isEmpty { return name }
+        return "User"
     }
+
+    /// First character of displayName (uppercased), fallback "U"
+    var userInitials: String {
+        String(displayName.prefix(1)).uppercased()
+    }
+
+    // MARK: - XP Progress
+
+    /// XP earned within the current level (0–99)
+    var xpWithinLevel: Int {
+        userProgress.map { $0.totalXP % 100 } ?? 0
+    }
+
+    /// XP remaining to reach the next level
+    var xpToNextLevel: Int {
+        userProgress.map { 100 - ($0.totalXP % 100) } ?? 100
+    }
+
+    /// Progress ratio within the current level (0.0–1.0)
+    var levelProgress: Double {
+        userProgress.map { Double($0.totalXP % 100) / 100.0 } ?? 0
+    }
+
+    /// Next level number
+    var nextLevel: Int { currentLevel + 1 }
+
+    // MARK: - Badge Progress
+
+    /// All badge progress records for the current user.
+    var badgeProgressList: [BadgeProgress] = []
 
     // MARK: - Initialization
 
-    /// Initializes the ViewModel with an AppCoordinator
-    /// - Parameter coordinator: The app coordinator for business logic
-    init(coordinator: AppCoordinator) {
+    /// Initializes the ViewModel with an AppCoordinator and auth service.
+    /// - Parameters:
+    ///   - coordinator: The app coordinator for business logic.
+    ///   - authService: Used to read isNewUser (suppresses false errors on brand-new accounts)
+    ///                  and isGuest (for display name fallback).
+    init(coordinator: AppCoordinator, authService: any AuthService) {
         self.coordinator = coordinator
+        self.authService = authService
     }
 
     // MARK: - Public Methods
@@ -87,8 +128,22 @@ final class ProfileViewModel {
         do {
             userProgress = try await coordinator.getUserProgress()
             currentGoal = try await coordinator.getCurrentGoal()
+            existingProfile = try await coordinator.getUserProfile()
+            badgeProgressList = (try? await coordinator.getAllBadgeProgress()) ?? []
+            // First successful load for a new account — clear the new-user flag.
+            if authService.isNewUser {
+                authService.isNewUser = false
+            }
         } catch {
-            errorMessage = "Failed to load profile data: \(error.localizedDescription)"
+            if authService.isNewUser {
+                // Brand-new account: no data exists yet. Suppress the error and show
+                // a clean empty state. This prevents false "unable to load" messages
+                // immediately after account creation.
+                errorMessage = nil
+                authService.isNewUser = false
+            } else {
+                errorMessage = "Failed to load profile data: \(error.localizedDescription)"
+            }
         }
 
         isLoading = false

@@ -1,0 +1,101 @@
+//
+//  BadgeToast.swift
+//  HealthBar
+//
+//  Created by Claude on 4/8/26.
+//
+
+import SwiftUI
+
+// MARK: - BadgeToastQueue
+
+/// Global singleton queue that drives badge unlock toasts across all tabs.
+///
+/// Each tab has its own AppCoordinator, so per-coordinator state is invisible
+/// cross-tab. This singleton ensures a toast triggered on the Food tab is still
+/// visible when the user is on the Profile tab.
+///
+/// Usage:
+///   BadgeToastQueue.shared.enqueue(newlyUnlockedBadges)
+@Observable
+@MainActor
+final class BadgeToastQueue {
+
+    static let shared = BadgeToastQueue()
+
+    /// Badges waiting to be shown (FIFO).
+    var queue: [BadgeDefinition] = []
+
+    /// The badge currently being displayed. Nil when no toast is active.
+    var currentToast: BadgeDefinition?
+
+    private init() {}
+
+    /// Adds badges to the queue and starts showing if nothing is active.
+    func enqueue(_ badges: [BadgeDefinition]) {
+        queue.append(contentsOf: badges)
+        showNext()
+    }
+
+    /// Advances to the next toast after a brief dismiss pause.
+    func dismiss() {
+        currentToast = nil
+        Task {
+            try? await Task.sleep(for: .seconds(0.3))
+            showNext()
+        }
+    }
+
+    // MARK: - Private
+
+    private func showNext() {
+        guard currentToast == nil, !queue.isEmpty else { return }
+        currentToast = queue.removeFirst()
+    }
+}
+
+// MARK: - BadgeToastView
+
+/// A banner that slides in from the top to celebrate a newly earned badge.
+///
+/// Shown via `.overlay(alignment: .top)` on ContentView's mainTabView.
+/// Auto-dismisses after 3 seconds; tapping it dismisses it immediately.
+struct BadgeToastView: View {
+
+    let badge: BadgeDefinition
+    let onDismiss: () -> Void
+
+    private var tc: ThemeColors { SettingsManager.shared.activeColors }
+
+    var body: some View {
+        HStack(spacing: DesignSystem.Spacing.sm) {
+            Text(badge.emoji)
+                .font(AppFont.regular(32))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Badge Unlocked!")
+                    .font(AppFont.bold(12))
+                    .foregroundColor(tc.textSecondary)
+                Text(badge.title)
+                    .font(AppFont.bold(17))
+                    .foregroundColor(tc.textPrimary)
+            }
+
+            Spacer()
+
+            Image(systemName: "xmark")
+                .font(AppFont.bold(12))
+                .foregroundColor(tc.textSecondary)
+        }
+        .padding(.horizontal, DesignSystem.Spacing.md)
+        .padding(.vertical, DesignSystem.Spacing.sm)
+        .adaptiveCard(borderColor: tc.primary.opacity(0.4), fillColor: tc.cardBackground)
+        .padding(.horizontal, DesignSystem.Spacing.md)
+        .padding(.top, DesignSystem.Spacing.sm)
+        .onTapGesture { onDismiss() }
+        .task {
+            try? await Task.sleep(for: .seconds(3))
+            onDismiss()
+        }
+    }
+}

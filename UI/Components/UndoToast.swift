@@ -28,13 +28,15 @@ struct UndoToast: View {
     /// Animation state
     @State private var isShowing = false
 
+    private var tc: ThemeColors { SettingsManager.shared.activeColors }
+
     // MARK: - Body
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.md) {
             // Message text
             Text(message)
-                .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
+                .font(AppFont.regular(16))
                 .foregroundColor(.white)
                 .lineLimit(1)
 
@@ -43,17 +45,13 @@ struct UndoToast: View {
             // Undo button
             Button(action: onUndo) {
                 Text("Undo")
-                    .font(.system(size: DesignSystem.FontSizes.callout, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .font(AppFont.bold(16))
+                    .foregroundColor(tc.primary)
             }
         }
         .padding(.horizontal, DesignSystem.Spacing.lg)
         .padding(.vertical, DesignSystem.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                .fill(Color(hex: "#1F2937")) // Dark charcoal
-                .shadow(color: Color.black.opacity(0.3), radius: 8, y: 4)
-        )
+        .adaptiveCard(borderColor: Color(hex: "#374151"), fillColor: Color(hex: "#1F2937"))
         .padding(.horizontal, DesignSystem.Spacing.lg)
         .offset(y: isShowing ? 0 : 100)
         .opacity(isShowing ? 1 : 0)
