@@ -104,6 +104,9 @@ final class ProfileViewModel {
     /// All badge progress records for the current user.
     var badgeProgressList: [BadgeProgress] = []
 
+    /// The user's unique @handle (nil if not yet claimed or guest).
+    var username: String? = nil
+
     // MARK: - Initialization
 
     /// Initializes the ViewModel with an AppCoordinator and auth service.
@@ -130,6 +133,7 @@ final class ProfileViewModel {
             currentGoal = try await coordinator.getCurrentGoal()
             existingProfile = try await coordinator.getUserProfile()
             badgeProgressList = (try? await coordinator.getAllBadgeProgress()) ?? []
+            username = await coordinator.currentUsername()
             // First successful load for a new account — clear the new-user flag.
             if authService.isNewUser {
                 authService.isNewUser = false

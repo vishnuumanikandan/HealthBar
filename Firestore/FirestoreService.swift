@@ -192,6 +192,30 @@ protocol FirestoreService {
     /// Same idempotency and MainActor guarantees as listenForFoodEntries.
     func listenForBadges(userId: String, onUpdate: @escaping ([BadgeProgressDTO]) -> Void)
 
+    // MARK: - Username (Friend System Phase 1)
+
+    /// One-time read: returns the canonical username owned by `userId`, or nil if unclaimed.
+    /// Reads users/{userId}/account/info and returns its `username` field.
+    func fetchUsername(userId: String) async throws -> String?
+
+    /// Non-authoritative availability probe for UI feedback only.
+    /// Returns true if no usernames/{handleKey} document exists for the given canonical handle.
+    /// The claim transaction remains the sole source of truth; never gate the claim on this result.
+    func isUsernameAvailable(_ handleKey: String) async throws -> Bool
+
+    /// Atomically claims `handleKey` for `userId` and writes it into account/info.
+    /// Runs inside a single Firestore transaction for uniqueness enforcement.
+    func claimUsername(_ handleKey: String, userId: String) async throws
+
+    /// Atomically changes the user's username from `oldHandleKey` to `newHandleKey`.
+    /// Runs inside a single Firestore transaction:
+    ///   1. Verify old handle is owned by this user.
+    ///   2. Verify new handle is unclaimed.
+    ///   3. Delete old usernames/{oldHandleKey}.
+    ///   4. Create usernames/{newHandleKey}.
+    ///   5. Merge-write username + lastUsernameChangeAt into account/info.
+    func changeUsername(from oldHandleKey: String, to newHandleKey: String, userId: String) async throws
+
     // MARK: - Account Deletion
 
     /// Deletes all Firestore data under users/{userId}/ in batches.

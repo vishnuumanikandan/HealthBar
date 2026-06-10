@@ -2124,6 +2124,148 @@ final class DataManager {
         return newlyUnlocked
     }
 
+    // MARK: - Username (Friend System Phase 1)
+
+    /// Returns the current user's canonical username, or nil if unclaimed.
+    /// Returns nil for guests and unauthenticated sessions (no Firestore read).
+    func currentUsername() async -> String? {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return nil }
+        return try? await firestoreService.fetchUsername(userId: userId)
+    }
+
+    /// True when an authenticated (non-guest) user has not yet claimed a username.
+    /// Always false for guests (guests never claim).
+    /// Returns false on network failure — never force the gate when we can't verify.
+    func needsUsername() async -> Bool {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return false }
+        do {
+            let name = try await firestoreService.fetchUsername(userId: userId)
+            return (name ?? "").isEmpty
+        } catch {
+            // Network failure — don't force the gate, let the user through.
+            // The gate will re-evaluate on next .task(id:) trigger.
+            return false
+        }
+    }
+
+    /// Validates + claims a username for the current user.
+    /// Validation runs locally first (throws UsernameError.invalidFormat on failure),
+    /// then delegates the atomic claim to FirestoreService.
+    /// Guests and unauthenticated callers throw UsernameError.notAuthenticated.
+    func claimUsername(_ raw: String) async throws {
+        guard !isGuest else { throw UsernameError.notAuthenticated }
+        guard let userId = currentUserId, !userId.isEmpty else { throw UsernameError.notAuthenticated }
+        let handleKey = try DataManager.normalizeAndValidateUsername(raw)
+        try await firestoreService.claimUsername(handleKey, userId: userId)
+    }
+
+    /// Fetches the full AccountInfoDTO for the current user.
+    /// Returns nil for guests and unauthenticated sessions (no Firestore read).
+    func fetchAccountInfo() async -> AccountInfoDTO? {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return nil }
+        return try? await firestoreService.fetchAccountInfo(userId: userId)
+    }
+
+    /// Changes the current user's username from their existing handle to a new one.
+    /// Enforces a 30-day cooldown between username changes.
+    /// Guests and unauthenticated callers throw UsernameError.notAuthenticated.
+    func changeUsername(to raw: String) async throws {
+        guard !isGuest else { throw UsernameError.notAuthenticated }
+        guard let userId = currentUserId, !userId.isEmpty else { throw UsernameError.notAuthenticated }
+
+        // Read old handle + cooldown directly from document fields (not Codable)
+        // to avoid decode failures from FieldValue.serverTimestamp() type mismatches.
+        let oldHandle = try await firestoreService.fetchUsername(userId: userId)
+
+        guard let oldHandle, !oldHandle.isEmpty else {
+            // No existing username — use the initial claim flow instead
+            let handleKey = try DataManager.normalizeAndValidateUsername(raw)
+            try await firestoreService.claimUsername(handleKey, userId: userId)
+            return
+        }
+
+        // Enforce 30-day cooldown by reading the raw field
+        let snapshot = try await FirestoreServiceImpl.shared.fetchAccountInfoRaw(userId: userId)
+        if let lastChangeTimestamp = snapshot?["lastUsernameChangeAt"] {
+            let lastChange: Date
+            if let ts = lastChangeTimestamp as? Date {
+                lastChange = ts
+            } else if let ts = lastChangeTimestamp as? NSNumber {
+                lastChange = Date(timeIntervalSince1970: ts.doubleValue)
+            } else {
+                lastChange = .distantPast
+            }
+            let cooldownEnd = Calendar.current.date(byAdding: .day, value: 30, to: lastChange)!
+            if Date() < cooldownEnd {
+                throw UsernameError.cooldownActive(cooldownEnd)
+            }
+        }
+
+        let newHandle = try DataManager.normalizeAndValidateUsername(raw)
+
+        // Same handle — no-op
+        guard newHandle != oldHandle else { return }
+
+        try await firestoreService.changeUsername(from: oldHandle, to: newHandle, userId: userId)
+    }
+
+    /// Returns the date when the user can next change their display name, or nil if no cooldown is active.
+    /// Weekly cooldown (7 days from lastDisplayNameChangeAt).
+    func displayNameCooldownEnd() async -> Date? {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return nil }
+        guard let data = try? await FirestoreServiceImpl.shared.fetchAccountInfoRaw(userId: userId) else { return nil }
+        let lastChange: Date?
+        if let ts = data["lastDisplayNameChangeAt"] as? Date {
+            lastChange = ts
+        } else {
+            lastChange = nil
+        }
+        guard let lastChange else { return nil }
+        let cooldownEnd = Calendar.current.date(byAdding: .day, value: 7, to: lastChange)!
+        return Date() < cooldownEnd ? cooldownEnd : nil
+    }
+
+    /// Returns the date when the user can next change their username, or nil if no cooldown is active.
+    /// Monthly cooldown (30 days from lastUsernameChangeAt).
+    func usernameCooldownEnd() async -> Date? {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return nil }
+        guard let data = try? await FirestoreServiceImpl.shared.fetchAccountInfoRaw(userId: userId) else { return nil }
+        let lastChange: Date?
+        if let ts = data["lastUsernameChangeAt"] as? Date {
+            lastChange = ts
+        } else {
+            lastChange = nil
+        }
+        guard let lastChange else { return nil }
+        let cooldownEnd = Calendar.current.date(byAdding: .day, value: 30, to: lastChange)!
+        return Date() < cooldownEnd ? cooldownEnd : nil
+    }
+
+    /// Normalizes and validates a raw username input.
+    /// Returns the canonical lowercased handle on success; throws UsernameError.invalidFormat on failure.
+    static func normalizeAndValidateUsername(_ raw: String) throws -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        let lowercased = trimmed.lowercased()
+
+        let regex = try! NSRegularExpression(pattern: "^[a-z][a-z0-9_]{2,19}$")
+        let range = NSRange(lowercased.startIndex..., in: lowercased)
+        guard regex.firstMatch(in: lowercased, range: range) != nil else {
+            throw UsernameError.invalidFormat
+        }
+
+        let reserved: Set<String> = [
+            "admin", "root", "support", "system", "healthbar",
+            "healthbarapp", "guest", "null", "undefined", "me", "you",
+            "official", "staff", "team", "founder", "developer",
+            "mod", "moderator"
+        ]
+        guard !reserved.contains(lowercased) else {
+            throw UsernameError.invalidFormat
+        }
+
+        return lowercased
+    }
+
     // MARK: - Guest Mode Methods
 
     /// Migrates all SwiftData records from userId=="guest" to the new authenticated userId.

@@ -47,6 +47,11 @@ struct ContentView: View {
     @State private var settings = SettingsManager.shared
     private var tc: ThemeColors { settings.activeColors }
 
+    // MARK: - Username Gate State
+
+    /// True when the current authenticated (non-guest) user has no claimed username.
+    @State private var showClaimUsername: Bool = false
+
     // MARK: - Onboarding State
 
     /// True when the current user has no completed UserProfile. Triggers fullScreenCover.
@@ -157,6 +162,18 @@ struct ContentView: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.7), value: BadgeToastQueue.shared.currentToast?.id)
+        .fullScreenCover(isPresented: $showClaimUsername) {
+            ClaimUsernameView(
+                coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared)
+            ) {
+                showClaimUsername = false
+                Task {
+                    let coordinator = AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared)
+                    let completed = await coordinator.checkOnboardingCompleted()
+                    showOnboarding = !completed
+                }
+            }
+        }
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView(
                 coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
@@ -179,11 +196,13 @@ struct ContentView: View {
         .task(id: authService.currentUserEmail) {
             guard let email = authService.currentUserEmail, !email.isEmpty else {
                 showOnboarding = false
+                showClaimUsername = false
                 return
             }
             let coordinator = AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared)
 
             if authService.isGuest {
+                showClaimUsername = false
                 let completed = await coordinator.checkOnboardingCompleted()
                 showOnboarding = !completed
                 return
@@ -196,8 +215,9 @@ struct ContentView: View {
                 Task { try? await coordinator.syncUserProfileFromFirestore() }
             }
 
-            let completed = await coordinator.checkOnboardingCompleted()
-            showOnboarding = !completed
+            let needsUsername = await coordinator.needsUsername()
+            showClaimUsername = needsUsername
+            showOnboarding = needsUsername ? false : !(await coordinator.checkOnboardingCompleted())
         }
         .onChange(of: authService.isGuest) { _, isGuest in
             if !isGuest && showSignUpFromGuest {

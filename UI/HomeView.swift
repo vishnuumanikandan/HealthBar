@@ -353,10 +353,10 @@ struct PurityVerticalBar: View {
     let score: Int
     var borderColor: Color = DesignSystem.Colors.primary
     var trackColor: Color = Color(hex: "#E5E7EB")
-    var band1: Color = Color(hex: "#059669")
-    var band2: Color = Color(hex: "#84CC16")
-    var band3: Color = Color(hex: "#EA580C")
-    var band4: Color = Color(hex: "#DC2626")
+    var band1: Color = Color(hex: "#DC2626")
+    var band2: Color = Color(hex: "#EA580C")
+    var band3: Color = Color(hex: "#84CC16")
+    var band4: Color = Color(hex: "#059669")
     var labelColor: Color = DesignSystem.Colors.textSecondary
     var valueColor: Color = DesignSystem.Colors.textPrimary
 

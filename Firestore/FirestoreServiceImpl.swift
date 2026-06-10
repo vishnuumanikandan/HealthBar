@@ -479,13 +479,174 @@ final class FirestoreServiceImpl: FirestoreService {
         db.collection("users").document(userId).collection("account").document("info")
     }
 
+    private func usernameDocument(for handleKey: String) -> DocumentReference {
+        db.collection("usernames").document(handleKey)
+    }
+
     func writeAccountInfo(_ info: AccountInfoDTO, userId: String) async throws {
-        try accountInfoDocument(for: userId).setData(from: info)
+        try accountInfoDocument(for: userId).setData(from: info, merge: true)
     }
 
     func fetchAccountInfo(userId: String) async throws -> AccountInfoDTO? {
         let snapshot = try await accountInfoDocument(for: userId).getDocument()
         return try? snapshot.data(as: AccountInfoDTO.self)
+    }
+
+    /// Reads account/info as raw dictionary, bypassing Codable.
+    /// Used by cooldown checks and changeUsername where FieldValue.serverTimestamp()
+    /// fields cause full Codable decode to fail.
+    /// Firestore Timestamp values are converted to Date for the caller.
+    func fetchAccountInfoRaw(userId: String) async throws -> [String: Any]? {
+        let snapshot = try await accountInfoDocument(for: userId).getDocument()
+        guard var data = snapshot.data() else { return nil }
+        // Convert Firestore Timestamp values to Date so callers don't need FirebaseFirestore import
+        for key in ["lastUsernameChangeAt", "lastDisplayNameChangeAt", "createdAt", "claimedAt"] {
+            if let ts = data[key] as? Timestamp {
+                data[key] = ts.dateValue()
+            }
+        }
+        return data
+    }
+
+    // MARK: - FirestoreService: Username (Friend System Phase 1)
+
+    func fetchUsername(userId: String) async throws -> String? {
+        let snapshot = try await accountInfoDocument(for: userId).getDocument()
+        // Read username directly from document data instead of full Codable decode.
+        // The account/info doc may contain FieldValue.serverTimestamp() fields from
+        // transaction writes that cause AccountInfoDTO Codable decode to fail silently.
+        return snapshot.data()?["username"] as? String
+    }
+
+    func isUsernameAvailable(_ handleKey: String) async throws -> Bool {
+        let snapshot = try await usernameDocument(for: handleKey).getDocument()
+        return !snapshot.exists
+    }
+
+    func claimUsername(_ handleKey: String, userId: String) async throws {
+        let usernameRef = usernameDocument(for: handleKey)
+        let accountRef = accountInfoDocument(for: userId)
+
+        do {
+            try await db.runTransaction { transaction, errorPointer in
+                // Step 1: Read the username document
+                let usernameSnapshot: DocumentSnapshot
+                do {
+                    usernameSnapshot = try transaction.getDocument(usernameRef)
+                } catch let fetchError as NSError {
+                    errorPointer?.pointee = fetchError
+                    return nil
+                }
+
+                if usernameSnapshot.exists {
+                    let existingUid = usernameSnapshot.data()?["uid"] as? String
+                    if existingUid == userId {
+                        // Step 2: Idempotent re-claim by same user — success no-op
+                        return nil
+                    } else {
+                        // Step 3: Owned by someone else
+                        let takenError = NSError(
+                            domain: "UsernameError",
+                            code: 409,
+                            userInfo: [NSLocalizedDescriptionKey: "taken"]
+                        )
+                        errorPointer?.pointee = takenError
+                        return nil
+                    }
+                }
+
+                // Step 4: Unclaimed — create the username doc and merge into account/info
+                transaction.setData([
+                    "uid": userId,
+                    "username": handleKey,
+                    "claimedAt": FieldValue.serverTimestamp()
+                ], forDocument: usernameRef)
+
+                transaction.setData(
+                    ["username": handleKey],
+                    forDocument: accountRef,
+                    merge: true
+                )
+
+                return nil
+            }
+        } catch let error as NSError {
+            if error.domain == "UsernameError" && error.code == 409 {
+                throw UsernameError.taken
+            }
+            throw UsernameError.network(error.localizedDescription)
+        }
+    }
+
+    func changeUsername(from oldHandleKey: String, to newHandleKey: String, userId: String) async throws {
+        let oldUsernameRef = usernameDocument(for: oldHandleKey)
+        let newUsernameRef = usernameDocument(for: newHandleKey)
+        let accountRef = accountInfoDocument(for: userId)
+
+        do {
+            try await db.runTransaction { transaction, errorPointer in
+                // Step 1: Verify old handle is owned by this user
+                let oldSnapshot: DocumentSnapshot
+                do {
+                    oldSnapshot = try transaction.getDocument(oldUsernameRef)
+                } catch let fetchError as NSError {
+                    errorPointer?.pointee = fetchError
+                    return nil
+                }
+                if oldSnapshot.exists {
+                    let ownerUid = oldSnapshot.data()?["uid"] as? String
+                    if ownerUid != userId {
+                        let err = NSError(domain: "UsernameError", code: 403,
+                                          userInfo: [NSLocalizedDescriptionKey: "not_owner"])
+                        errorPointer?.pointee = err
+                        return nil
+                    }
+                }
+
+                // Step 2: Verify new handle is unclaimed
+                let newSnapshot: DocumentSnapshot
+                do {
+                    newSnapshot = try transaction.getDocument(newUsernameRef)
+                } catch let fetchError as NSError {
+                    errorPointer?.pointee = fetchError
+                    return nil
+                }
+                if newSnapshot.exists {
+                    let existingUid = newSnapshot.data()?["uid"] as? String
+                    if existingUid == userId {
+                        // Same user re-claiming same handle — no-op
+                        return nil
+                    }
+                    let takenError = NSError(domain: "UsernameError", code: 409,
+                                             userInfo: [NSLocalizedDescriptionKey: "taken"])
+                    errorPointer?.pointee = takenError
+                    return nil
+                }
+
+                // Step 3: Delete old handle
+                transaction.deleteDocument(oldUsernameRef)
+
+                // Step 4: Create new handle
+                transaction.setData([
+                    "uid": userId,
+                    "username": newHandleKey,
+                    "claimedAt": FieldValue.serverTimestamp()
+                ], forDocument: newUsernameRef)
+
+                // Step 5: Update account/info with new username + timestamp
+                transaction.setData([
+                    "username": newHandleKey,
+                    "lastUsernameChangeAt": FieldValue.serverTimestamp()
+                ], forDocument: accountRef, merge: true)
+
+                return nil
+            }
+        } catch let error as NSError {
+            if error.domain == "UsernameError" && error.code == 409 {
+                throw UsernameError.taken
+            }
+            throw UsernameError.network(error.localizedDescription)
+        }
     }
 
     // MARK: - FirestoreService: BadgeProgress
@@ -514,6 +675,17 @@ final class FirestoreServiceImpl: FirestoreService {
     /// Deletes all Firestore data under users/{userId}/ in batches of ≤500.
     /// Deletes all known subcollections first, then the root users/{userId} document.
     func deleteAllUserData(userId: String) async throws {
+        // Release the username handle (top-level, not a subcollection) before deleting user data.
+        // Only delete if the doc's uid matches this user (guard against reassigned handles).
+        if let accountInfo = try? await fetchAccountInfo(userId: userId),
+           let username = accountInfo.username, !username.isEmpty {
+            let usernameRef = usernameDocument(for: username)
+            let usernameSnap = try? await usernameRef.getDocument()
+            if let data = usernameSnap?.data(), data["uid"] as? String == userId {
+                try? await deleteDocument(ref: usernameRef)
+            }
+        }
+
         let knownSubcollections = [
             "foodEntries", "dailyGoals", "dailyQuests", "moodEntries",
             "customFoods", "savedMeals", "savedRecipes", "personalBaselines",

@@ -266,6 +266,12 @@ struct ProfileView: View {
                 .font(AppFont.bold(22))
                 .foregroundColor(tc.textPrimary)
 
+            if let username = viewModel.username, !username.isEmpty {
+                Text("@\(username)")
+                    .font(AppFont.regular(14))
+                    .foregroundColor(tc.textSecondary)
+            }
+
             // Rank badge
             HStack(spacing: DesignSystem.Spacing.xs) {
                 Image(systemName: "crown.fill")
@@ -475,7 +481,7 @@ struct ProfileView: View {
                     settingButton(
                         icon: "person.circle",
                         title: "Account",
-                        subtitle: "Manage display name, password",
+                        subtitle: "Manage username, display name, password",
                         action: { showingAccount = true }
                     )
                 }
