@@ -728,7 +728,7 @@ struct AuthTextField: View {
                             .autocorrectionDisabled()
                     }
                 }
-                .font(.system(size: DesignSystem.FontSizes.body, weight: .regular))
+                .font(AppFont.regular(DesignSystem.FontSizes.body))
                 .foregroundColor(DesignSystem.Colors.textPrimary)
                 // Indent right edge when the reveal toggle is present to avoid overlap
                 .padding(.leading, DesignSystem.Spacing.md)

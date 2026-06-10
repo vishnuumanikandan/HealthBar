@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Existing users/{userId} rules — owner-only read/write
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Username uniqueness index (Friend System Phase 1)
+    match /usernames/{handleKey} {
+      // Any authenticated user may read (availability checks + Phase 2 discovery).
+      allow read: if request.auth != null;
+
+      // Create only an unclaimed handle (document ID = the lock), only pointing to
+      // your own uid, only the exact three expected fields, with the handleKey itself
+      // validated against the SAME format + reserved rules the client enforces.
+      allow create: if request.auth != null
+                    && request.resource.data.keys().hasOnly(['uid', 'username', 'claimedAt'])
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.username == handleKey
+                    && handleKey.matches('^[a-z][a-z0-9_]{2,19}$')
+                    && !(handleKey in [
+                         'admin', 'root', 'support', 'system', 'healthbar',
+                         'healthbarapp', 'guest', 'null', 'undefined', 'me', 'you',
+                         'official', 'staff', 'team', 'founder', 'developer',
+                         'mod', 'moderator'
+                       ]);
+
+      // No in-place renames. Username changes use delete + create (atomic transaction).
+      allow update: if false;
+
+      // Only the owner may release their handle (used by account deletion and username changes).
+      allow delete: if request.auth != null
+                    && resource.data.uid == request.auth.uid;
+    }
+  }
+}

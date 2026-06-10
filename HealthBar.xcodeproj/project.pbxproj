@@ -38,6 +38,9 @@
 		1146B2F42F234473004767C9 /* FoodLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2B22F233BE6004767C9 /* FoodLogView.swift */; };
 		1146B3002F247828004767C9 /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2FF2F247828004767C9 /* ProfileViewModel.swift */; };
 		1146B3042F247FA7004767C9 /* CameraPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B3032F247FA7004767C9 /* CameraPickerView.swift */; };
+		BE1029442FD8A2E700E9744F /* ClaimUsernameViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1029432FD8A2E700E9744F /* ClaimUsernameViewModel.swift */; };
+		BE1029462FD8A2F000E9744F /* ClaimUsernameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1029452FD8A2F000E9744F /* ClaimUsernameView.swift */; };
+		BE1029482FD8A32A00E9744F /* UsernameError.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1029472FD8A32A00E9744F /* UsernameError.swift */; };
 		BE47B6372F67739C007F48F5 /* FirebaseAI in Frameworks */ = {isa = PBXBuildFile; productRef = BE47B6362F67739C007F48F5 /* FirebaseAI */; };
 		BE47B6392F67739C007F48F5 /* FirebaseAILogic in Frameworks */ = {isa = PBXBuildFile; productRef = BE47B6382F67739C007F48F5 /* FirebaseAILogic */; };
 		BE47B63B2F67739C007F48F5 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = BE47B63A2F67739C007F48F5 /* FirebaseAnalytics */; };
@@ -188,6 +191,9 @@
 		1146B2EE2F234414004767C9 /* DataManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataManager.swift; sourceTree = "<group>"; };
 		1146B2FF2F247828004767C9 /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
 		1146B3032F247FA7004767C9 /* CameraPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPickerView.swift; sourceTree = "<group>"; };
+		BE1029432FD8A2E700E9744F /* ClaimUsernameViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaimUsernameViewModel.swift; sourceTree = "<group>"; };
+		BE1029452FD8A2F000E9744F /* ClaimUsernameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaimUsernameView.swift; sourceTree = "<group>"; };
+		BE1029472FD8A32A00E9744F /* UsernameError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsernameError.swift; sourceTree = "<group>"; };
 		BE47B6812F6D16A0007F48F5 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		BE77873D2F70E62E00666EE3 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		BE7787952F72699800666EE3 /* FirebaseAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseAuthService.swift; sourceTree = "<group>"; };
@@ -381,6 +387,8 @@
 		1146B2612F1F37BD004767C9 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				BE1029452FD8A2F000E9744F /* ClaimUsernameView.swift */,
+				BE1029432FD8A2E700E9744F /* ClaimUsernameViewModel.swift */,
 				BEF96D0E2FC8F4B200FB0F83 /* DescribeMealView.swift */,
 				BEF96D0C2FC8F4A700FB0F83 /* RecognizedFoodsReviewView.swift */,
 				BEF96B5C2F8851B200FB0F83 /* AccountView.swift */,
@@ -531,6 +539,7 @@
 		CC220AA02F400000000000C0 /* Firestore */ = {
 			isa = PBXGroup;
 			children = (
+				BE1029472FD8A32A00E9744F /* UsernameError.swift */,
 				BEF96B582F88515A00FB0F83 /* AccountInfoDTO.swift */,
 				BEF96B562F88515200FB0F83 /* BadgeProgressDTO.swift */,
 				CC220AA12F400000000000C1 /* FirestoreService.swift */,
@@ -743,6 +752,7 @@
 				CC770AB12F500000000000E1 /* TimeOfDayTheme.swift in Sources */,
 				BEF9698E2F7B48B500FB0F83 /* AddCustomFoodView.swift in Sources */,
 				BE77873E2F70E62E00666EE3 /* ProfileView.swift in Sources */,
+				BE1029442FD8A2E700E9744F /* ClaimUsernameViewModel.swift in Sources */,
 				BEF96B552F88511800FB0F83 /* BadgeDefinition.swift in Sources */,
 				BEF96A972F7CC7A200FB0F83 /* UserProfileDTO.swift in Sources */,
 				1111E13C2F285EBA006EF76F /* DailyGoalsView.swift in Sources */,
@@ -754,6 +764,7 @@
 				BEF96AB02F7CC7F600FB0F83 /* FoodFingerprint.swift in Sources */,
 				BEF96AB12F7CC7F600FB0F83 /* SavedMeal.swift in Sources */,
 				BEF96AC42F7CC86500FB0F83 /* OnboardingView.swift in Sources */,
+				BE1029482FD8A32A00E9744F /* UsernameError.swift in Sources */,
 				BEF96AB22F7CC7F600FB0F83 /* FoodEntry.swift in Sources */,
 				BEF96AB32F7CC7F600FB0F83 /* Mood.swift in Sources */,
 				BEF96AB42F7CC7F600FB0F83 /* DailyQuest.swift in Sources */,
@@ -784,6 +795,7 @@
 				1111E0C82F248958006EF76F /* BarcodeService.swift in Sources */,
 				1111E0CA2F248975006EF76F /* BarcodeScannerView.swift in Sources */,
 				BEF969F22F7BA74D00FB0F83 /* ToolsView.swift in Sources */,
+				BE1029462FD8A2F000E9744F /* ClaimUsernameView.swift in Sources */,
 				1146B2EF2F234414004767C9 /* DataManager.swift in Sources */,
 				1111E13E2F285ECD006EF76F /* DailyGoalsViewModel.swift in Sources */,
 				BEF969922F7B48C800FB0F83 /* FoodDatabaseViewModel.swift in Sources */,

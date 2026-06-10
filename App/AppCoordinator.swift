@@ -815,6 +815,16 @@ final class AppCoordinator {
         try await dataManager.upsertUserProfile(profile)
     }
 
+    // MARK: - Username (Friend System Phase 1)
+
+    func currentUsername() async -> String? { await dataManager.currentUsername() }
+    func needsUsername() async -> Bool { await dataManager.needsUsername() }
+    func claimUsername(_ raw: String) async throws { try await dataManager.claimUsername(raw) }
+    func changeUsername(to raw: String) async throws { try await dataManager.changeUsername(to: raw) }
+    func fetchAccountInfo() async -> AccountInfoDTO? { await dataManager.fetchAccountInfo() }
+    func usernameCooldownEnd() async -> Date? { await dataManager.usernameCooldownEnd() }
+    func displayNameCooldownEnd() async -> Date? { await dataManager.displayNameCooldownEnd() }
+
     // MARK: - Guest Mode
 
     /// Migrates all SwiftData records from userId=="guest" to the given authenticated userId.

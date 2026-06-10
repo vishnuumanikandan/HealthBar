@@ -164,6 +164,7 @@ struct RecognizedFoodsReviewView: View {
                         Text(draft.quantityText)
                             .font(AppFont.regular(12))
                             .foregroundColor(tc.textSecondary)
+                            .allowsHitTesting(false)
                             .accessibilityLabel("Quantity: \(draft.quantityText)")
                     }
                 }
