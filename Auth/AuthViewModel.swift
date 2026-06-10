@@ -66,13 +66,21 @@ final class AuthViewModel {
     // boundary that makes backend swapping possible without touching Views.
     private let authService: any AuthService
 
+    /// Resolves usernames to login emails pre-auth via the public
+    /// loginHandles mapping. Defaulted so existing call sites compile unchanged.
+    private let firestoreService: FirestoreService
+
     // MARK: - Initialization
 
     /// - Parameter authService: The auth backend to use.
     ///   Pass `LocalAuthService.shared` during development.
     ///   Replace with `FirebaseAuthService.shared` when ready.
-    init(authService: any AuthService) {
+    init(
+        authService: any AuthService,
+        firestoreService: FirestoreService = FirestoreServiceImpl.shared
+    ) {
         self.authService = authService
+        self.firestoreService = firestoreService
     }
 
     // MARK: - Submit Guards
@@ -116,11 +124,38 @@ final class AuthViewModel {
         isLoading = true
         defer { isLoading = false }
 
+        // The login field accepts an email OR a username. Usernames can never
+        // contain "@" except as an optional leading prefix, so any input that
+        // is not email-shaped is resolved through the public loginHandles
+        // mapping before the normal email sign-in.
+        let input = email.trimmingCharacters(in: .whitespaces)
+        let loginEmail: String
+
+        if isEmailInput(input) {
+            loginEmail = input
+        } else {
+            let handle = input.hasPrefix("@") ? String(input.dropFirst()) : input
+            guard let handleKey = try? DataManager.normalizeAndValidateUsername(handle) else {
+                emailError = "Please enter a valid email or username."
+                return
+            }
+
+            let resolved: String?
+            do {
+                resolved = try await firestoreService.lookupLoginEmail(forHandleKey: handleKey)
+            } catch {
+                authError = "Network error. Please check your connection."
+                return
+            }
+            guard let resolved, !resolved.isEmpty else {
+                authError = "No account found with that username. Try signing in with your email."
+                return
+            }
+            loginEmail = resolved
+        }
+
         do {
-            try await authService.login(
-                email: email.trimmingCharacters(in: .whitespaces),
-                password: password
-            )
+            try await authService.login(email: loginEmail, password: password)
             // userId is now live in authService.currentUserEmail.
             // DataManager picks it up automatically on the next data access.
         } catch let error as AuthError {
@@ -209,14 +244,24 @@ final class AuthViewModel {
 
     // MARK: - Private: Validation
 
-    /// Validates email and password for login. Returns `true` if all fields pass.
+    /// Validates the email-or-username field and password for login.
+    /// Returns `true` if all fields pass.
     @discardableResult
     private func validateLoginFields() -> Bool {
         var isValid = true
 
-        if !isValidEmail(email) {
-            emailError = "Please enter a valid email address."
-            isValid = false
+        let input = email.trimmingCharacters(in: .whitespaces)
+        if isEmailInput(input) {
+            if !isValidEmail(input) {
+                emailError = "Please enter a valid email address."
+                isValid = false
+            }
+        } else {
+            let handle = input.hasPrefix("@") ? String(input.dropFirst()) : input
+            if (try? DataManager.normalizeAndValidateUsername(handle)) == nil {
+                emailError = "Please enter a valid email or username."
+                isValid = false
+            }
         }
 
         if password.count < 8 {
@@ -228,6 +273,12 @@ final class AuthViewModel {
         }
 
         return isValid
+    }
+
+    /// True when the login input should be treated as an email address.
+    /// A leading "@" marks a username (e.g. "@vishnu"); any other "@" means email.
+    private func isEmailInput(_ input: String) -> Bool {
+        input.contains("@") && !input.hasPrefix("@")
     }
 
     /// Validates display name, email, password, and confirm password for sign-up.

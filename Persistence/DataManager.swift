@@ -37,6 +37,13 @@ final class DataManager {
     /// Injected for testability; the default requires no changes to existing callers.
     private let firestoreService: FirestoreService
 
+    // MARK: - Nutrition (adherence metric only)
+
+    /// Stateless calculator reused for the 7-day adherence metric (Friend System
+    /// Phase 3). Goal-evaluation logic stays in the Nutrition module — this is a
+    /// private instance, not a merge of the modules.
+    private let nutritionManager = NutritionManager()
+
     /// The identifier for the currently authenticated user.
     ///
     /// Read **live** from AuthService on every call — never cached locally.
@@ -52,7 +59,9 @@ final class DataManager {
     /// Used as the single gate for ALL Firestore entry points in this class.
     /// "guest" userId must never appear in any Firestore path.
     /// Always check this property — never infer guest state from userId.
-    private var isGuest: Bool { authService.isGuest }
+    /// Internal (not private) so AppCoordinator can surface it for the profile
+    /// comparison's `canCompare` gate (Friend System Phase 6).
+    var isGuest: Bool { authService.isGuest }
 
     // MARK: - Initialization
 
@@ -185,56 +194,92 @@ final class DataManager {
         guard !isGuest else { return }
 
         // MARK: Real-time listeners (idempotent — safe to call from 3 DataManagers)
+        //
+        // Listener closures capture self STRONGLY on purpose: registration is
+        // one-shot per user+model, so whichever DataManager registers must stay
+        // alive for as long as its listeners do — even when the registrar is a
+        // transient coordinator (e.g. the guest→account migration path). A weak
+        // capture here left registered listeners pointing at a deallocated
+        // DataManager: snapshots kept arriving but nothing reconciled until app
+        // relaunch. Lifetime stays bounded — stopAllListeners (logout / user
+        // switch) releases these closures and with them the DataManager.
 
-        firestoreService.listenForFoodEntries(userId: userId) { [weak self] dtos in
-            Task { [weak self] in try? await self?.applyFirestoreUpdates(dtos, userId: userId) }
+        firestoreService.listenForFoodEntries(userId: userId) { dtos in
+            Task { try? await self.applyFirestoreUpdates(dtos, userId: userId) }
         }
 
-        firestoreService.listenForDailyGoals(userId: userId) { [weak self] dtos in
-            Task { [weak self] in try? await self?.applyDailyGoalUpdates(dtos, userId: userId) }
+        firestoreService.listenForDailyGoals(userId: userId) { dtos in
+            Task { try? await self.applyDailyGoalUpdates(dtos, userId: userId) }
         }
 
-        firestoreService.listenForPersonalBaselines(userId: userId) { [weak self] dtos in
-            Task { [weak self] in try? await self?.applyPersonalBaselineUpdates(dtos, userId: userId) }
+        firestoreService.listenForPersonalBaselines(userId: userId) { dtos in
+            Task { try? await self.applyPersonalBaselineUpdates(dtos, userId: userId) }
         }
 
-        firestoreService.listenForFoodFingerprints(userId: userId) { [weak self] dtos in
+        firestoreService.listenForFoodFingerprints(userId: userId) { dtos in
             // FoodFingerprint is not a SwiftData @Model — listener fires for cross-device
             // awareness of new foods but requires no local SwiftData writes.
             // FoodEntry sync (Phase 1) already carries all nutritional and favorite data.
-            Task { [weak self] in await self?.applyFoodFingerprintUpdates(dtos, userId: userId) }
+            Task { await self.applyFoodFingerprintUpdates(dtos, userId: userId) }
         }
 
-        firestoreService.listenForMoodEntries(userId: userId) { [weak self] dtos in
-            Task { [weak self] in try? await self?.applyMoodEntryUpdates(dtos, userId: userId) }
+        firestoreService.listenForMoodEntries(userId: userId) { dtos in
+            Task { try? await self.applyMoodEntryUpdates(dtos, userId: userId) }
         }
 
-        firestoreService.listenForUserProgress(userId: userId) { [weak self] dto in
-            Task { [weak self] in try? await self?.applyUserProgressUpdate(dto, userId: userId) }
+        firestoreService.listenForUserProgress(userId: userId) { dto in
+            Task { try? await self.applyUserProgressUpdate(dto, userId: userId) }
         }
 
-        firestoreService.listenForDailyQuests(userId: userId) { [weak self] dtos in
-            Task { [weak self] in try? await self?.applyDailyQuestUpdates(dtos, userId: userId) }
+        firestoreService.listenForDailyQuests(userId: userId) { dtos in
+            Task { try? await self.applyDailyQuestUpdates(dtos, userId: userId) }
         }
 
-        firestoreService.listenForCustomFoods(userId: userId) { [weak self] dtos in
-            Task { [weak self] in try? await self?.applyCustomFoodUpdates(dtos, userId: userId) }
+        firestoreService.listenForCustomFoods(userId: userId) { dtos in
+            Task { try? await self.applyCustomFoodUpdates(dtos, userId: userId) }
         }
 
-        firestoreService.listenForSavedMeals(userId: userId) { [weak self] dtos in
-            Task { [weak self] in try? await self?.applySavedMealUpdates(dtos, userId: userId) }
+        firestoreService.listenForSavedMeals(userId: userId) { dtos in
+            Task { try? await self.applySavedMealUpdates(dtos, userId: userId) }
         }
 
-        firestoreService.listenForSavedRecipes(userId: userId) { [weak self] dtos in
-            Task { [weak self] in try? await self?.applySavedRecipeUpdates(dtos, userId: userId) }
+        firestoreService.listenForSavedRecipes(userId: userId) { dtos in
+            Task { try? await self.applySavedRecipeUpdates(dtos, userId: userId) }
         }
 
-        firestoreService.listenForBadges(userId: userId) { [weak self] dtos in
-            Task { [weak self] in try? await self?.applyBadgeUpdates(dtos, userId: userId) }
+        firestoreService.listenForBadges(userId: userId) { dtos in
+            Task { try? await self.applyBadgeUpdates(dtos, userId: userId) }
+        }
+
+        // Friend System Phase 2: server-authoritative, listener-driven.
+        // These reconciles are the ONLY local writers for Friend/FriendRequest rows
+        // — mutation paths never touch SwiftData and no pending sets exist for them.
+        firestoreService.listenForFriends(userId: userId) { dtos in
+            Task { try? await self.reconcileFriends(dtos, userId: userId) }
+        }
+
+        firestoreService.listenForIncomingRequests(userId: userId) { dtos in
+            let snapshots = dtos.map {
+                RequestSnapshot(otherUid: $0.fromUid, username: $0.fromUsername,
+                                displayName: $0.fromDisplayName, createdAt: $0.createdAt)
+            }
+            Task { try? await self.reconcileRequests(snapshots, direction: "incoming", userId: userId) }
+        }
+
+        firestoreService.listenForSentRequests(userId: userId) { dtos in
+            let snapshots = dtos.map {
+                RequestSnapshot(otherUid: $0.toUid, username: $0.toUsername,
+                                displayName: nil, createdAt: $0.createdAt)
+            }
+            Task { try? await self.reconcileRequests(snapshots, direction: "outgoing", userId: userId) }
         }
 
         // Sync displayName from account/info on login (source of truth for display name).
-        Task { [weak self] in await self?.syncDisplayNameFromAccountInfo(userId: userId) }
+        Task { await self.syncDisplayNameFromAccountInfo(userId: userId) }
+
+        // Backfill/heal the username → email login mapping on every login so
+        // accounts that claimed a handle before this feature can sign in by username.
+        Task { await self.syncLoginHandle(userId: userId) }
 
         // MARK: One-time initial sync per model (runs once at login)
         // For each model:
@@ -361,6 +406,11 @@ final class DataManager {
                     try? await firestoreService.uploadSavedRecipe(SavedRecipeDTO(from: recipe))
                 }
             }
+
+            // --- Public stats projection (Friend Leaderboard, Phase 3) ---
+            // Publish after the initial sync has merged remote progress, so
+            // friends see fresh numbers from the first app open of the day.
+            await publishMyStats()
         }
     }
 
@@ -1017,6 +1067,12 @@ final class DataManager {
             Task {
                 try? await firestoreService.uploadFoodFingerprint(fingerprintDTO)
             }
+
+            // Friend Leaderboard (Phase 3): a logged food can change today's
+            // adherence even when no XP is awarded — refresh the projection.
+            Task {
+                await publishMyStats()
+            }
         }
 
         // Badge check: first meal, 100 meals
@@ -1044,6 +1100,11 @@ final class DataManager {
             Task {
                 try? await firestoreService.deleteFoodEntry(id: entryId, userId: userId)
             }
+
+            // Friend Leaderboard (Phase 3): deletion can change today's adherence.
+            Task {
+                await publishMyStats()
+            }
         }
     }
 
@@ -1056,6 +1117,11 @@ final class DataManager {
             let dto = FoodEntryDTO(from: entry)
             Task {
                 try? await firestoreService.uploadFoodEntry(dto)
+            }
+
+            // Friend Leaderboard (Phase 3): edited macros can change adherence.
+            Task {
+                await publishMyStats()
             }
         }
     }
@@ -1242,6 +1308,14 @@ final class DataManager {
         FirestoreServiceImpl.shared.pendingProgressIds.insert(dto.id)
         Task {
             try? await firestoreService.uploadUserProgress(dto)
+        }
+
+        // Friend Leaderboard (Phase 3): single publish chokepoint. Every
+        // UserProgress mutation (XP, streak, rank, milestones) funnels through
+        // this save, so this one hook keeps the friend-readable projection
+        // fresh for all award paths. Fire-and-forget — never blocks UI.
+        Task {
+            await publishMyStats()
         }
     }
 
@@ -1476,6 +1550,12 @@ final class DataManager {
         FirestoreServiceImpl.shared.pendingFingerprintIds.insert(fingerprintDTO.id)
         Task {
             try? await firestoreService.uploadFoodFingerprint(fingerprintDTO)
+        }
+
+        // Friend Leaderboard (Phase 3): quick-logged food changes adherence.
+        // publishMyStats guest-guards itself, so no extra gate is needed here.
+        Task {
+            await publishMyStats()
         }
     }
 
@@ -1823,6 +1903,135 @@ final class DataManager {
         }
     }
 
+    // MARK: - Quick-Log Capture (Phase 10)
+
+    /// Converts AI-recognized items into SavedMealComponents (pure, no side
+    /// effects). Excludes any item with a blank name or a negative macro/calorie
+    /// value; the rest convert. Purity defaults to 50 (neutral) — the AI gives no
+    /// toxin data, and 0 would falsely claim "perfectly clean."
+    static func components(from items: [RecognizedFoodItem]) -> [SavedMealComponent] {
+        items.compactMap { item -> SavedMealComponent? in
+            let name = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { return nil }
+            guard item.calories >= 0, item.protein >= 0, item.carbs >= 0, item.fat >= 0 else { return nil }
+
+            let (quantity, unit) = parseQuantity(item.quantityText)
+            return SavedMealComponent(
+                foodName: name,
+                quantity: quantity,
+                servingUnit: unit,
+                calories: item.calories,
+                protein: item.protein,
+                carbs: item.carbs,
+                fat: item.fat,
+                toxinScore: 50
+            )
+        }
+    }
+
+    /// Deterministic quantity parse: a leading decimal or simple fraction →
+    /// (number, remainder-as-unit); otherwise (1, full text). Empty ⇒ (1, "serving").
+    static func parseQuantity(_ text: String) -> (quantity: Double, unit: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return (1, "serving") }
+
+        let parts = trimmed.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+        let leading = String(parts.first ?? "")
+        if let number = parseLeadingNumber(leading) {
+            let remainder = parts.count > 1
+                ? String(parts[1]).trimmingCharacters(in: .whitespaces)
+                : ""
+            return (number, remainder.isEmpty ? "serving" : remainder)
+        }
+        // No leading number — keep the whole text as the unit, quantity 1.
+        return (1, trimmed)
+    }
+
+    /// Parses a single leading token as a Double or a simple integer fraction
+    /// ("1/2" → 0.5). Returns nil if neither.
+    private static func parseLeadingNumber(_ token: String) -> Double? {
+        if token.contains("/") {
+            let sides = token.split(separator: "/")
+            if sides.count == 2, let n = Int(sides[0]), let d = Int(sides[1]), d != 0 {
+                return Double(n) / Double(d)
+            }
+            return nil
+        }
+        return Double(token)
+    }
+
+    /// Identity signature for true-duplicate detection: case-insensitive name
+    /// plus the component set (ignoring per-component UUIDs — those regenerate on
+    /// every conversion). Two saves with the same name and the same items produce
+    /// the same signature, so we never create a second identical meal/recipe.
+    static func contentSignature(name: String, components: [SavedMealComponent]) -> String {
+        let body = components
+            .map { "\($0.foodName.lowercased())|\($0.quantity)|\($0.calories)|\($0.protein)|\($0.carbs)|\($0.fat)|\($0.toxinScore)" }
+            .sorted()
+            .joined(separator: ";")
+        return name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() + "##" + body
+    }
+
+    /// Calorie-weighted average purity — mirrors RecipeBuilderView.recipePurityScore.
+    static func recipePurity(of components: [SavedMealComponent]) -> Int {
+        let totalCalories = components.reduce(0) { $0 + $1.calories }
+        guard totalCalories > 0 else { return 0 }
+        let weighted = components.reduce(0.0) { $0 + Double($1.calories) * Double($1.toxinScore) }
+        return Int(weighted / Double(totalCalories))
+    }
+
+    /// Converts + saves recognized items as a SavedMeal via the existing add
+    /// pipeline. Returns the created model so the caller can chain Share (Phase 9).
+    func saveQuickLog(asMealNamed name: String, items: [RecognizedFoodItem]) async throws -> SavedMeal {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw QuickLogError.emptyName }
+
+        let components = DataManager.components(from: items)
+        guard !components.isEmpty else { throw QuickLogError.nothingToSave }
+
+        // Dedup: if an identical meal (same name + items) already exists, return
+        // it instead of creating a duplicate.
+        let signature = DataManager.contentSignature(name: trimmed, components: components)
+        let existing = (try? await getSavedMeals()) ?? []
+        if let dup = existing.first(where: {
+            DataManager.contentSignature(name: $0.name, components: $0.components) == signature
+        }) {
+            return dup
+        }
+
+        // Same construction MealBuilderView uses — SavedMeal(name:components:)
+        // encodes componentsData; addSavedMeal handles local save + Firestore.
+        let meal = SavedMeal(name: trimmed, components: components)
+        try await addSavedMeal(meal)
+        return meal
+    }
+
+    /// Converts + saves recognized items as a SavedRecipe via the existing add
+    /// pipeline. Sets yield (≥1) and the calorie-weighted purityScore.
+    func saveQuickLog(asRecipeNamed name: String, yield: Int, items: [RecognizedFoodItem]) async throws -> SavedRecipe {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw QuickLogError.emptyName }
+
+        let components = DataManager.components(from: items)
+        guard !components.isEmpty else { throw QuickLogError.nothingToSave }
+
+        // Dedup: identical recipe = same name + items + yield.
+        let resolvedYield = max(1, yield)
+        let signature = DataManager.contentSignature(name: trimmed, components: components) + "#y\(resolvedYield)"
+        let existing = (try? await getSavedRecipes()) ?? []
+        if let dup = existing.first(where: {
+            DataManager.contentSignature(name: $0.name, components: $0.ingredients) + "#y\($0.yield)" == signature
+        }) {
+            return dup
+        }
+
+        // Same construction RecipeBuilderView uses.
+        let recipe = SavedRecipe(name: trimmed, yield: resolvedYield, ingredients: components)
+        recipe.purityScore = DataManager.recipePurity(of: components)
+        try await addSavedRecipe(recipe)
+        return recipe
+    }
+
     // MARK: - UserProfile Methods
 
     /// Fetches the UserProfile for the current user.
@@ -2100,6 +2309,11 @@ final class DataManager {
             }
 
             newlyUnlocked.append(def)
+
+            // Friend activity feed (Phase 7): this closure only reaches here on a
+            // genuine false→true unlock (already-unlocked badges early-returned),
+            // so this emits exactly one event per newly earned badge.
+            emitFeedEvent(type: "badge", value: badgeId)
         }
 
         switch trigger {
@@ -2122,6 +2336,1182 @@ final class DataManager {
         }
 
         return newlyUnlocked
+    }
+
+    // MARK: - Username (Friend System Phase 1)
+
+    /// Returns the current user's canonical username, or nil if unclaimed.
+    /// Returns nil for guests and unauthenticated sessions (no Firestore read).
+    func currentUsername() async -> String? {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return nil }
+        return try? await firestoreService.fetchUsername(userId: userId)
+    }
+
+    /// True when an authenticated (non-guest) user has not yet claimed a username.
+    /// Always false for guests (guests never claim).
+    /// Returns false on network failure — never force the gate when we can't verify.
+    func needsUsername() async -> Bool {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return false }
+        do {
+            let name = try await firestoreService.fetchUsername(userId: userId)
+            return (name ?? "").isEmpty
+        } catch {
+            // Network failure — don't force the gate, let the user through.
+            // The gate will re-evaluate on next .task(id:) trigger.
+            return false
+        }
+    }
+
+    /// Validates + claims a username for the current user.
+    /// Validation runs locally first (throws UsernameError.invalidFormat on failure),
+    /// then delegates the atomic claim to FirestoreService.
+    /// Guests and unauthenticated callers throw UsernameError.notAuthenticated.
+    func claimUsername(_ raw: String) async throws {
+        guard !isGuest else { throw UsernameError.notAuthenticated }
+        guard let userId = currentUserId, !userId.isEmpty else { throw UsernameError.notAuthenticated }
+        let handleKey = try DataManager.normalizeAndValidateUsername(raw)
+        try await firestoreService.claimUsername(handleKey, userId: userId)
+
+        // Write the username → email login mapping so this handle can be used
+        // to sign in. Non-fatal: the login backfill heals a missed write.
+        if let email = authService.currentUserActualEmail, !email.isEmpty {
+            try? await firestoreService.upsertLoginHandle(handleKey: handleKey, uid: userId, email: email)
+        }
+    }
+
+    /// Creates or repairs the username → email login mapping for the current user.
+    /// Called once per login from startFirestoreSync; safe to call repeatedly.
+    /// Logs the outcome so a rules rejection is visible in the Xcode console
+    /// instead of failing silently.
+    func syncLoginHandle(userId: String) async {
+        guard !isGuest, !userId.isEmpty else { return }
+        guard let username = try? await firestoreService.fetchUsername(userId: userId),
+              !username.isEmpty else {
+            print("HealthBar loginHandle backfill: skipped — no username on account/info")
+            return
+        }
+        guard let email = authService.currentUserActualEmail, !email.isEmpty else {
+            print("HealthBar loginHandle backfill: skipped — no auth email")
+            return
+        }
+
+        // Skip the write when the mapping is already correct.
+        if let existing = try? await firestoreService.lookupLoginEmail(forHandleKey: username),
+           existing == email {
+            print("HealthBar loginHandle backfill: @\(username) already mapped")
+            return
+        }
+
+        do {
+            try await firestoreService.upsertLoginHandle(handleKey: username, uid: userId, email: email)
+            print("HealthBar loginHandle backfill: wrote mapping for @\(username)")
+        } catch {
+            print("HealthBar loginHandle backfill FAILED for @\(username): \(error.localizedDescription)")
+        }
+    }
+
+    /// Fetches the full AccountInfoDTO for the current user.
+    /// Returns nil for guests and unauthenticated sessions (no Firestore read).
+    func fetchAccountInfo() async -> AccountInfoDTO? {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return nil }
+        return try? await firestoreService.fetchAccountInfo(userId: userId)
+    }
+
+    /// Changes the current user's username from their existing handle to a new one.
+    /// Enforces a 30-day cooldown between username changes.
+    /// Guests and unauthenticated callers throw UsernameError.notAuthenticated.
+    func changeUsername(to raw: String) async throws {
+        guard !isGuest else { throw UsernameError.notAuthenticated }
+        guard let userId = currentUserId, !userId.isEmpty else { throw UsernameError.notAuthenticated }
+
+        // Read old handle + cooldown directly from document fields (not Codable)
+        // to avoid decode failures from FieldValue.serverTimestamp() type mismatches.
+        let oldHandle = try await firestoreService.fetchUsername(userId: userId)
+
+        guard let oldHandle, !oldHandle.isEmpty else {
+            // No existing username — use the initial claim flow instead
+            let handleKey = try DataManager.normalizeAndValidateUsername(raw)
+            try await firestoreService.claimUsername(handleKey, userId: userId)
+            return
+        }
+
+        // Enforce 30-day cooldown by reading the raw field
+        let snapshot = try await FirestoreServiceImpl.shared.fetchAccountInfoRaw(userId: userId)
+        if let lastChangeTimestamp = snapshot?["lastUsernameChangeAt"] {
+            let lastChange: Date
+            if let ts = lastChangeTimestamp as? Date {
+                lastChange = ts
+            } else if let ts = lastChangeTimestamp as? NSNumber {
+                lastChange = Date(timeIntervalSince1970: ts.doubleValue)
+            } else {
+                lastChange = .distantPast
+            }
+            let cooldownEnd = Calendar.current.date(byAdding: .day, value: 30, to: lastChange)!
+            if Date() < cooldownEnd {
+                throw UsernameError.cooldownActive(cooldownEnd)
+            }
+        }
+
+        let newHandle = try DataManager.normalizeAndValidateUsername(raw)
+
+        // Same handle — no-op
+        guard newHandle != oldHandle else { return }
+
+        try await firestoreService.changeUsername(from: oldHandle, to: newHandle, userId: userId)
+
+        // Move the username → email login mapping to the new handle.
+        // Non-fatal: the login backfill heals a missed write.
+        try? await firestoreService.deleteLoginHandle(handleKey: oldHandle, uid: userId)
+        if let email = authService.currentUserActualEmail, !email.isEmpty {
+            try? await firestoreService.upsertLoginHandle(handleKey: newHandle, uid: userId, email: email)
+        }
+    }
+
+    /// Returns the date when the user can next change their display name, or nil if no cooldown is active.
+    /// Weekly cooldown (7 days from lastDisplayNameChangeAt).
+    func displayNameCooldownEnd() async -> Date? {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return nil }
+        guard let data = try? await FirestoreServiceImpl.shared.fetchAccountInfoRaw(userId: userId) else { return nil }
+        let lastChange: Date?
+        if let ts = data["lastDisplayNameChangeAt"] as? Date {
+            lastChange = ts
+        } else {
+            lastChange = nil
+        }
+        guard let lastChange else { return nil }
+        let cooldownEnd = Calendar.current.date(byAdding: .day, value: 7, to: lastChange)!
+        return Date() < cooldownEnd ? cooldownEnd : nil
+    }
+
+    /// Returns the date when the user can next change their username, or nil if no cooldown is active.
+    /// Monthly cooldown (30 days from lastUsernameChangeAt).
+    func usernameCooldownEnd() async -> Date? {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return nil }
+        guard let data = try? await FirestoreServiceImpl.shared.fetchAccountInfoRaw(userId: userId) else { return nil }
+        let lastChange: Date?
+        if let ts = data["lastUsernameChangeAt"] as? Date {
+            lastChange = ts
+        } else {
+            lastChange = nil
+        }
+        guard let lastChange else { return nil }
+        let cooldownEnd = Calendar.current.date(byAdding: .day, value: 30, to: lastChange)!
+        return Date() < cooldownEnd ? cooldownEnd : nil
+    }
+
+    /// Normalizes and validates a raw username input.
+    /// Returns the canonical lowercased handle on success; throws UsernameError.invalidFormat on failure.
+    static func normalizeAndValidateUsername(_ raw: String) throws -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        let lowercased = trimmed.lowercased()
+
+        let regex = try! NSRegularExpression(pattern: "^[a-z][a-z0-9_]{2,19}$")
+        let range = NSRange(lowercased.startIndex..., in: lowercased)
+        guard regex.firstMatch(in: lowercased, range: range) != nil else {
+            throw UsernameError.invalidFormat
+        }
+
+        let reserved: Set<String> = [
+            "admin", "root", "support", "system", "healthbar",
+            "healthbarapp", "guest", "null", "undefined", "me", "you",
+            "official", "staff", "team", "founder", "developer",
+            "mod", "moderator"
+        ]
+        guard !reserved.contains(lowercased) else {
+            throw UsernameError.invalidFormat
+        }
+
+        return lowercased
+    }
+
+    // MARK: - Friends (Friend System Phase 2)
+
+    /// Normalized request snapshot fed into reconcileRequests for both directions.
+    /// Incoming requests carry the sender's display name; outgoing mirrors carry nil.
+    private struct RequestSnapshot {
+        let otherUid: String
+        let username: String
+        let displayName: String?
+        let createdAt: Date
+    }
+
+    /// Reconciles the Firestore friends snapshot into local SwiftData.
+    ///
+    /// The single local writer for Friend rows: upserts from DTOs, deletes locals
+    /// absent from the snapshot, one save if anything changed. Scoped to `userId`.
+    @MainActor
+    private func reconcileFriends(_ dtos: [FriendDTO], userId: String) async throws {
+        let descriptor = FetchDescriptor<Friend>(
+            predicate: #Predicate { $0.userId == userId }
+        )
+        let locals = try modelContext.fetch(descriptor)
+        var localByUid: [String: Friend] = [:]
+        for friend in locals { localByUid[friend.friendUid] = friend }
+
+        var didChange = false
+        var remoteUids = Set<String>()
+
+        for dto in dtos {
+            remoteUids.insert(dto.friendUid)
+            if let local = localByUid[dto.friendUid] {
+                if local.username != dto.friendUsername
+                    || local.displayName != dto.friendDisplayName
+                    || local.since != dto.since {
+                    local.username = dto.friendUsername
+                    local.displayName = dto.friendDisplayName
+                    local.since = dto.since
+                    didChange = true
+                }
+            } else {
+                modelContext.insert(Friend(
+                    userId: userId,
+                    friendUid: dto.friendUid,
+                    username: dto.friendUsername,
+                    displayName: dto.friendDisplayName,
+                    since: dto.since
+                ))
+                didChange = true
+            }
+        }
+
+        for local in locals where !remoteUids.contains(local.friendUid) {
+            modelContext.delete(local)
+            didChange = true
+        }
+
+        if didChange { try modelContext.save() }
+    }
+
+    /// Reconciles one direction of friend requests into local SwiftData.
+    ///
+    /// CRITICAL: fetches and deletes only rows matching `userId` AND the passed
+    /// `direction`, so the incoming-requests listener never deletes outgoing rows
+    /// and vice-versa.
+    @MainActor
+    private func reconcileRequests(_ snapshots: [RequestSnapshot], direction: String, userId: String) async throws {
+        let descriptor = FetchDescriptor<FriendRequest>(
+            predicate: #Predicate { $0.userId == userId && $0.direction == direction }
+        )
+        let locals = try modelContext.fetch(descriptor)
+        var localByUid: [String: FriendRequest] = [:]
+        for request in locals { localByUid[request.otherUid] = request }
+
+        var didChange = false
+        var remoteUids = Set<String>()
+
+        for snapshot in snapshots {
+            remoteUids.insert(snapshot.otherUid)
+            if let local = localByUid[snapshot.otherUid] {
+                if local.username != snapshot.username
+                    || local.displayName != snapshot.displayName
+                    || local.createdAt != snapshot.createdAt {
+                    local.username = snapshot.username
+                    local.displayName = snapshot.displayName
+                    local.createdAt = snapshot.createdAt
+                    didChange = true
+                }
+            } else {
+                modelContext.insert(FriendRequest(
+                    userId: userId,
+                    otherUid: snapshot.otherUid,
+                    direction: direction,
+                    username: snapshot.username,
+                    displayName: snapshot.displayName,
+                    createdAt: snapshot.createdAt
+                ))
+                didChange = true
+            }
+        }
+
+        for local in locals where !remoteUids.contains(local.otherUid) {
+            modelContext.delete(local)
+            didChange = true
+        }
+
+        if didChange { try modelContext.save() }
+    }
+
+    /// Returns all cached friends for the current user (listener-maintained).
+    func fetchFriends() async throws -> [Friend] {
+        guard let userId = currentUserId, !userId.isEmpty else { return [] }
+        let descriptor = FetchDescriptor<Friend>(
+            predicate: #Predicate { $0.userId == userId }
+        )
+        return try modelContext.fetch(descriptor)
+    }
+
+    /// Returns all cached friend requests for the current user in one direction
+    /// ("incoming" or "outgoing").
+    func fetchRequests(direction: String) async throws -> [FriendRequest] {
+        guard let userId = currentUserId, !userId.isEmpty else { return [] }
+        let descriptor = FetchDescriptor<FriendRequest>(
+            predicate: #Predicate { $0.userId == userId && $0.direction == direction }
+        )
+        return try modelContext.fetch(descriptor)
+    }
+
+    /// Local-only lookup of a cached incoming request. Used by acceptIncomingRequest
+    /// to read the sender's identity snapshot — keeps accept listener-owned (no
+    /// Firestore read for the snapshot).
+    func fetchIncomingRequest(fromUid: String) -> FriendRequest? {
+        guard let userId = currentUserId, !userId.isEmpty else { return nil }
+        var descriptor = FetchDescriptor<FriendRequest>(
+            predicate: #Predicate { $0.userId == userId && $0.otherUid == fromUid && $0.direction == "incoming" }
+        )
+        descriptor.fetchLimit = 1
+        return (try? modelContext.fetch(descriptor))?.first
+    }
+
+    /// Classifies the relationship with `uid` from cached local rows only.
+    ///
+    /// Pure, local, synchronous — no network. Order of precedence:
+    /// friends > incomingPending > outgoingPending > none. Local state can be
+    /// stale, so sendFriendRequest still performs the authoritative server read.
+    func friendshipState(with uid: String) -> FriendshipState {
+        guard let userId = currentUserId, !userId.isEmpty else { return .none }
+
+        let friendDescriptor = FetchDescriptor<Friend>(
+            predicate: #Predicate { $0.userId == userId && $0.friendUid == uid }
+        )
+        if let count = try? modelContext.fetchCount(friendDescriptor), count > 0 {
+            return .friends
+        }
+
+        let incomingDescriptor = FetchDescriptor<FriendRequest>(
+            predicate: #Predicate { $0.userId == userId && $0.otherUid == uid && $0.direction == "incoming" }
+        )
+        if let count = try? modelContext.fetchCount(incomingDescriptor), count > 0 {
+            return .incomingPending
+        }
+
+        let outgoingDescriptor = FetchDescriptor<FriendRequest>(
+            predicate: #Predicate { $0.userId == userId && $0.otherUid == uid && $0.direction == "outgoing" }
+        )
+        if let count = try? modelContext.fetchCount(outgoingDescriptor), count > 0 {
+            return .outgoingPending
+        }
+
+        return .none
+    }
+
+    /// Returns every user in the public usernames directory except me, sorted
+    /// alphabetically by username. Reads only the public usernames index — no
+    /// private account data. Empty for guests (no Firestore reads in guest mode).
+    ///
+    /// One row per uid: when a uid owns multiple handle docs (orphans left by
+    /// earlier claims), only the latest claim — the user's current handle —
+    /// is kept. Duplicate uids would also break SwiftUI ForEach identity.
+    func fetchAllUsers() async throws -> [DirectoryUser] {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return [] }
+        let users: [DirectoryUser]
+        do {
+            users = try await firestoreService.fetchAllUsernames()
+        } catch {
+            throw FriendError.network(error.localizedDescription)
+        }
+
+        var latestByUid: [String: DirectoryUser] = [:]
+        for user in users where user.uid != me {
+            if let existing = latestByUid[user.uid] {
+                let newClaim = user.claimedAt ?? .distantPast
+                let oldClaim = existing.claimedAt ?? .distantPast
+                if newClaim > oldClaim {
+                    latestByUid[user.uid] = user
+                }
+            } else {
+                latestByUid[user.uid] = user
+            }
+        }
+
+        return latestByUid.values.sorted { $0.username < $1.username }
+    }
+
+    /// Fetches my identity for stamping into cross-user writes.
+    ///
+    /// Reads account/info fields RAW, never via AccountInfoDTO Codable decode:
+    /// older accounts' account/info docs are missing displayName/email/createdAt
+    /// (only `username` was merged in by the claim transaction), which makes the
+    /// full decode fail and return nil. Same reason fetchUsername reads raw.
+    /// A missing username should be impossible past the Phase 1 claim gate.
+    ///
+    /// `createdAt` rides along from the same raw account/info read (nil for
+    /// legacy accounts whose doc never got the field) — publishMyStats uses it
+    /// as the published `joinedAt` without a second fetch.
+    private func fetchMyFriendIdentity(userId: String) async throws -> (username: String, displayName: String, createdAt: Date?) {
+        let fetchedUsername = try? await firestoreService.fetchUsername(userId: userId)
+        guard let username = fetchedUsername, !username.isEmpty else {
+            throw FriendError.network("Your account has no username yet.")
+        }
+
+        let raw = try? await FirestoreServiceImpl.shared.fetchAccountInfoRaw(userId: userId)
+        var displayName = (raw?["displayName"] as? String) ?? ""
+        if displayName.isEmpty {
+            displayName = authService.currentUserDisplayName ?? username
+        }
+        return (username, displayName, raw?["createdAt"] as? Date)
+    }
+
+    /// Resolves a typed handle and validates before sending a friend request.
+    ///
+    /// Steps: 1. normalize + validate locally (invalid input never hits the network)
+    ///        2. resolve uid via the public usernames index → nil ⇒ userNotFound
+    ///        3. self-request ⇒ cannotFriendSelf
+    ///        4. local relationship checks (friends / incoming / outgoing-idempotent)
+    ///        5. AUTHORITATIVE reverse-request check: fresh server read of MY OWN
+    ///           incoming request doc users/{me}/friendRequests/{uid} (own space —
+    ///           no cross-user read). Closes the reverse-duplicate window local
+    ///           state can miss. The rare exact-simultaneous cross-send is benign:
+    ///           the first accept deletes both request directions.
+    ///        6. send, stamping my identity from account/info
+    func sendFriendRequest(toHandle raw: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw FriendError.network("You must be signed in to add friends.")
+        }
+
+        let handleKey = try DataManager.normalizeAndValidateUsername(raw)
+
+        let resolvedUid: String?
+        do {
+            resolvedUid = try await firestoreService.lookupUid(forHandleKey: handleKey)
+        } catch {
+            throw FriendError.network(error.localizedDescription)
+        }
+        guard let toUid = resolvedUid else { throw FriendError.userNotFound }
+        guard toUid != me else { throw FriendError.cannotFriendSelf }
+
+        switch friendshipState(with: toUid) {
+        case .friends:
+            throw FriendError.alreadyFriends
+        case .incomingPending:
+            throw FriendError.incomingExists
+        case .outgoingPending:
+            return // Already sent — doc id == recipient uid makes re-send idempotent anyway.
+        case .none:
+            break
+        }
+
+        let reverseExists: Bool
+        do {
+            reverseExists = try await firestoreService.incomingRequestExists(meUid: me, fromUid: toUid)
+        } catch {
+            throw FriendError.network(error.localizedDescription)
+        }
+        if reverseExists { throw FriendError.incomingExists }
+
+        let identity = try await fetchMyFriendIdentity(userId: me)
+        try await firestoreService.sendFriendRequest(
+            toUid: toUid,
+            toUsername: handleKey,
+            fromUid: me,
+            fromUsername: identity.username,
+            fromDisplayName: identity.displayName
+        )
+    }
+
+    /// Accepts a cached incoming request. The from* snapshot comes from the LOCAL
+    /// row (listener-owned); my own identity comes from account/info. The accept
+    /// batch deletes BOTH request directions so no pending request survives
+    /// becoming friends, even after a simultaneous cross-send.
+    func acceptIncomingRequest(fromUid: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw FriendError.network("You must be signed in to use friends.")
+        }
+        guard let request = fetchIncomingRequest(fromUid: fromUid) else {
+            throw FriendError.network("That request is no longer available.")
+        }
+
+        let identity = try await fetchMyFriendIdentity(userId: me)
+        try await firestoreService.acceptFriendRequest(
+            fromUid: fromUid,
+            fromUsername: request.username,
+            fromDisplayName: request.displayName ?? "",
+            meUid: me,
+            meUsername: identity.username,
+            meDisplayName: identity.displayName
+        )
+    }
+
+    /// Declines an incoming request: deletes it and the sender's mirror.
+    /// Deleting an absent doc is a no-op — safe if the sender just cancelled.
+    func declineIncomingRequest(fromUid: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw FriendError.network("You must be signed in to use friends.")
+        }
+        try await firestoreService.declineFriendRequest(fromUid: fromUid, meUid: me)
+    }
+
+    /// Cancels my outgoing request: deletes my mirror and the recipient's incoming doc.
+    func cancelSentRequest(toUid: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw FriendError.network("You must be signed in to use friends.")
+        }
+        try await firestoreService.cancelSentRequest(toUid: toUid, meUid: me)
+    }
+
+    /// Removes a friendship: deletes both edges (unfriend is mutual).
+    func removeFriend(friendUid: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw FriendError.network("You must be signed in to use friends.")
+        }
+        // TESTING ONLY — no real edges exist for the placeholder; succeed as a
+        // no-op (it reappears on the next load, by design).
+        if friendUid == PlaceholderFriend.uid { return }
+        try await firestoreService.removeFriend(friendUid: friendUid, meUid: me)
+    }
+
+    // MARK: - Public Stats / Leaderboard (Friend System Phase 3)
+
+    /// Computes the rolling 7-day macro-goal adherence from the current user's
+    /// OWN local data. The single source of truth for the leaderboard metric:
+    /// the owner publishes it, the leaderboard sorts on it.
+    ///
+    /// For each of the last 7 calendar days (today inclusive), evaluates
+    /// `NutritionManager.didMeetGoals` with that day's entries and the DailyGoal
+    /// in effect that day. A day with NO logged entries counts as NOT met —
+    /// absence is non-adherence, never skipped.
+    ///
+    /// Returns (weeklyGoalsMet 0...7, weeklyAdherence 0.0...1.0).
+    private func computeWeeklyAdherence() async -> (goalsMet: Int, adherence: Double) {
+        guard let userId = currentUserId, !userId.isEmpty else { return (0, 0.0) }
+
+        let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: Date())
+        guard let windowStart = calendar.date(byAdding: .day, value: -6, to: todayStart),
+              let windowEnd = calendar.date(byAdding: .day, value: 1, to: todayStart) else {
+            return (0, 0.0)
+        }
+
+        let entries = (try? await fetchEntriesForDateRange(start: windowStart, end: windowEnd)) ?? []
+        let entriesByDay = Dictionary(grouping: entries) { calendar.startOfDay(for: $0.date) }
+
+        let goals = (try? await fetchAllDailyGoalsForSync(userId: userId)) ?? []
+        let goalsByRecency = goals.sorted { $0.date > $1.date }
+
+        var goalsMet = 0
+        for offset in 0..<7 {
+            guard let dayStart = calendar.date(byAdding: .day, value: -offset, to: todayStart) else { continue }
+            // No entries that day → not met (do not skip the day).
+            guard let dayEntries = entriesByDay[dayStart], !dayEntries.isEmpty else { continue }
+            guard let goal = goalInEffect(on: dayStart, calendar: calendar, goalsByRecency: goalsByRecency) else { continue }
+            if nutritionManager.didMeetGoals(entries: dayEntries, goal: goal) {
+                goalsMet += 1
+            }
+        }
+
+        // Explicit Double conversion — integer division would collapse to 0 or 1.
+        return (goalsMet, Double(goalsMet) / 7.0)
+    }
+
+    /// The DailyGoal in effect on a given day: that day's own goal when one was
+    /// retained, else the most recent earlier goal (goals persist until changed),
+    /// else the oldest goal on record (day predates the first goal). nil only
+    /// when the user has no goals at all — that day then counts as not met.
+    private func goalInEffect(on dayStart: Date, calendar: Calendar, goalsByRecency: [DailyGoal]) -> DailyGoal? {
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return nil }
+        if let sameDay = goalsByRecency.first(where: { $0.date >= dayStart && $0.date < dayEnd }) {
+            return sameDay
+        }
+        if let earlier = goalsByRecency.first(where: { $0.date < dayStart }) {
+            return earlier
+        }
+        return goalsByRecency.last
+    }
+
+    /// Computes the owner's friend-readable stats projection from local
+    /// UserProgress + the adherence metric and publishes it to
+    /// users/{me}/public/stats. Owner-computed, owner-published — nothing here
+    /// reads another user's data.
+    ///
+    /// Fire-and-forget safe: never throws and never blocks UI. Guests and
+    /// unauthenticated sessions are a strict no-op (no Firestore I/O).
+    func publishMyStats() async {
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+        // The snapshot builder applies the same guest/auth gate and produces the
+        // identical payload — publish is now a thin wrapper over it.
+        guard let dto = await buildMyStatsSnapshot() else { return }
+        try? await firestoreService.publishPublicStats(dto, userId: userId)
+    }
+
+    /// Builds the current user's stats projection from LOCAL data only (no
+    /// network, no self-read of `public/stats`). Returns nil for
+    /// guests/unauthenticated.
+    ///
+    /// Shared by `publishMyStats()` (the only writer of the projection) and the
+    /// Friend System Phase 6 profile comparison, so the published payload and
+    /// the "you vs. them" comparison can never diverge. Local data is fresher
+    /// than the friend-readable doc and avoids a redundant self-read.
+    func buildMyStatsSnapshot() async -> PublicStatsDTO? {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return nil }
+
+        // Snapshot progress fields before the next awaits (never hold a @Model
+        // across suspension points).
+        guard let progress = try? await getUserProgress() else { return nil }
+        let level = progress.currentLevel
+        let totalXP = progress.totalXP
+        let currentStreak = progress.currentStreak
+        let longestStreak = progress.longestStreak
+        let rank = progress.rank
+
+        // Earned badge IDs only (Phase 4 profile) — friends resolve them to
+        // emoji/title locally via BadgeDefinition; the badges subcollection
+        // itself stays owner-only. Sorted so re-publishes are byte-stable.
+        let badgeRows = (try? await getAllBadgeProgress()) ?? []
+        let earnedBadgeIds = badgeRows.filter { $0.isUnlocked }.map { $0.badgeId }.sorted()
+
+        let (goalsMet, adherence) = await computeWeeklyAdherence()
+
+        // Identity snapshot via the same raw account/info read used for friend
+        // request stamping (full Codable decode fails for older accounts).
+        // No username yet (pre-claim-gate edge) → nothing to publish under.
+        guard let identity = try? await fetchMyFriendIdentity(userId: userId) else { return nil }
+
+        return PublicStatsDTO(
+            username: identity.username,
+            displayName: identity.displayName,
+            level: level,
+            totalXP: totalXP,
+            currentStreak: currentStreak,
+            rank: rank,
+            weeklyGoalsMet: goalsMet,
+            weeklyAdherence: adherence,
+            longestStreak: longestStreak,
+            joinedAt: identity.createdAt, // nil (field omitted) for legacy accounts
+            badgeCount: earnedBadgeIds.count,
+            earnedBadgeIds: earnedBadgeIds,
+            updatedAt: nil // encoded as FieldValue.serverTimestamp() via @ServerTimestamp
+        )
+    }
+
+    // MARK: - Activity Feed (Friend System Phase 7)
+
+    /// Builds and publishes a milestone feed event, then prunes to the 30
+    /// newest. Guest/unauthenticated ⇒ no-op.
+    ///
+    /// Fire-and-forget: spawns a Task, returns immediately, and never blocks or
+    /// fails the caller's progress save. All errors are swallowed — including
+    /// the expected permission-denied when a re-emitted event hits the immutable
+    /// create-only rules (idempotency = "no duplicates," not "must succeed
+    /// twice"); never surfaced, never retried.
+    ///
+    /// Lives here (not in GamificationManager, which stays pure) because it
+    /// needs Firestore + identity + the guest gate. Identity is read via the
+    /// raw-read `fetchMyFriendIdentity` (the same snapshot publishMyStats uses),
+    /// which tolerates older accounts whose account/info fails Codable decode.
+    func emitFeedEvent(type: String, value: String) {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return }
+        Task {
+            guard let identity = try? await fetchMyFriendIdentity(userId: userId) else { return }
+            let event = FeedEventDTO(
+                type: type,
+                value: value,
+                username: identity.username,
+                displayName: identity.displayName,
+                createdAt: nil // server timestamp via @ServerTimestamp
+            )
+            try? await firestoreService.publishFeedEvent(event, userId: userId)
+            try? await firestoreService.pruneFeedEvents(userId: userId, keep: 30)
+        }
+    }
+
+    /// Merges friends' recent milestone events into one reverse-chronological
+    /// feed. Fetch-on-view, in-memory — no listeners, nothing persisted. Guest
+    /// ⇒ []. My OWN events are never included (the feed shows friends only; the
+    /// app already celebrates my own milestones in-place).
+    ///
+    /// Per-friend fetches fan out concurrently; a friend that errors or has no
+    /// readable events contributes nothing (partial feed still renders). Events
+    /// whose type/value no longer resolve locally (removed badge/rank) are
+    /// dropped. Merged newest-first and capped at 50.
+    func loadActivityFeed() async -> [FeedItem] {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return [] }
+
+        // Local friend edges only (Phase 2). The placeholder test friend is not
+        // a real user and has no feedEvents subcollection, so it is naturally
+        // absent — fetchFriends() never returns it.
+        let friendModels = (try? await fetchFriends()) ?? []
+        let friendUids = friendModels.map { $0.friendUid }
+
+        var items: [FeedItem] = []
+        await withTaskGroup(of: [FeedItem].self) { group in
+            for uid in friendUids {
+                group.addTask { [firestoreService] in
+                    let dtos = (try? await firestoreService.fetchFeedEvents(friendUid: uid, limit: 10)) ?? []
+                    return dtos.compactMap { dto in
+                        let item = FeedItem(dto: dto, friendUid: uid)
+                        // Drop events whose type/value no longer resolve locally.
+                        return item.resolvedText == nil ? nil : item
+                    }
+                }
+            }
+            for await partial in group {
+                items.append(contentsOf: partial)
+            }
+        }
+
+        // TESTING ONLY — fabricated events from the placeholder friend so the
+        // Activity segment isn't empty without a second account. Merges and
+        // sorts alongside real events. Grep "PlaceholderFriend" to remove.
+        items.append(contentsOf: PlaceholderFriend.feedItems())
+
+        items.sort { $0.createdAt > $1.createdAt }
+        let capped = Array(items.prefix(50))
+
+        // Cheers (Phase 8): one cheers query per displayed item, concurrently.
+        // A per-item failure leaves that item at cheerCount 0 / didCheer false —
+        // the feed never fails wholesale. No denormalized counter on the event
+        // doc (events stay immutable); a Cloud-Function `cheerCount` is the
+        // documented future lever, not built here.
+        var enriched: [FeedItem] = []
+        await withTaskGroup(of: FeedItem.self) { group in
+            for item in capped {
+                group.addTask { [firestoreService, me, item] in
+                    // TESTING ONLY — placeholder items keep their fabricated
+                    // cheer fields (the fixture has no real cheers subcollection).
+                    if item.friendUid == PlaceholderFriend.uid { return item }
+                    var result = item
+                    let cheers = (try? await firestoreService.fetchCheers(
+                        ownerUid: item.friendUid, eventId: item.eventId, limit: 20)) ?? []
+                    result.cheerCount = cheers.count
+                    result.didCheer = cheers.contains { $0.cheererUid == me }
+                    result.recentCheererNames = cheers.prefix(3).map {
+                        $0.displayName.isEmpty ? "@\($0.username)" : $0.displayName
+                    }
+                    return result
+                }
+            }
+            for await item in group {
+                enriched.append(item)
+            }
+        }
+
+        // Task-group completion order is nondeterministic — restore newest-first.
+        enriched.sort { $0.createdAt > $1.createdAt }
+        return enriched
+    }
+
+    /// Cheer a friend's event (Friend System Phase 8). guard !isGuest; never
+    /// self-cheer (rules also enforce). Identity snapshot via the raw-read
+    /// `fetchMyFriendIdentity` (the Codable account/info decode fails for older
+    /// accounts), same as event emission.
+    ///
+    /// A genuine permission-denied (unfriended between feed load and tap)
+    /// propagates so the UI can surface it. A re-cheer never reaches here: the
+    /// UI's per-row in-flight flag + `didCheer` state machine route an
+    /// already-cheered event to `uncheer` instead.
+    func cheer(ownerUid: String, eventId: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return }
+        guard ownerUid != me else { return }
+        guard let identity = try? await fetchMyFriendIdentity(userId: me) else { return }
+        try await firestoreService.addCheer(
+            ownerUid: ownerUid, eventId: eventId,
+            cheererUid: me, username: identity.username, displayName: identity.displayName)
+    }
+
+    /// Remove my cheer (Friend System Phase 8). Deleting an absent doc is a no-op.
+    func uncheer(ownerUid: String, eventId: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return }
+        try await firestoreService.removeCheer(ownerUid: ownerUid, eventId: eventId, cheererUid: me)
+    }
+
+    /// Owner receipts (Friend System Phase 8): my own recent events with the
+    /// cheers each received, newest-first. Guest ⇒ []. Resolves display text the
+    /// same way feed rows do and drops events that no longer resolve.
+    func loadMyMilestones() async -> [OwnEventItem] {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return [] }
+
+        let events = (try? await firestoreService.fetchMyFeedEvents(userId: me, limit: 5)) ?? []
+
+        var items: [OwnEventItem] = []
+        await withTaskGroup(of: OwnEventItem?.self) { group in
+            for event in events {
+                // Capture only Sendable primitives, not the DTO.
+                let type = event.type
+                let value = event.value
+                let eid = event.id
+                let created = event.createdAt ?? .distantPast
+                group.addTask { [firestoreService, me] in
+                    guard FeedEventDisplay.text(type: type, value: value) != nil else { return nil }
+                    let cheers = (try? await firestoreService.fetchCheers(
+                        ownerUid: me, eventId: eid, limit: 20)) ?? []
+                    return OwnEventItem(
+                        eventId: eid,
+                        type: type,
+                        value: value,
+                        createdAt: created,
+                        cheerCount: cheers.count,
+                        recentCheererNames: cheers.prefix(3).map {
+                            $0.displayName.isEmpty ? "@\($0.username)" : $0.displayName
+                        }
+                    )
+                }
+            }
+            for await item in group {
+                if let item { items.append(item) }
+            }
+        }
+        items.sort { $0.createdAt > $1.createdAt }
+
+        // TESTING ONLY — fabricated owner milestones so the "Your milestones"
+        // strip is visible without real emitted events. Grep "PlaceholderFriend".
+        if items.isEmpty {
+            items = PlaceholderFriend.ownMilestones()
+        }
+        return items
+    }
+
+    // MARK: - Meal/Recipe Sharing (Friend System Phase 9)
+
+    /// Share a meal snapshot to a friend's inbox. Photos never travel (the DTO
+    /// excludes them by design); meals send yield 1 / purity 0 (ignored on import).
+    func shareMeal(_ meal: SavedMeal, toFriendUid: String) async throws {
+        let json = String(data: meal.componentsData, encoding: .utf8) ?? "[]"
+        try await sendShare(kind: "meal", name: meal.name, contentJSON: json,
+                            yield: 1, purityScore: 0, toFriendUid: toFriendUid)
+    }
+
+    /// Share a recipe snapshot to a friend's inbox (carries yield + purityScore).
+    func shareRecipe(_ recipe: SavedRecipe, toFriendUid: String) async throws {
+        let json = String(data: recipe.ingredientsData, encoding: .utf8) ?? "[]"
+        try await sendShare(kind: "recipe", name: recipe.name, contentJSON: json,
+                            yield: recipe.yield, purityScore: recipe.purityScore, toFriendUid: toFriendUid)
+    }
+
+    /// Shared send path: guest/self guards, friend re-check, size guard, identity
+    /// stamp, deliver. The rules are the real authorization boundary.
+    private func sendShare(kind: String, name: String, contentJSON: String,
+                           yield: Int, purityScore: Int, toFriendUid: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { throw ShareError.notAuthenticated }
+        guard toFriendUid != me else { throw ShareError.network("You can't share with yourself.") }
+
+        let friends = (try? await fetchFriends()) ?? []
+        guard friends.contains(where: { $0.friendUid == toFriendUid }) else {
+            throw ShareError.network("You can only share with friends.")
+        }
+
+        // Friendly client-side cap; the rules enforce a 200 KB hard backstop.
+        guard contentJSON.utf8.count <= 100_000 else { throw ShareError.tooLarge }
+
+        // Identity snapshot via the raw-read helper (the Codable account/info
+        // decode fails for older accounts), same as event emission / cheers.
+        guard let identity = try? await fetchMyFriendIdentity(userId: me) else {
+            throw ShareError.notAuthenticated
+        }
+
+        let dto = SharedItemDTO(
+            id: nil, // doc id assigned at send (fresh UUID); @DocumentID omitted from body
+            fromUid: me,
+            fromUsername: identity.username,
+            fromDisplayName: identity.displayName,
+            kind: kind,
+            name: name,
+            contentJSON: contentJSON,
+            yield: yield,
+            purityScore: purityScore,
+            createdAt: nil
+        )
+        do {
+            try await firestoreService.sendSharedItem(dto, toUid: toFriendUid)
+        } catch {
+            throw ShareError.network(error.localizedDescription)
+        }
+    }
+
+    /// Inbox fetch scoped to one kind ("meal" | "recipe") — filtered SERVER-side.
+    /// Guest ⇒ []. (Retained for callers that want a single kind.)
+    func loadSharedItems(kind: String) async -> [SharedItemDTO] {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return [] }
+        return (try? await firestoreService.fetchSharedItems(userId: me, kind: kind, limit: 50)) ?? []
+    }
+
+    /// The recipient's ENTIRE share inbox (both kinds), newest first. Guest ⇒ [].
+    /// Uses a single-field ordered query (no composite index) so it never fails
+    /// silently on a missing/not-yet-built index — this is what the Friends-tab
+    /// "Shared with you" strip loads.
+    func loadSharedItems() async -> [SharedItemDTO] {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return [] }
+        return (try? await firestoreService.fetchAllSharedItems(userId: me, limit: 50)) ?? []
+    }
+
+    /// Share a single logged food entry as a one-item meal snapshot.
+    func shareFoodEntry(_ entry: FoodEntry, toFriendUid: String) async throws {
+        try await shareFoodEntries([entry], named: entry.name, toFriendUid: toFriendUid)
+    }
+
+    /// Share a set of logged food entries (e.g. a logged meal bundle) as a
+    /// multi-item meal snapshot — reuses the Phase 9 delivery path verbatim.
+    func shareFoodEntries(_ entries: [FoodEntry], named name: String, toFriendUid: String) async throws {
+        let components = entries.map { entry in
+            SavedMealComponent(
+                foodName: entry.name,
+                quantity: 1,
+                servingUnit: "serving",
+                calories: entry.calories,
+                protein: entry.protein,
+                carbs: entry.carbs,
+                fat: entry.fat,
+                toxinScore: entry.toxinScore
+            )
+        }
+        let json = String(data: (try? JSONEncoder().encode(components)) ?? Data(), encoding: .utf8) ?? "[]"
+        try await sendShare(kind: "meal", name: name, contentJSON: json,
+                            yield: 1, purityScore: 0, toFriendUid: toFriendUid)
+    }
+
+    /// Import a share into the recipient's own collection through the EXISTING
+    /// save pipeline (decode → validate → fresh-UUID DTO → toSaved* → addSaved*).
+    /// The share is removed ONLY after the save succeeds; a failed delete leaves
+    /// it in the inbox (re-import yields an independent copy — never upsert).
+    func importSharedItem(_ item: SharedItemDTO) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { throw ShareError.notAuthenticated }
+
+        // Decode the snapshot. Empty array or decode failure ⇒ malformed.
+        guard let data = item.contentJSON.data(using: .utf8),
+              let components = try? JSONDecoder().decode([SavedMealComponent].self, from: data),
+              !components.isEmpty else {
+            throw ShareError.malformed
+        }
+        // Every component's macros (and quantity) must be non-negative.
+        let valid = components.allSatisfy {
+            $0.calories >= 0 && $0.protein >= 0 && $0.carbs >= 0 && $0.fat >= 0 && $0.quantity >= 0
+        }
+        guard valid else { throw ShareError.malformed }
+
+        // FRESH UUID — never the sender's id, so a genuinely new import is an
+        // independent copy. But skip creating a duplicate of one already saved
+        // (same name + items), so a re-import doesn't spam the collection.
+        let now = Date()
+        switch item.kind {
+        case "meal":
+            let signature = DataManager.contentSignature(name: item.name, components: components)
+            let existing = (try? await getSavedMeals()) ?? []
+            let isDuplicate = existing.contains {
+                DataManager.contentSignature(name: $0.name, components: $0.components) == signature
+            }
+            if !isDuplicate {
+                let dto = SavedMealDTO(
+                    id: UUID().uuidString, name: item.name,
+                    componentsJSON: item.contentJSON, createdAt: now)
+                try await addSavedMeal(dto.toSavedMeal(userId: me))
+            }
+        case "recipe":
+            let signature = DataManager.contentSignature(name: item.name, components: components) + "#y\(max(1, item.yield))"
+            let existing = (try? await getSavedRecipes()) ?? []
+            let isDuplicate = existing.contains {
+                DataManager.contentSignature(name: $0.name, components: $0.ingredients) + "#y\($0.yield)" == signature
+            }
+            if !isDuplicate {
+                let dto = SavedRecipeDTO(
+                    id: UUID().uuidString, name: item.name, yield: item.yield,
+                    ingredientsJSON: item.contentJSON, purityScore: item.purityScore, createdAt: now)
+                try await addSavedRecipe(dto.toSavedRecipe(userId: me))
+            }
+        default:
+            throw ShareError.malformed
+        }
+
+        // Only now remove the share (whether newly saved or already present, the
+        // share is resolved). A failed delete is acceptable. NEVER delete before
+        // the save succeeds.
+        if let shareId = item.id {
+            try? await firestoreService.deleteSharedItem(id: shareId, userId: me)
+        }
+    }
+
+    /// Dismiss a share without saving. Guest ⇒ no-op.
+    func dismissSharedItem(_ item: SharedItemDTO) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return }
+        guard let shareId = item.id else { return }
+        try await firestoreService.deleteSharedItem(id: shareId, userId: me)
+    }
+
+    /// Fetches one friend's published stats projection for the profile sheet
+    /// (Friend System Phase 4). Reuses the leaderboard's friend-gated service
+    /// read — nil means not published yet OR permission-denied (unfriended),
+    /// both rendered as "hasn't shared their stats yet."
+    func fetchPublicStats(friendUid: String) async throws -> PublicStatsDTO? {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return nil }
+        // TESTING ONLY — the placeholder friend's stats are fabricated locally.
+        if friendUid == PlaceholderFriend.uid { return PlaceholderFriend.stats }
+        return try await firestoreService.fetchPublicStats(friendUid: friendUid)
+    }
+
+    /// Fetches every friend's published projection keyed by uid, for the
+    /// detailed friends-list rows. Same concurrent friend-gated reads as the
+    /// leaderboard; friends without a published projection are simply absent
+    /// (their row falls back to identity only). Fetch-on-view, never persisted.
+    func fetchFriendStats() async -> [String: PublicStatsDTO] {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return [:] }
+
+        let friendModels = (try? await fetchFriends()) ?? []
+        var uids = friendModels.map { $0.friendUid }
+        // TESTING ONLY — placeholder friend rides along (fabricated stats).
+        uids.append(PlaceholderFriend.uid)
+
+        var statsByUid: [String: PublicStatsDTO] = [:]
+        await withTaskGroup(of: (uid: String, stats: PublicStatsDTO?).self) { group in
+            for uid in uids {
+                group.addTask { [firestoreService] in
+                    if uid == PlaceholderFriend.uid { return (uid, PlaceholderFriend.stats) }
+                    return (uid, try? await firestoreService.fetchPublicStats(friendUid: uid))
+                }
+            }
+            for await result in group {
+                if let stats = result.stats {
+                    statsByUid[result.uid] = stats
+                }
+            }
+        }
+        return statsByUid
+    }
+
+    /// Builds the ranked friend leaderboard: my own locally computed row plus
+    /// each friend's published projection, fetched concurrently and ranked
+    /// client-side in memory.
+    ///
+    /// Fetch-on-view only — no listeners are opened and nothing is persisted
+    /// to SwiftData. Guests get an empty list (no Firestore reads in guest mode).
+    func loadLeaderboard() async -> [LeaderboardEntry] {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return [] }
+
+        // Value snapshots of the listener-maintained Friend rows — never carry
+        // @Model references into the concurrent fan-out.
+        let friendModels = (try? await fetchFriends()) ?? []
+        let friendRefs = friendModels.map {
+            (uid: $0.friendUid, username: $0.username, displayName: $0.displayName)
+        }
+
+        // Concurrent per-friend fetch (task-group fan-out, never a serial loop).
+        // nil — not published yet, permission-denied, or a network failure —
+        // keeps that friend as a zeroed "no data yet" row instead of failing
+        // the whole board.
+        var statsByUid: [String: PublicStatsDTO] = [:]
+        await withTaskGroup(of: (uid: String, stats: PublicStatsDTO?).self) { group in
+            for friend in friendRefs {
+                group.addTask { [firestoreService] in
+                    (friend.uid, try? await firestoreService.fetchPublicStats(friendUid: friend.uid))
+                }
+            }
+            for await result in group {
+                if let stats = result.stats {
+                    statsByUid[result.uid] = stats
+                }
+            }
+        }
+
+        // Deduplicate by uid (hard requirement). Friends are written first and
+        // my own row last, so the current-user row always wins a duplicate.
+        var entriesByUid: [String: LeaderboardEntry] = [:]
+        for friend in friendRefs {
+            if let stats = statsByUid[friend.uid] {
+                entriesByUid[friend.uid] = LeaderboardEntry(
+                    uid: friend.uid,
+                    username: stats.username,
+                    displayName: stats.displayName,
+                    level: stats.level,
+                    totalXP: stats.totalXP,
+                    currentStreak: stats.currentStreak,
+                    rank: stats.rank,
+                    weeklyGoalsMet: stats.weeklyGoalsMet,
+                    weeklyAdherence: stats.weeklyAdherence,
+                    isCurrentUser: false,
+                    hasData: true
+                )
+            } else {
+                // Identity from the local Friend snapshot only — never fetch
+                // account/info (or anything else) for another user.
+                entriesByUid[friend.uid] = LeaderboardEntry(
+                    uid: friend.uid,
+                    username: friend.username,
+                    displayName: friend.displayName,
+                    level: 1,
+                    totalXP: 0,
+                    currentStreak: 0,
+                    rank: Rank.iron.rawValue,
+                    weeklyGoalsMet: 0,
+                    weeklyAdherence: 0.0,
+                    isCurrentUser: false,
+                    hasData: false
+                )
+            }
+        }
+
+        // TESTING ONLY — placeholder friend row, built from the same fabricated
+        // stats the profile sheet shows (PlaceholderFriend).
+        entriesByUid[PlaceholderFriend.uid] = LeaderboardEntry(
+            uid: PlaceholderFriend.uid,
+            username: PlaceholderFriend.username,
+            displayName: PlaceholderFriend.displayName,
+            level: PlaceholderFriend.stats.level,
+            totalXP: PlaceholderFriend.stats.totalXP,
+            currentStreak: PlaceholderFriend.stats.currentStreak,
+            rank: PlaceholderFriend.stats.rank,
+            weeklyGoalsMet: PlaceholderFriend.stats.weeklyGoalsMet,
+            weeklyAdherence: PlaceholderFriend.stats.weeklyAdherence,
+            isCurrentUser: false,
+            hasData: true
+        )
+
+        // PREVIEW ONLY — two extra demo rows so CLI screenshots show the full
+        // gold/silver/bronze podium. Active only under the HB_PREVIEW launch
+        // environment; never present in a normal app session.
+        if ProcessInfo.processInfo.environment["HB_PREVIEW"] == "leaderboard" {
+            entriesByUid["preview-demo-1"] = LeaderboardEntry(
+                uid: "preview-demo-1", username: "pixelpete", displayName: "Pixel Pete",
+                level: 18, totalXP: 7900, currentStreak: 12, rank: Rank.diamond.rawValue,
+                weeklyGoalsMet: 6, weeklyAdherence: 6.0 / 7.0,
+                isCurrentUser: false, hasData: true
+            )
+            entriesByUid["preview-demo-2"] = LeaderboardEntry(
+                uid: "preview-demo-2", username: "ironivy", displayName: "Iron Ivy",
+                level: 4, totalXP: 760, currentStreak: 2, rank: Rank.bronze.rawValue,
+                weeklyGoalsMet: 3, weeklyAdherence: 3.0 / 7.0,
+                isCurrentUser: false, hasData: true
+            )
+        }
+
+        entriesByUid[me] = await buildMyLeaderboardEntry(userId: me)
+
+        // Deterministic ranking: no-data rows always last regardless of zeros,
+        // then adherence desc → total XP desc → streak desc → username asc.
+        return entriesByUid.values.sorted { lhs, rhs in
+            if lhs.hasData != rhs.hasData { return lhs.hasData }
+            if lhs.weeklyAdherence != rhs.weeklyAdherence { return lhs.weeklyAdherence > rhs.weeklyAdherence }
+            if lhs.totalXP != rhs.totalXP { return lhs.totalXP > rhs.totalXP }
+            if lhs.currentStreak != rhs.currentStreak { return lhs.currentStreak > rhs.currentStreak }
+            return lhs.username.localizedCaseInsensitiveCompare(rhs.username) == .orderedAscending
+        }
+    }
+
+    /// My own leaderboard row, built from local UserProgress + the locally
+    /// computed adherence — the owner's published projection is never read back.
+    private func buildMyLeaderboardEntry(userId: String) async -> LeaderboardEntry {
+        let progress = try? await getUserProgress()
+        let level = progress?.currentLevel ?? 1
+        let totalXP = progress?.totalXP ?? 0
+        let currentStreak = progress?.currentStreak ?? 0
+        let rank = progress?.rank ?? Rank.iron.rawValue
+
+        let (goalsMet, adherence) = await computeWeeklyAdherence()
+
+        let identity = try? await fetchMyFriendIdentity(userId: userId)
+        let username = identity?.username ?? ""
+        let displayName = identity?.displayName
+            ?? authService.currentUserDisplayName
+            ?? username
+
+        return LeaderboardEntry(
+            uid: userId,
+            username: username,
+            displayName: displayName,
+            level: level,
+            totalXP: totalXP,
+            currentStreak: currentStreak,
+            rank: rank,
+            weeklyGoalsMet: goalsMet,
+            weeklyAdherence: adherence,
+            isCurrentUser: true,
+            hasData: true
+        )
     }
 
     // MARK: - Guest Mode Methods
@@ -2429,6 +3819,130 @@ final class DataManager {
     }
 }
 
+// MARK: - Friendship State
+
+/// Local relationship classification between the current user and another uid.
+/// Derived only from cached @Model rows — pure, synchronous, possibly stale.
+/// Order of precedence: friends > incomingPending > outgoingPending > none.
+enum FriendshipState {
+    case none
+    case outgoingPending
+    case incomingPending
+    case friends
+}
+
+// MARK: - Leaderboard Entry
+
+/// One ranked row of the friend leaderboard (Friend System Phase 3).
+///
+/// Plain value type — friends' stats live in memory only, never in SwiftData.
+/// `uid` is the sole identity, ranking, and dedup key; `username`/`displayName`
+/// are display-only snapshots and may be stale.
+struct LeaderboardEntry: Identifiable, Equatable {
+    let uid: String
+    let username: String
+    let displayName: String
+    let level: Int
+    let totalXP: Int
+    let currentStreak: Int
+    let rank: String
+    let weeklyGoalsMet: Int
+    let weeklyAdherence: Double
+    let isCurrentUser: Bool
+
+    /// False when this friend has not published a projection yet — rendered as
+    /// "no data yet" and always sorted to the bottom.
+    let hasData: Bool
+
+    /// Identifiable keys on the uid only.
+    var id: String { uid }
+}
+
+// MARK: - Placeholder Friend (TESTING ONLY)
+
+/// TESTING ONLY — a fake friend every signed-in user sees, so the friends
+/// list, leaderboard, and profile sheet can be exercised without a second
+/// account. Lives entirely in memory: never written to SwiftData (the friend
+/// listeners' reconcile would delete it) and never written to Firestore.
+/// Grep "PlaceholderFriend" and delete every reference to remove the fixture.
+enum PlaceholderFriend {
+    static let uid = "placeholder-test-friend"
+    static let username = "testbuddy"
+    static let displayName = "Test Buddy"
+
+    /// Fabricated projection that exercises every field of the profile sheet:
+    /// rank pill, level, both streaks, member-since, adherence, badge grid.
+    static let stats = PublicStatsDTO(
+        username: username,
+        displayName: displayName,
+        level: 12,
+        totalXP: 4200,
+        currentStreak: 5,
+        rank: Rank.gold.rawValue,
+        weeklyGoalsMet: 5,
+        weeklyAdherence: 5.0 / 7.0,
+        longestStreak: 21,
+        joinedAt: Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 1)),
+        badgeCount: 3,
+        earnedBadgeIds: ["first_flame", "goal_getter", "week_warrior"],
+        updatedAt: Date()
+    )
+
+    /// TESTING ONLY — fabricated activity-feed events so the Friends → Activity
+    /// segment shows content without a second account. Exercises all four event
+    /// types; timestamps are relative to now so the "Xh ago" labels read live.
+    /// Values line up with the fabricated `stats` above (Level 12, Gold, its
+    /// earned badges). Grep "PlaceholderFriend" to remove the whole fixture.
+    static func feedItems() -> [FeedItem] {
+        let now = Date()
+        func event(_ type: String, _ value: String, hoursAgo: Double,
+                   cheers: Int = 0, names: [String] = []) -> FeedItem {
+            let dto = FeedEventDTO(
+                type: type,
+                value: value,
+                username: username,
+                displayName: displayName,
+                createdAt: now.addingTimeInterval(-hoursAgo * 3600)
+            )
+            var item = FeedItem(dto: dto, friendUid: uid)
+            // Fabricated cheer counts/names (Phase 8) so the feed shows the
+            // cheer affordance populated. didCheer stays false so tapping toggles.
+            item.cheerCount = cheers
+            item.recentCheererNames = names
+            return item
+        }
+        return [
+            event("streak", "30", hoursAgo: 2, cheers: 3, names: ["Sam", "Priya", "Alex"]),
+            event("level", "12", hoursAgo: 8, cheers: 1, names: ["Sam"]),
+            event("badge", "week_warrior", hoursAgo: 26),
+            event("rank", Rank.gold.rawValue, hoursAgo: 50, cheers: 2, names: ["Jordan", "Riley"]),
+            event("badge", "first_flame", hoursAgo: 80)
+        ]
+    }
+
+    /// TESTING ONLY — fabricated OWN milestones (Phase 8) so the "Your
+    /// milestones" receipts strip is visible without real emitted events.
+    /// Used by loadMyMilestones() only when the user has no real events.
+    static func ownMilestones() -> [OwnEventItem] {
+        let now = Date()
+        func own(_ type: String, _ value: String, hoursAgo: Double,
+                 cheers: Int, names: [String]) -> OwnEventItem {
+            OwnEventItem(
+                eventId: "\(type)_\(value)",
+                type: type,
+                value: value,
+                createdAt: now.addingTimeInterval(-hoursAgo * 3600),
+                cheerCount: cheers,
+                recentCheererNames: names
+            )
+        }
+        return [
+            own("level", "8", hoursAgo: 5, cheers: 4, names: ["Test Buddy", "Sam", "Priya"]),
+            own("streak", "7", hoursAgo: 30, cheers: 2, names: ["Alex", "Jordan"])
+        ]
+    }
+}
+
 // MARK: - Badge Trigger
 
 /// Events that can trigger badge unlock checks.
@@ -2437,6 +3951,46 @@ enum BadgeTrigger {
     case streakUpdated
     case questsChecked
     case xpAwarded
+}
+
+// MARK: - Share Error (Friend System Phase 9)
+
+/// Errors surfaced by meal/recipe sharing and import, mirroring FriendError.
+enum ShareError: LocalizedError {
+    case tooLarge
+    case malformed
+    case notAuthenticated
+    case network(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .tooLarge:
+            return "This item is too large to share."
+        case .malformed:
+            return "This share couldn't be read."
+        case .notAuthenticated:
+            return "You must be signed in to do that."
+        case .network(let message):
+            return message
+        }
+    }
+}
+
+// MARK: - Quick-Log Error (Phase 10)
+
+/// Errors surfaced by the quick-log save flow (AI items → SavedMeal/Recipe).
+enum QuickLogError: LocalizedError {
+    case emptyName
+    case nothingToSave
+
+    var errorDescription: String? {
+        switch self {
+        case .emptyName:
+            return "Please name this meal or recipe."
+        case .nothingToSave:
+            return "Nothing to save."
+        }
+    }
 }
 
 // MARK: - Error Types

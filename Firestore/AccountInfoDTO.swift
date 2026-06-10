@@ -15,6 +15,9 @@ import Foundation
 /// Firestore path: users/{userId}/account/info (fixed document ID "info")
 struct AccountInfoDTO: Codable {
     var displayName: String
+    var username: String?
     var email: String
     var createdAt: Date
+    var lastUsernameChangeAt: Date?
+    var lastDisplayNameChangeAt: Date?
 }

@@ -254,9 +254,33 @@ final class AppCoordinator {
     /// - Returns: Tuple indicating level up and new level
     func addXP(_ amount: Int) async throws -> (didLevelUp: Bool, newLevel: Int) {
         var progress = try await dataManager.getUserProgress()
+        let beforeLevel = progress.currentLevel
+        let beforeRank = progress.rank
         let result = gamificationManager.addXP(amount: amount, to: &progress)
         try await dataManager.saveUserProgress()
+        emitProgressionEvents(beforeLevel: beforeLevel, beforeRank: beforeRank, progress: progress)
         return result
+    }
+
+    /// Emits level-up / rank-up activity-feed events for any XP-awarding path
+    /// (Friend System Phase 7). Call with the level/rank captured BEFORE the XP
+    /// mutation; `progress` is the post-save model — one event per crossed
+    /// threshold.
+    ///
+    /// `gamificationManager.addXP` is the single XP/rank chokepoint, but it is
+    /// invoked from several flows (manual XP, quest completion, daily-goal XP,
+    /// milestone bonuses), so the transition is detected here at the persistence
+    /// boundary rather than at one site. Deterministic event IDs make this
+    /// duplicate-safe: if two paths both emit `level_12`, the second is a
+    /// harmless no-op. GamificationManager stays pure; the emission itself
+    /// (Firestore + identity + guest gate) lives in DataManager.
+    private func emitProgressionEvents(beforeLevel: Int, beforeRank: String, progress: UserProgress) {
+        if progress.currentLevel > beforeLevel {
+            dataManager.emitFeedEvent(type: "level", value: String(progress.currentLevel))
+        }
+        if progress.rank != beforeRank {
+            dataManager.emitFeedEvent(type: "rank", value: progress.rank)
+        }
     }
 
     /// Updates streak and awards daily goal XP if met
@@ -264,6 +288,8 @@ final class AppCoordinator {
     /// Call this once per day (e.g., at midnight or on first app open)
     func checkAndAwardDailyXP() async throws -> (xpAwarded: Int, newStreak: Int) {
         var progress = try await dataManager.getUserProgress()
+        let beforeLevel = progress.currentLevel
+        let beforeRank = progress.rank
         let entries = try await dataManager.fetchTodaysEntries()
         let goal = try await getCurrentGoal()
 
@@ -275,6 +301,7 @@ final class AppCoordinator {
         let xpAwarded = gamificationManager.awardDailyGoalXP(to: &progress, metGoals: metGoals)
 
         try await dataManager.saveUserProgress()
+        emitProgressionEvents(beforeLevel: beforeLevel, beforeRank: beforeRank, progress: progress)
 
         return (xpAwarded: xpAwarded, newStreak: newStreak)
     }
@@ -307,6 +334,8 @@ final class AppCoordinator {
         let entries = try await dataManager.fetchTodaysEntries()
         let goal = try await getCurrentGoal()
         var progress = try await dataManager.getUserProgress()
+        let beforeLevel = progress.currentLevel
+        let beforeRank = progress.rank
 
         let xpEarned = gamificationManager.checkQuestProgress(
             quests: &quests,
@@ -318,6 +347,7 @@ final class AppCoordinator {
         // Save updates
         try await dataManager.saveQuests()
         try await dataManager.saveUserProgress()
+        emitProgressionEvents(beforeLevel: beforeLevel, beforeRank: beforeRank, progress: progress)
 
         return xpEarned
     }
@@ -328,11 +358,14 @@ final class AppCoordinator {
     func completeQuest(_ quest: DailyQuest) async throws -> Int {
         var questCopy = quest
         var progress = try await dataManager.getUserProgress()
+        let beforeLevel = progress.currentLevel
+        let beforeRank = progress.rank
 
         let xpEarned = gamificationManager.completeQuest(quest: &questCopy, progress: &progress)
 
         try await dataManager.saveQuests()
         try await dataManager.saveUserProgress()
+        emitProgressionEvents(beforeLevel: beforeLevel, beforeRank: beforeRank, progress: progress)
 
         return xpEarned
     }
@@ -363,11 +396,19 @@ final class AppCoordinator {
     /// - Returns: The milestone that was claimed, or nil if none
     func checkForStreakMilestone() async throws -> StreakMilestone? {
         var progress = try await dataManager.getUserProgress()
+        let beforeLevel = progress.currentLevel
+        let beforeRank = progress.rank
 
         // Check for milestone
         if let milestone = gamificationManager.checkForMilestone(streak: progress.currentStreak, progress: &progress) {
             // Save updated progress
             try await dataManager.saveUserProgress()
+
+            // Friend activity feed (Phase 7): the streak milestone itself (7/30/100)…
+            dataManager.emitFeedEvent(type: "streak", value: String(milestone.rawValue))
+            // …and any level/rank threshold the milestone's bonus XP just crossed.
+            emitProgressionEvents(beforeLevel: beforeLevel, beforeRank: beforeRank, progress: progress)
+
             return milestone
         }
 
@@ -813,6 +854,137 @@ final class AppCoordinator {
         guard let profile = try await dataManager.getUserProfile() else { return }
         profile.displayName = name.trimmingCharacters(in: .whitespaces)
         try await dataManager.upsertUserProfile(profile)
+    }
+
+    // MARK: - Username (Friend System Phase 1)
+
+    func currentUsername() async -> String? { await dataManager.currentUsername() }
+    func needsUsername() async -> Bool { await dataManager.needsUsername() }
+    func claimUsername(_ raw: String) async throws { try await dataManager.claimUsername(raw) }
+    func changeUsername(to raw: String) async throws { try await dataManager.changeUsername(to: raw) }
+    func fetchAccountInfo() async -> AccountInfoDTO? { await dataManager.fetchAccountInfo() }
+    func usernameCooldownEnd() async -> Date? { await dataManager.usernameCooldownEnd() }
+    func displayNameCooldownEnd() async -> Date? { await dataManager.displayNameCooldownEnd() }
+
+    // MARK: - Friends (Friend System Phase 2)
+
+    func fetchFriends() async throws -> [Friend] { try await dataManager.fetchFriends() }
+    func fetchRequests(direction: String) async throws -> [FriendRequest] { try await dataManager.fetchRequests(direction: direction) }
+    func fetchIncomingRequest(fromUid: String) -> FriendRequest? { dataManager.fetchIncomingRequest(fromUid: fromUid) }
+    func friendshipState(with uid: String) -> FriendshipState { dataManager.friendshipState(with: uid) }
+    func fetchAllUsers() async throws -> [DirectoryUser] { try await dataManager.fetchAllUsers() }
+    func sendFriendRequest(toHandle raw: String) async throws { try await dataManager.sendFriendRequest(toHandle: raw) }
+    func acceptIncomingRequest(fromUid: String) async throws { try await dataManager.acceptIncomingRequest(fromUid: fromUid) }
+    func declineIncomingRequest(fromUid: String) async throws { try await dataManager.declineIncomingRequest(fromUid: fromUid) }
+    func cancelSentRequest(toUid: String) async throws { try await dataManager.cancelSentRequest(toUid: toUid) }
+    func removeFriend(friendUid: String) async throws { try await dataManager.removeFriend(friendUid: friendUid) }
+
+    // MARK: - Leaderboard (Friend System Phase 3)
+
+    /// Recomputes and publishes the current user's friend-readable stats projection.
+    func publishMyStats() async { await dataManager.publishMyStats() }
+
+    /// Builds the current user's stats projection from LOCAL data only (Friend
+    /// System Phase 6 profile comparison) — no network, no self-read of
+    /// `public/stats`. nil for guests/unauthenticated. Same payload publishMyStats publishes.
+    func currentUserStats() async -> PublicStatsDTO? { await dataManager.buildMyStatsSnapshot() }
+
+    /// True for an unauthenticated guest session — used to gate the profile
+    /// comparison's Compare affordance (guests have no shareable stats).
+    var isGuest: Bool { dataManager.isGuest }
+
+    /// Builds the ranked leaderboard (me + friends' published stats). Empty for guests.
+    func loadLeaderboard() async -> [LeaderboardEntry] { await dataManager.loadLeaderboard() }
+
+    // MARK: - Activity Feed (Friend System Phase 7)
+
+    /// Merges friends' recent milestone events, newest first. Empty for guests.
+    /// Fetch-on-view — no listeners, nothing persisted.
+    func loadActivityFeed() async -> [FeedItem] { await dataManager.loadActivityFeed() }
+
+    // MARK: - Cheers (Friend System Phase 8)
+
+    /// Cheer a friend's feed event. Throws on permission-denied (e.g. unfriended)
+    /// so the UI can surface it; re-cheer is prevented upstream by the UI state machine.
+    func cheer(ownerUid: String, eventId: String) async throws {
+        try await dataManager.cheer(ownerUid: ownerUid, eventId: eventId)
+    }
+
+    /// Remove my cheer from a friend's event. Absent ⇒ no-op.
+    func uncheer(ownerUid: String, eventId: String) async throws {
+        try await dataManager.uncheer(ownerUid: ownerUid, eventId: eventId)
+    }
+
+    /// My own recent events with cheers received, for the "Your milestones"
+    /// strip. Empty for guests.
+    func loadMyMilestones() async -> [OwnEventItem] { await dataManager.loadMyMilestones() }
+
+    // MARK: - Meal/Recipe Sharing (Friend System Phase 9)
+
+    /// Share a meal snapshot to a friend's inbox.
+    func shareMeal(_ meal: SavedMeal, toFriendUid: String) async throws {
+        try await dataManager.shareMeal(meal, toFriendUid: toFriendUid)
+    }
+
+    /// Share a recipe snapshot to a friend's inbox.
+    func shareRecipe(_ recipe: SavedRecipe, toFriendUid: String) async throws {
+        try await dataManager.shareRecipe(recipe, toFriendUid: toFriendUid)
+    }
+
+    /// The recipient's share inbox for one kind ("meal" | "recipe"). Empty for guests.
+    func loadSharedItems(kind: String) async -> [SharedItemDTO] {
+        await dataManager.loadSharedItems(kind: kind)
+    }
+
+    /// The recipient's entire share inbox (both kinds), newest first. Empty for guests.
+    func loadSharedItems() async -> [SharedItemDTO] {
+        await dataManager.loadSharedItems()
+    }
+
+    /// Share a single logged food entry as a one-item meal snapshot to a friend.
+    func shareFoodEntry(_ entry: FoodEntry, toFriendUid: String) async throws {
+        try await dataManager.shareFoodEntry(entry, toFriendUid: toFriendUid)
+    }
+
+    /// Share a logged meal bundle (its entries) as a multi-item meal snapshot.
+    func shareFoodEntries(_ entries: [FoodEntry], named name: String, toFriendUid: String) async throws {
+        try await dataManager.shareFoodEntries(entries, named: name, toFriendUid: toFriendUid)
+    }
+
+    /// Import a share into the user's own collection (then removes the share).
+    func importSharedItem(_ item: SharedItemDTO) async throws {
+        try await dataManager.importSharedItem(item)
+    }
+
+    /// Dismiss a share without saving.
+    func dismissSharedItem(_ item: SharedItemDTO) async throws {
+        try await dataManager.dismissSharedItem(item)
+    }
+
+    // MARK: - Quick-Log Capture (Phase 10)
+
+    /// Save AI-recognized items as a reusable SavedMeal. Returns the created model.
+    func saveQuickLog(asMealNamed name: String, items: [RecognizedFoodItem]) async throws -> SavedMeal {
+        try await dataManager.saveQuickLog(asMealNamed: name, items: items)
+    }
+
+    /// Save AI-recognized items as a reusable SavedRecipe (yield + purity). Returns the model.
+    func saveQuickLog(asRecipeNamed name: String, yield: Int, items: [RecognizedFoodItem]) async throws -> SavedRecipe {
+        try await dataManager.saveQuickLog(asRecipeNamed: name, yield: yield, items: items)
+    }
+
+    // MARK: - Friend Profiles (Friend System Phase 4)
+
+    /// Fetches one friend's published stats projection for the profile sheet.
+    /// nil ⇒ not published yet or permission-denied (rendered as "no stats").
+    func fetchPublicStats(friendUid: String) async throws -> PublicStatsDTO? {
+        try await dataManager.fetchPublicStats(friendUid: friendUid)
+    }
+
+    /// Fetches all friends' published projections keyed by uid (friends-list
+    /// detail rows). Friends without a published projection are absent.
+    func fetchFriendStats() async -> [String: PublicStatsDTO] {
+        await dataManager.fetchFriendStats()
     }
 
     // MARK: - Guest Mode

@@ -127,10 +127,10 @@ struct LoginView: View {
 
     private var fieldsSection: some View {
         VStack(spacing: DesignSystem.Spacing.md) {
-            // Email
+            // Email or username
             AuthTextField(
-                label: "Email",
-                placeholder: "you@example.com",
+                label: "Email or Username",
+                placeholder: "you@example.com or @username",
                 text: $viewModel.email,
                 isSecure: false,
                 errorMessage: viewModel.emailError,

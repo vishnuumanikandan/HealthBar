@@ -18,7 +18,17 @@
       "Bash(ls /Users/vishnumanikandan/Desktop/repos/HealthBar/*Info*)",
       "Bash(__NEW_LINE_426470e21d6d0964__ echo \"\")",
       "Skill(impeccable)",
-      "Skill(impeccable:*)"
+      "Skill(impeccable:*)",
+      "Bash(python3 *)",
+      "Bash(plutil -lint HealthBar.xcodeproj/project.pbxproj)",
+      "Bash(firebase deploy *)",
+      "Bash(cat)",
+      "Bash(chmod +x /tmp/sim_tap.sh)",
+      "Bash(/tmp/sim_tap.sh 0.639 0.922)",
+      "Bash(xcrun simctl *)",
+      "Bash(/tmp/hb_iterate.sh *)",
+      "Bash(node *)",
+      "Bash(SIMCTL_CHILD_HB_PREVIEW=leaderboard xcrun simctl launch booted com.vishnu.myapp)"
     ]
   }
 }

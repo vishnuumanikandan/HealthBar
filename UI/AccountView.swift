@@ -19,6 +19,16 @@ final class AccountViewModel {
     var displayName: String = ""
     var displayNameError: String? = nil
     var isSavingDisplayName: Bool = false
+    var displayNameCooldownEnd: Date? = nil
+
+    // MARK: - Username
+
+    var currentUsername: String = ""
+    var newUsername: String = ""
+    var usernameError: String? = nil
+    var isSavingUsername: Bool = false
+    var isEditingUsername: Bool = false
+    var usernameCooldownEnd: Date? = nil
 
     // MARK: - Current Email (read-only)
 
@@ -70,6 +80,13 @@ final class AccountViewModel {
             displayName = authService.currentUserDisplayName ?? ""
         }
         currentEmail = Auth.auth().currentUser?.email ?? ""
+
+        // Load username + cooldowns
+        if let username = await coordinator.currentUsername() {
+            currentUsername = username
+        }
+        usernameCooldownEnd = await coordinator.usernameCooldownEnd()
+        displayNameCooldownEnd = await coordinator.displayNameCooldownEnd()
     }
 
     // MARK: - Save Display Name
@@ -83,6 +100,14 @@ final class AccountViewModel {
             return
         }
 
+        // Enforce 7-day cooldown
+        if let cooldownEnd = displayNameCooldownEnd, Date() < cooldownEnd {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            displayNameError = "You can change your display name again on \(formatter.string(from: cooldownEnd))."
+            return
+        }
+
         isSavingDisplayName = true
         defer { isSavingDisplayName = false }
 
@@ -90,13 +115,14 @@ final class AccountViewModel {
             // 1. Update Firebase Auth profile
             try await authService.updateDisplayName(trimmed)
 
-            // 2. Write full account/info to Firestore
+            // 2. Write account/info with lastDisplayNameChangeAt timestamp
             let userId = authService.currentUserEmail ?? ""
             if !userId.isEmpty {
                 let info = AccountInfoDTO(
                     displayName: trimmed,
                     email: currentEmail,
-                    createdAt: Date()
+                    createdAt: Date(),
+                    lastDisplayNameChangeAt: Date()
                 )
                 try await firestoreService.writeAccountInfo(info, userId: userId)
             }
@@ -104,10 +130,41 @@ final class AccountViewModel {
             // 3. Update local UserProfile
             try await coordinator.updateUserProfileDisplayName(trimmed)
 
+            // Update local cooldown state
+            displayNameCooldownEnd = Calendar.current.date(byAdding: .day, value: 7, to: Date())
+
             showToast("Display name updated.")
         } catch {
             displayNameError = error.localizedDescription
         }
+    }
+
+    // MARK: - Save Username
+
+    func saveUsername() async {
+        usernameError = nil
+
+        isSavingUsername = true
+        defer { isSavingUsername = false }
+
+        do {
+            try await coordinator.changeUsername(to: newUsername)
+            let normalized = try DataManager.normalizeAndValidateUsername(newUsername)
+            currentUsername = normalized
+            newUsername = ""
+            isEditingUsername = false
+            usernameCooldownEnd = Calendar.current.date(byAdding: .day, value: 30, to: Date())
+            showToast("Username updated.")
+        } catch let e as UsernameError {
+            usernameError = e.errorDescription
+        } catch {
+            usernameError = UsernameError.network(error.localizedDescription).errorDescription
+        }
+    }
+
+    var isUsernameSubmittable: Bool {
+        guard !isSavingUsername, !newUsername.isEmpty else { return false }
+        return (try? DataManager.normalizeAndValidateUsername(newUsername)) != nil
     }
 
     // MARK: - Change Password
@@ -235,6 +292,7 @@ struct AccountView: View {
 
             ScrollView {
                 VStack(spacing: DesignSystem.Spacing.lg) {
+                    usernameSection
                     displayNameSection
                     emailSection
                     passwordSection
@@ -269,6 +327,111 @@ struct AccountView: View {
         }
     }
 
+    // MARK: - Username Section
+
+    private var usernameSection: some View {
+        sectionCard(title: "Username") {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+                if viewModel.isEditingUsername {
+                    // Edit mode
+                    HStack(spacing: 0) {
+                        Text("@")
+                            .font(AppFont.bold(17))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .padding(.leading, DesignSystem.Spacing.md)
+
+                        TextField("new_username", text: $viewModel.newUsername)
+                            .font(AppFont.regular(DesignSystem.FontSizes.body))
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .padding(.leading, DesignSystem.Spacing.xs)
+                            .padding(.trailing, DesignSystem.Spacing.md)
+                            .padding(.vertical, DesignSystem.Spacing.md)
+                            .submitLabel(.done)
+                            .onSubmit {
+                                if viewModel.isUsernameSubmittable {
+                                    Task { await viewModel.saveUsername() }
+                                }
+                            }
+                    }
+                    .frame(minHeight: 52)
+                    .background(DesignSystem.Colors.cardBackground)
+                    .clipShape(AdaptiveCardShapeStyle())
+                    .overlay(
+                        AdaptiveCardShapeStyle()
+                            .stroke(
+                                viewModel.usernameError != nil
+                                    ? DesignSystem.Colors.danger
+                                    : DesignSystem.Colors.border,
+                                lineWidth: viewModel.usernameError != nil ? 2 : 1
+                            )
+                    )
+
+                    if let error = viewModel.usernameError {
+                        Text(error)
+                            .font(AppFont.regular(12))
+                            .foregroundColor(DesignSystem.Colors.danger)
+                    }
+
+                    HStack(spacing: DesignSystem.Spacing.sm) {
+                        AppButton(
+                            title: "Save",
+                            style: .primary,
+                            action: { Task { await viewModel.saveUsername() } },
+                            isLoading: viewModel.isSavingUsername,
+                            isDisabled: !viewModel.isUsernameSubmittable
+                        )
+
+                        AppButton(
+                            title: "Cancel",
+                            style: .secondary,
+                            action: {
+                                viewModel.isEditingUsername = false
+                                viewModel.newUsername = ""
+                                viewModel.usernameError = nil
+                            }
+                        )
+                    }
+                } else {
+                    // Display mode
+                    HStack {
+                        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                            Text("@\(viewModel.currentUsername)")
+                                .font(AppFont.bold(17))
+                                .foregroundColor(tc.textPrimary)
+
+                            if let cooldownEnd = viewModel.usernameCooldownEnd, Date() < cooldownEnd {
+                                let formatter = {
+                                    let f = DateFormatter()
+                                    f.dateStyle = .medium
+                                    return f
+                                }()
+                                Text("Can change again on \(formatter.string(from: cooldownEnd))")
+                                    .font(AppFont.regular(12))
+                                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                            }
+                        }
+
+                        Spacer()
+
+                        if viewModel.usernameCooldownEnd == nil || Date() >= (viewModel.usernameCooldownEnd ?? .distantPast) {
+                            Button {
+                                viewModel.newUsername = ""
+                                viewModel.usernameError = nil
+                                viewModel.isEditingUsername = true
+                            } label: {
+                                Text("Change")
+                                    .font(AppFont.bold(14))
+                                    .foregroundColor(tc.primary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Display Name Section
 
     private var displayNameSection: some View {
@@ -283,11 +446,23 @@ struct AccountView: View {
                     onSubmit: { Task { await viewModel.saveDisplayName() } }
                 )
 
+                if let cooldownEnd = viewModel.displayNameCooldownEnd, Date() < cooldownEnd {
+                    let formatter = {
+                        let f = DateFormatter()
+                        f.dateStyle = .medium
+                        return f
+                    }()
+                    Text("Can change again on \(formatter.string(from: cooldownEnd))")
+                        .font(AppFont.regular(12))
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                }
+
                 AppButton(
                     title: "Save",
                     style: .primary,
                     action: { Task { await viewModel.saveDisplayName() } },
-                    isLoading: viewModel.isSavingDisplayName
+                    isLoading: viewModel.isSavingDisplayName,
+                    isDisabled: viewModel.displayNameCooldownEnd != nil && Date() < (viewModel.displayNameCooldownEnd ?? .distantPast)
                 )
             }
         }

@@ -52,6 +52,9 @@ final class LocalAuthService: AuthService {
     /// LocalAuthService does not support display names — always returns nil.
     var currentUserDisplayName: String? { nil }
 
+    /// LocalAuthService identifies users by email, so the "actual email" is the same value.
+    var currentUserActualEmail: String? { currentUserEmail }
+
     /// LocalAuthService does not support guest mode — always false.
     var isGuest: Bool = false
 

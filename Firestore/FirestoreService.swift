@@ -7,6 +7,16 @@
 
 import Foundation
 
+/// A public entry from the top-level usernames index (uid + claimed handle).
+/// Used by the Add Friends user directory. Contains no private account data.
+/// `claimedAt` disambiguates when one uid owns multiple handle docs (orphans
+/// from earlier claims) — the latest claim is the user's current handle.
+struct DirectoryUser {
+    let uid: String
+    let username: String
+    let claimedAt: Date?
+}
+
 /// Defines the Firestore sync contract for cloud persistence.
 ///
 /// Phase 1: FoodEntry
@@ -191,6 +201,162 @@ protocol FirestoreService {
     /// Append-only: callers must never revert isUnlocked from true to false.
     /// Same idempotency and MainActor guarantees as listenForFoodEntries.
     func listenForBadges(userId: String, onUpdate: @escaping ([BadgeProgressDTO]) -> Void)
+
+    // MARK: - Username (Friend System Phase 1)
+
+    /// One-time read: returns the canonical username owned by `userId`, or nil if unclaimed.
+    /// Reads users/{userId}/account/info and returns its `username` field.
+    func fetchUsername(userId: String) async throws -> String?
+
+    /// Non-authoritative availability probe for UI feedback only.
+    /// Returns true if no usernames/{handleKey} document exists for the given canonical handle.
+    /// The claim transaction remains the sole source of truth; never gate the claim on this result.
+    func isUsernameAvailable(_ handleKey: String) async throws -> Bool
+
+    /// Atomically claims `handleKey` for `userId` and writes it into account/info.
+    /// Runs inside a single Firestore transaction for uniqueness enforcement.
+    func claimUsername(_ handleKey: String, userId: String) async throws
+
+    // MARK: - Username Login Mapping
+
+    /// Resolves a username to its login email via the public loginHandles mapping.
+    /// Works pre-auth (rules allow unauthenticated single-document get, no list).
+    /// Returns nil when no mapping exists for the handle.
+    func lookupLoginEmail(forHandleKey handleKey: String) async throws -> String?
+
+    /// Creates or overwrites the username → login-email mapping used for sign-in.
+    /// Firestore path: loginHandles/{handleKey} = { uid, email }.
+    func upsertLoginHandle(handleKey: String, uid: String, email: String) async throws
+
+    /// Deletes a username → email mapping if it is owned by `uid` (owner-guarded).
+    /// No-op when the mapping is absent or owned by someone else.
+    func deleteLoginHandle(handleKey: String, uid: String) async throws
+
+    /// Atomically changes the user's username from `oldHandleKey` to `newHandleKey`.
+    /// Runs inside a single Firestore transaction:
+    ///   1. Verify old handle is owned by this user.
+    ///   2. Verify new handle is unclaimed.
+    ///   3. Delete old usernames/{oldHandleKey}.
+    ///   4. Create usernames/{newHandleKey}.
+    ///   5. Merge-write username + lastUsernameChangeAt into account/info.
+    func changeUsername(from oldHandleKey: String, to newHandleKey: String, userId: String) async throws
+
+    // MARK: - Friends (Phase 2)
+
+    /// Resolve a handle to a uid via the public usernames index. Returns nil if unclaimed.
+    func lookupUid(forHandleKey handleKey: String) async throws -> String?
+
+    /// Fresh server existence check of my own incoming request from `fromUid`
+    /// (users/{meUid}/friendRequests/{fromUid}). Used to block reverse-duplicate sends.
+    func incomingRequestExists(meUid: String, fromUid: String) async throws -> Bool
+
+    /// One-time fetch of the entire public usernames index, ordered alphabetically
+    /// by handle (= document ID). Powers the Add Friends user directory.
+    func fetchAllUsernames() async throws -> [DirectoryUser]
+
+    /// Atomic (WriteBatch): create the incoming request in the recipient's space AND the
+    /// sender's own sentRequests mirror. Caller passes its own identity for stamping.
+    func sendFriendRequest(toUid: String, toUsername: String,
+                           fromUid: String, fromUsername: String, fromDisplayName: String) async throws
+
+    /// Atomic (WriteBatch): create both friend edges, delete the incoming request and the
+    /// sender's mirror. `me*` = accepter identity, `from*` = original sender identity (from the request doc).
+    /// Also deletes the reverse request pair (users/{fromUid}/friendRequests/{meUid} and
+    /// users/{meUid}/sentRequests/{fromUid}) — a no-op when absent — so no pending request
+    /// survives becoming friends, even after a simultaneous cross-send.
+    func acceptFriendRequest(fromUid: String, fromUsername: String, fromDisplayName: String,
+                             meUid: String, meUsername: String, meDisplayName: String) async throws
+
+    /// Atomic (WriteBatch): delete the incoming request and the sender's mirror.
+    func declineFriendRequest(fromUid: String, meUid: String) async throws
+
+    /// Atomic (WriteBatch): delete the sender's mirror and the recipient's incoming request.
+    func cancelSentRequest(toUid: String, meUid: String) async throws
+
+    /// Atomic (WriteBatch): delete both friend edges.
+    func removeFriend(friendUid: String, meUid: String) async throws
+
+    /// Starts a real-time listener for a user's friends collection.
+    /// Same idempotency and MainActor guarantees as listenForFoodEntries.
+    func listenForFriends(userId: String, onUpdate: @escaping ([FriendDTO]) -> Void)
+
+    /// Starts a real-time listener for a user's incoming friend requests.
+    /// Same idempotency and MainActor guarantees as listenForFoodEntries.
+    func listenForIncomingRequests(userId: String, onUpdate: @escaping ([IncomingRequestDTO]) -> Void)
+
+    /// Starts a real-time listener for a user's outgoing request mirrors.
+    /// Same idempotency and MainActor guarantees as listenForFoodEntries.
+    func listenForSentRequests(userId: String, onUpdate: @escaping ([SentRequestDTO]) -> Void)
+
+    // MARK: - Public stats / leaderboard (Friend System Phase 3)
+
+    /// Owner publishes their own stats projection. Overwrites users/{userId}/public/stats.
+    func publishPublicStats(_ stats: PublicStatsDTO, userId: String) async throws
+
+    /// Read a single friend's published stats. Returns nil if the friend has not
+    /// published yet. Authorized by rules only when the caller is in `friendUid`'s
+    /// friends list — permission-denied is surfaced as nil, never a crash, so an
+    /// unfriended user simply drops off the leaderboard.
+    func fetchPublicStats(friendUid: String) async throws -> PublicStatsDTO?
+
+    // MARK: - Activity feed (Friend System Phase 7)
+
+    /// Owner emits a milestone event. Idempotent: the deterministic eventId
+    /// (`<type>_<value>`) means a re-emitted milestone collides on the same
+    /// document — no duplicate. Authorized for the owner only.
+    func publishFeedEvent(_ event: FeedEventDTO, userId: String) async throws
+
+    /// Owner prunes their own events beyond the newest `keep`: queries own
+    /// feedEvents ordered by createdAt desc and deletes everything past index
+    /// keep-1 (batched). Bounded storage, no TTL infrastructure.
+    func pruneFeedEvents(userId: String, keep: Int) async throws
+
+    /// Fetch a friend's recent events (createdAt desc, capped at `limit`).
+    /// Friend-gated by rules; permission-denied (unfriended) ⇒ [], consistent
+    /// with fetchPublicStats. Undecodable docs are skipped.
+    func fetchFeedEvents(friendUid: String, limit: Int) async throws -> [FeedEventDTO]
+
+    /// Owner reads their OWN recent events (createdAt desc, capped at `limit`)
+    /// for the "Your milestones" receipts strip. Permitted by the owner read rule.
+    func fetchMyFeedEvents(userId: String, limit: Int) async throws -> [FeedEventDTO]
+
+    // MARK: - Cheers (Friend System Phase 8)
+
+    /// Cheer a friend's event. Create-only; doc ID = cheererUid ⇒ one cheer per
+    /// person per event. Re-cheer of an existing cheer is rejected by the rules
+    /// (update: false); callers swallow that as the expected no-op — same
+    /// contract as Phase 7 event emission.
+    func addCheer(ownerUid: String, eventId: String,
+                  cheererUid: String, username: String, displayName: String) async throws
+
+    /// Remove my cheer (delete users/{ownerUid}/feedEvents/{eventId}/cheers/{cheererUid}).
+    /// Deleting an absent doc is a no-op.
+    func removeCheer(ownerUid: String, eventId: String, cheererUid: String) async throws
+
+    /// Fetch cheers for one event (createdAt desc, capped at `limit`).
+    /// Friend-gated by rules; permission-denied ⇒ []. Undecodable docs skipped.
+    func fetchCheers(ownerUid: String, eventId: String, limit: Int) async throws -> [CheerDTO]
+
+    // MARK: - Meal/recipe sharing (Friend System Phase 9)
+
+    /// Deliver a share into a friend's inbox (cross-user create; rules require
+    /// the sender to be in the recipient's friends list at send time).
+    func sendSharedItem(_ item: SharedItemDTO, toUid: String) async throws
+
+    /// Recipient fetches their inbox filtered by kind ("meal" | "recipe"),
+    /// createdAt desc, capped at `limit`. Owner-only read. The equality filter
+    /// plus order-by REQUIRES the composite index (kind ASC, createdAt DESC) in
+    /// firestore.indexes.json — without it the query throws FAILED_PRECONDITION.
+    /// Undecodable docs are skipped.
+    func fetchSharedItems(userId: String, kind: String, limit: Int) async throws -> [SharedItemDTO]
+
+    /// Recipient fetches their ENTIRE inbox (both kinds), createdAt desc, capped
+    /// at `limit`. Owner-only read; ordering on a single field uses the automatic
+    /// single-field index — no composite index required. Undecodable docs skipped.
+    func fetchAllSharedItems(userId: String, limit: Int) async throws -> [SharedItemDTO]
+
+    /// Recipient removes a share (after save or dismiss). Absent ⇒ no-op.
+    func deleteSharedItem(id: String, userId: String) async throws
 
     // MARK: - Account Deletion
 

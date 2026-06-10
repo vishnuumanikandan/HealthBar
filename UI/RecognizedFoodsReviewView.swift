@@ -20,6 +20,11 @@ struct RecognizedFoodsReviewView: View {
     @State private var settings = SettingsManager.shared
     @State private var draftItems: [DraftItem] = []
 
+    /// "Save for later" (Phase 10): the mode drives the sheet; the snapshot is
+    /// frozen at tap time so later edits don't affect an open save sheet.
+    @State private var quickLogMode: SaveQuickLogSheet.Mode? = nil
+    @State private var saveSnapshot: [RecognizedFoodItem] = []
+
     private var tc: ThemeColors { settings.activeColors }
 
     private var includedItems: [DraftItem] {
@@ -113,6 +118,20 @@ struct RecognizedFoodsReviewView: View {
                                 .foregroundColor(tc.textSecondary)
                         }
                     }
+
+                    // Save for later (Phase 10) — capture this AI result as a
+                    // reusable meal/recipe. Independent of logging; hidden when
+                    // there are no included items.
+                    if includedCount > 0 {
+                        HStack(spacing: DesignSystem.Spacing.sm) {
+                            saveForLaterButton(title: "Save as Meal", icon: "rectangle.stack.fill") {
+                                presentSaveSheet(.meal)
+                            }
+                            saveForLaterButton(title: "Save as Recipe", icon: "list.bullet.rectangle.fill") {
+                                presentSaveSheet(.recipe)
+                            }
+                        }
+                    }
                 }
                 .padding(.horizontal, DesignSystem.Spacing.lg)
                 .padding(.bottom, DesignSystem.Spacing.lg)
@@ -134,6 +153,38 @@ struct RecognizedFoodsReviewView: View {
         .onAppear {
             draftItems = viewModel.recognizedItems.map { DraftItem(from: $0) }
         }
+        .sheet(item: $quickLogMode) { mode in
+            SaveQuickLogSheet(
+                coordinator: viewModel.coordinator,
+                mode: mode,
+                prefillName: viewModel.mealDescriptionInput,
+                items: saveSnapshot
+            )
+        }
+    }
+
+    // MARK: - Save for Later (Phase 10)
+
+    private func saveForLaterButton(title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                Image(systemName: icon)
+                    .font(AppFont.regular(13))
+                Text(title)
+                    .font(AppFont.bold(13))
+            }
+            .foregroundColor(tc.primary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DesignSystem.Spacing.sm)
+            .adaptiveCard(borderColor: tc.primary.opacity(0.4), fillColor: tc.cardBackground)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    /// Freezes the current included-items snapshot, then opens the save sheet.
+    private func presentSaveSheet(_ mode: SaveQuickLogSheet.Mode) {
+        saveSnapshot = includedItems.compactMap { $0.toRecognizedFoodItem() }
+        quickLogMode = mode
     }
 
     // MARK: - Item Row
@@ -164,6 +215,7 @@ struct RecognizedFoodsReviewView: View {
                         Text(draft.quantityText)
                             .font(AppFont.regular(12))
                             .foregroundColor(tc.textSecondary)
+                            .allowsHitTesting(false)
                             .accessibilityLabel("Quantity: \(draft.quantityText)")
                     }
                 }

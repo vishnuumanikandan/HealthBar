@@ -40,7 +40,9 @@ struct HealthBarApp: App {
                 SavedMeal.self,
                 SavedRecipe.self,
                 UserProfile.self,
-                BadgeProgress.self
+                BadgeProgress.self,
+                Friend.self,
+                FriendRequest.self
             ])
 
             let modelConfiguration = ModelConfiguration(

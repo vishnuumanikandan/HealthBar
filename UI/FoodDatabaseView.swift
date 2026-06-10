@@ -360,6 +360,11 @@ private struct MyMealsTab: View {
     private var tc: ThemeColors { settings.activeColors }
 
     var body: some View {
+        mealsContent
+    }
+
+    @ViewBuilder
+    private var mealsContent: some View {
         if dbViewModel.savedMeals.isEmpty {
             VStack {
                 Spacer()
@@ -397,22 +402,27 @@ private struct MyMealsTab: View {
                 }
                 Section {
                     ForEach(dbViewModel.savedMeals) { meal in
-                        SavedMealRow(meal: meal) {
-                            Task {
-                                await dbViewModel.logMeal(
-                                    meal,
-                                    date: logViewModel.selectedDate,
-                                    mealType: logViewModel.pendingMealType
-                                )
-                                await logViewModel.loadTodaysData()
-                                onLogged()
+                        SavedMealRow(
+                            meal: meal,
+                            onLog: {
+                                Task {
+                                    await dbViewModel.logMeal(
+                                        meal,
+                                        date: logViewModel.selectedDate,
+                                        mealType: logViewModel.pendingMealType
+                                    )
+                                    await logViewModel.loadTodaysData()
+                                    onLogged()
+                                }
+                            },
+                            onEdit: {
+                                dbViewModel.editingMeal = meal
+                                dbViewModel.showingMealBuilder = true
+                            },
+                            onDelete: {
+                                Task { await dbViewModel.deleteSavedMeal(meal) }
                             }
-                        } onEdit: {
-                            dbViewModel.editingMeal = meal
-                            dbViewModel.showingMealBuilder = true
-                        } onDelete: {
-                            Task { await dbViewModel.deleteSavedMeal(meal) }
-                        }
+                        )
                         .listRowBackground(tc.cardBackground)
                     }
                 }
@@ -469,6 +479,11 @@ private struct MyRecipesTab: View {
     private var tc: ThemeColors { settings.activeColors }
 
     var body: some View {
+        recipesContent
+    }
+
+    @ViewBuilder
+    private var recipesContent: some View {
         if dbViewModel.savedRecipes.isEmpty {
             VStack {
                 Spacer()
@@ -506,17 +521,23 @@ private struct MyRecipesTab: View {
                 }
                 Section {
                     ForEach(dbViewModel.savedRecipes) { recipe in
-                        SavedRecipeRow(recipe: recipe) {
-                            // Log directly to the food log (opens serving size picker)
-                            dbViewModel.beginLog(recipe: recipe)
-                        } onSaveAsFood: {
-                            Task { await dbViewModel.saveRecipeAsFood(recipe) }
-                        } onEdit: {
-                            dbViewModel.editingRecipe = recipe
-                            dbViewModel.showingRecipeBuilder = true
-                        } onDelete: {
-                            Task { await dbViewModel.deleteRecipe(recipe) }
-                        }
+                        SavedRecipeRow(
+                            recipe: recipe,
+                            onLog: {
+                                // Log directly to the food log (opens serving size picker)
+                                dbViewModel.beginLog(recipe: recipe)
+                            },
+                            onSaveAsFood: {
+                                Task { await dbViewModel.saveRecipeAsFood(recipe) }
+                            },
+                            onEdit: {
+                                dbViewModel.editingRecipe = recipe
+                                dbViewModel.showingRecipeBuilder = true
+                            },
+                            onDelete: {
+                                Task { await dbViewModel.deleteRecipe(recipe) }
+                            }
+                        )
                         .listRowBackground(tc.cardBackground)
                     }
                 }
@@ -686,6 +707,14 @@ private struct SavedMealRow: View {
             }
             .tint(.blue)
         }
+        .contextMenu {
+            Button(action: onEdit) {
+                Label("Edit", systemImage: "pencil")
+            }
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete", systemImage: "trash")
+            }
+        }
     }
 }
 
@@ -805,6 +834,17 @@ private struct SavedRecipeRow: View {
                 Label("Save to My Foods", systemImage: "arrow.down.to.line")
             }
             .tint(tc.primaryDark)
+        }
+        .contextMenu {
+            Button(action: onSaveAsFood) {
+                Label("Save to My Foods", systemImage: "arrow.down.to.line")
+            }
+            Button(action: onEdit) {
+                Label("Edit", systemImage: "pencil")
+            }
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete", systemImage: "trash")
+            }
         }
     }
 }

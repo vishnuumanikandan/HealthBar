@@ -1318,7 +1318,7 @@ final class FoodLogViewModel {
         }
 
         do {
-            let result = try await coordinator.quickLogFood(entry, mealType: .uncategorized)
+            let result = try await coordinator.quickLogFood(entry, date: selectedDate, mealType: .uncategorized)
 
             // Haptic feedback
             #if os(iOS)
@@ -1334,8 +1334,11 @@ final class FoodLogViewModel {
             undoMessage = "\(entry.name) logged"
             showUndoToast = true
 
-            // Reload today's data to update progress
+            // Reload data to update progress
             await loadTodaysData()
+            if !isViewingToday {
+                await loadEntriesForSelectedDate()
+            }
 
             // Store XP earned for potential display
             if result.xpEarned > 0 {
