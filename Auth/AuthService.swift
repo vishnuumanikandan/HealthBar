@@ -72,6 +72,11 @@ protocol AuthService {
     /// The display name of the currently authenticated user, or `nil` if not set.
     var currentUserDisplayName: String? { get }
 
+    /// The real email address of the currently authenticated user, or `nil`.
+    /// Distinct from `currentUserEmail`, which carries the Firebase UID.
+    /// Used to maintain the username → email login mapping.
+    var currentUserActualEmail: String? { get }
+
     /// True when the user is in an anonymous guest session (no account).
     /// Use this — never `currentUserEmail == "guest"` — to gate guest behavior.
     var isGuest: Bool { get }

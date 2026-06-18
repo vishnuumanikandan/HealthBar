@@ -37,7 +37,7 @@ struct ContentView: View {
 
     // MARK: - Tab State
 
-    /// Currently selected tab (0 = Home, 1 = Food, 2 = Tools, 3 = Profile).
+    /// Currently selected tab (0 = Home, 1 = Food, 2 = Tools, 3 = Friends, 4 = Profile).
     @State private var selectedTab: Int = 0
 
     /// Shared state for the Tools tab (carries TDEE from Calculator 1 → Calculator 8).
@@ -64,6 +64,9 @@ struct ContentView: View {
 
     /// True when a guest user taps "Create Account" in ProfileView.
     @State private var showSignUpFromGuest: Bool = false
+
+    /// PREVIEW ONLY — driven by the "--preview-friend-profile" launch argument.
+    @State private var showPreviewFriendProfile: Bool = false
 
     // MARK: - Initialization
 
@@ -118,7 +121,8 @@ struct ContentView: View {
                 // Home Tab
                 HomeView(
                     coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
-                    selectedTab: $selectedTab
+                    selectedTab: $selectedTab,
+                    authService: FirebaseAuthService.shared
                 )
                 .background(tc.primaryBackground.ignoresSafeArea())
                 .toolbar(.hidden, for: .tabBar)
@@ -136,6 +140,16 @@ struct ContentView: View {
                     .toolbar(.hidden, for: .tabBar)
                     .tag(2)
 
+                // Friends Tab
+                FriendsView(
+                    coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
+                    authService: FirebaseAuthService.shared,
+                    onCreateAccount: { showSignUpFromGuest = true }
+                )
+                .background(tc.primaryBackground.ignoresSafeArea())
+                .toolbar(.hidden, for: .tabBar)
+                .tag(3)
+
                 // Profile Tab
                 ProfileView(
                     coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
@@ -145,7 +159,7 @@ struct ContentView: View {
                 )
                 .background(tc.primaryBackground.ignoresSafeArea())
                 .toolbar(.hidden, for: .tabBar)
-                .tag(3)
+                .tag(4)
             }
 
             if settings.isCleanUI {
@@ -183,6 +197,29 @@ struct ContentView: View {
         .sheet(isPresented: $showSignUpFromGuest) {
             NavigationStack {
                 SignUpView(viewModel: authViewModel)
+            }
+        }
+        // PREVIEW ONLY — the "--preview-friend-profile" launch argument
+        // auto-opens the placeholder friend's profile sheet so the UI can be
+        // iterated/screenshotted from the CLI. Remove with PlaceholderFriend.
+        .sheet(isPresented: $showPreviewFriendProfile) {
+            FriendProfileView(
+                coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
+                friendUid: PlaceholderFriend.uid,
+                username: PlaceholderFriend.username,
+                displayName: PlaceholderFriend.displayName
+            )
+        }
+        .task {
+            switch ProcessInfo.processInfo.environment["HB_PREVIEW"] {
+            case "friend-profile":
+                try? await Task.sleep(for: .seconds(1))
+                showPreviewFriendProfile = true
+            case "friends-tab", "leaderboard":
+                // FriendsView handles the leaderboard push itself.
+                selectedTab = 3
+            default:
+                break
             }
         }
         .alert("Migration Failed", isPresented: .init(
@@ -259,7 +296,8 @@ struct WoodenTabBar: View {
         ("house.fill", "Home", 0),
         ("fork.knife", "Food", 1),
         ("wrench.and.screwdriver.fill", "Tools", 2),
-        ("person.fill", "Profile", 3)
+        ("person.2.fill", "Friends", 3),
+        ("person.fill", "Profile", 4)
     ]
 
     var body: some View {
@@ -318,7 +356,8 @@ struct CleanTabBar: View {
         ("house.fill", "Home", 0),
         ("fork.knife", "Food", 1),
         ("wrench.and.screwdriver.fill", "Tools", 2),
-        ("person.fill", "Profile", 3)
+        ("person.2.fill", "Friends", 3),
+        ("person.fill", "Profile", 4)
     ]
 
     var body: some View {

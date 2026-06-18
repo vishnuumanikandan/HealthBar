@@ -59,6 +59,11 @@ final class FirebaseAuthService: AuthService {
         Auth.auth().currentUser?.displayName
     }
 
+    /// The real email address of the current Firebase user (currentUserEmail is the UID).
+    var currentUserActualEmail: String? {
+        Auth.auth().currentUser?.email
+    }
+
     /// True when the user is running an anonymous guest session.
     /// Persisted across app launches via UserDefaults.
     var isGuest: Bool = false
@@ -235,6 +240,13 @@ final class FirebaseAuthService: AuthService {
     }
 
     func logout() {
+        // Stop all Firestore listeners BEFORE revoking auth (same as
+        // continueAsGuest). Otherwise the sign-out kills every active listener
+        // with permission-denied while FirestoreServiceImpl still holds their
+        // handles and currentSyncUserId — so logging back into the SAME account
+        // mid-session skips re-registration ("already listening") and the whole
+        // session runs with dead listeners until the app is relaunched.
+        FirestoreServiceImpl.shared.stopAllListeners()
         isGuest = false
         isNewUser = false
         pendingMigrationUserId = nil

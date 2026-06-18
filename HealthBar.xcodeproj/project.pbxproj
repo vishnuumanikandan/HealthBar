@@ -41,6 +41,28 @@
 		BE1029442FD8A2E700E9744F /* ClaimUsernameViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1029432FD8A2E700E9744F /* ClaimUsernameViewModel.swift */; };
 		BE1029462FD8A2F000E9744F /* ClaimUsernameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1029452FD8A2F000E9744F /* ClaimUsernameView.swift */; };
 		BE1029482FD8A32A00E9744F /* UsernameError.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1029472FD8A32A00E9744F /* UsernameError.swift */; };
+		BE102AB62FD9352E00E9744F /* Friend.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102AB52FD9352E00E9744F /* Friend.swift */; };
+		BE102AB82FD9353900E9744F /* FriendRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102AB72FD9353900E9744F /* FriendRequest.swift */; };
+		BE102ABA2FD9355600E9744F /* FriendError.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102AB92FD9355600E9744F /* FriendError.swift */; };
+		BE102ABC2FD9355C00E9744F /* SentRequestDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102ABB2FD9355C00E9744F /* SentRequestDTO.swift */; };
+		BE102ABE2FD9356600E9744F /* IncomingRequestDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102ABD2FD9356600E9744F /* IncomingRequestDTO.swift */; };
+		BE102AC02FD9356D00E9744F /* FriendDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102ABF2FD9356D00E9744F /* FriendDTO.swift */; };
+		BE102AC22FD9358000E9744F /* FriendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102AC12FD9358000E9744F /* FriendsView.swift */; };
+		BE102AC42FD9358600E9744F /* FriendsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102AC32FD9358600E9744F /* FriendsViewModel.swift */; };
+		BE102B522FD9EA8600E9744F /* PublicStatsDTO .swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102B512FD9EA8600E9744F /* PublicStatsDTO .swift */; };
+		BE102B542FD9EAAB00E9744F /* LeaderboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102B532FD9EAAB00E9744F /* LeaderboardView.swift */; };
+		BE102B562FD9EAB300E9744F /* LeaderboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102B552FD9EAB300E9744F /* LeaderboardViewModel.swift */; };
+		BE102BC82FD9F60100E9744F /* FriendProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102BC72FD9F60100E9744F /* FriendProfileViewModel.swift */; };
+		BE102BCA2FD9F60700E9744F /* FriendProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102BC92FD9F60700E9744F /* FriendProfileView.swift */; };
+		BE102C3C2FDBE88C00E9744F /* LeaderboardSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102C3B2FDBE88C00E9744F /* LeaderboardSection.swift */; };
+		BE102D8E2FDBF71400E9744F /* FeedEventDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102D8D2FDBF71400E9744F /* FeedEventDTO.swift */; };
+		BE102D902FDBF72B00E9744F /* ActivityFeedSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102D8F2FDBF72B00E9744F /* ActivityFeedSection.swift */; };
+		BE102D922FDBF73200E9744F /* StatComparisonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102D912FDBF73200E9744F /* StatComparisonView.swift */; };
+		BE102E042FDC8E6200E9744F /* CheerDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102E032FDC8E6200E9744F /* CheerDTO.swift */; };
+		BE102EE62FDC979900E9744F /* SharedInboxSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102EE52FDC979900E9744F /* SharedInboxSection.swift */; };
+		BE102EE82FDC97A200E9744F /* FriendPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102EE72FDC97A200E9744F /* FriendPickerSheet.swift */; };
+		BE102F5A2FDD018600E9744F /* SharedItemDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102F592FDD018600E9744F /* SharedItemDTO.swift */; };
+		BE102F5C2FDD019B00E9744F /* SaveQuickLogSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102F5B2FDD019B00E9744F /* SaveQuickLogSheet.swift */; };
 		BE47B6372F67739C007F48F5 /* FirebaseAI in Frameworks */ = {isa = PBXBuildFile; productRef = BE47B6362F67739C007F48F5 /* FirebaseAI */; };
 		BE47B6392F67739C007F48F5 /* FirebaseAILogic in Frameworks */ = {isa = PBXBuildFile; productRef = BE47B6382F67739C007F48F5 /* FirebaseAILogic */; };
 		BE47B63B2F67739C007F48F5 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = BE47B63A2F67739C007F48F5 /* FirebaseAnalytics */; };
@@ -194,6 +216,28 @@
 		BE1029432FD8A2E700E9744F /* ClaimUsernameViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaimUsernameViewModel.swift; sourceTree = "<group>"; };
 		BE1029452FD8A2F000E9744F /* ClaimUsernameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaimUsernameView.swift; sourceTree = "<group>"; };
 		BE1029472FD8A32A00E9744F /* UsernameError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsernameError.swift; sourceTree = "<group>"; };
+		BE102AB52FD9352E00E9744F /* Friend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Friend.swift; sourceTree = "<group>"; };
+		BE102AB72FD9353900E9744F /* FriendRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendRequest.swift; sourceTree = "<group>"; };
+		BE102AB92FD9355600E9744F /* FriendError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendError.swift; sourceTree = "<group>"; };
+		BE102ABB2FD9355C00E9744F /* SentRequestDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentRequestDTO.swift; sourceTree = "<group>"; };
+		BE102ABD2FD9356600E9744F /* IncomingRequestDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingRequestDTO.swift; sourceTree = "<group>"; };
+		BE102ABF2FD9356D00E9744F /* FriendDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendDTO.swift; sourceTree = "<group>"; };
+		BE102AC12FD9358000E9744F /* FriendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsView.swift; sourceTree = "<group>"; };
+		BE102AC32FD9358600E9744F /* FriendsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsViewModel.swift; sourceTree = "<group>"; };
+		BE102B512FD9EA8600E9744F /* PublicStatsDTO .swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PublicStatsDTO .swift"; sourceTree = "<group>"; };
+		BE102B532FD9EAAB00E9744F /* LeaderboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardView.swift; sourceTree = "<group>"; };
+		BE102B552FD9EAB300E9744F /* LeaderboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardViewModel.swift; sourceTree = "<group>"; };
+		BE102BC72FD9F60100E9744F /* FriendProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendProfileViewModel.swift; sourceTree = "<group>"; };
+		BE102BC92FD9F60700E9744F /* FriendProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendProfileView.swift; sourceTree = "<group>"; };
+		BE102C3B2FDBE88C00E9744F /* LeaderboardSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardSection.swift; sourceTree = "<group>"; };
+		BE102D8D2FDBF71400E9744F /* FeedEventDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedEventDTO.swift; sourceTree = "<group>"; };
+		BE102D8F2FDBF72B00E9744F /* ActivityFeedSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityFeedSection.swift; sourceTree = "<group>"; };
+		BE102D912FDBF73200E9744F /* StatComparisonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatComparisonView.swift; sourceTree = "<group>"; };
+		BE102E032FDC8E6200E9744F /* CheerDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheerDTO.swift; sourceTree = "<group>"; };
+		BE102EE52FDC979900E9744F /* SharedInboxSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedInboxSection.swift; sourceTree = "<group>"; };
+		BE102EE72FDC97A200E9744F /* FriendPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendPickerSheet.swift; sourceTree = "<group>"; };
+		BE102F592FDD018600E9744F /* SharedItemDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedItemDTO.swift; sourceTree = "<group>"; };
+		BE102F5B2FDD019B00E9744F /* SaveQuickLogSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveQuickLogSheet.swift; sourceTree = "<group>"; };
 		BE47B6812F6D16A0007F48F5 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		BE77873D2F70E62E00666EE3 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		BE7787952F72699800666EE3 /* FirebaseAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseAuthService.swift; sourceTree = "<group>"; };
@@ -387,6 +431,18 @@
 		1146B2612F1F37BD004767C9 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				BE102F5B2FDD019B00E9744F /* SaveQuickLogSheet.swift */,
+				BE102EE72FDC97A200E9744F /* FriendPickerSheet.swift */,
+				BE102EE52FDC979900E9744F /* SharedInboxSection.swift */,
+				BE102D912FDBF73200E9744F /* StatComparisonView.swift */,
+				BE102D8F2FDBF72B00E9744F /* ActivityFeedSection.swift */,
+				BE102C3B2FDBE88C00E9744F /* LeaderboardSection.swift */,
+				BE102BC92FD9F60700E9744F /* FriendProfileView.swift */,
+				BE102BC72FD9F60100E9744F /* FriendProfileViewModel.swift */,
+				BE102B552FD9EAB300E9744F /* LeaderboardViewModel.swift */,
+				BE102B532FD9EAAB00E9744F /* LeaderboardView.swift */,
+				BE102AC32FD9358600E9744F /* FriendsViewModel.swift */,
+				BE102AC12FD9358000E9744F /* FriendsView.swift */,
 				BE1029452FD8A2F000E9744F /* ClaimUsernameView.swift */,
 				BE1029432FD8A2E700E9744F /* ClaimUsernameViewModel.swift */,
 				BEF96D0E2FC8F4B200FB0F83 /* DescribeMealView.swift */,
@@ -498,6 +554,8 @@
 		BEF96AAB2F7CC7F600FB0F83 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				BE102AB72FD9353900E9744F /* FriendRequest.swift */,
+				BE102AB52FD9352E00E9744F /* Friend.swift */,
 				BEF96DF02FCAAA7E00FB0F83 /* FoodClarification.swift */,
 				BEF96D082FC8F45B00FB0F83 /* RecognizedFoodItem.swift */,
 				BEF96B542F88511800FB0F83 /* BadgeDefinition.swift */,
@@ -539,6 +597,14 @@
 		CC220AA02F400000000000C0 /* Firestore */ = {
 			isa = PBXGroup;
 			children = (
+				BE102F592FDD018600E9744F /* SharedItemDTO.swift */,
+				BE102E032FDC8E6200E9744F /* CheerDTO.swift */,
+				BE102D8D2FDBF71400E9744F /* FeedEventDTO.swift */,
+				BE102B512FD9EA8600E9744F /* PublicStatsDTO .swift */,
+				BE102ABF2FD9356D00E9744F /* FriendDTO.swift */,
+				BE102ABD2FD9356600E9744F /* IncomingRequestDTO.swift */,
+				BE102ABB2FD9355C00E9744F /* SentRequestDTO.swift */,
+				BE102AB92FD9355600E9744F /* FriendError.swift */,
 				BE1029472FD8A32A00E9744F /* UsernameError.swift */,
 				BEF96B582F88515A00FB0F83 /* AccountInfoDTO.swift */,
 				BEF96B562F88515200FB0F83 /* BadgeProgressDTO.swift */,
@@ -738,12 +804,15 @@
 			files = (
 				BEF96D0D2FC8F4A700FB0F83 /* RecognizedFoodsReviewView.swift in Sources */,
 				1146B2ED2F234408004767C9 /* GamificationManager.swift in Sources */,
+				BE102ABC2FD9355C00E9744F /* SentRequestDTO.swift in Sources */,
 				BEF96DF12FCAAA7E00FB0F83 /* FoodClarification.swift in Sources */,
 				1146B2F22F23446A004767C9 /* HomeViewModel.swift in Sources */,
 				1111E1B02F32E133006EF76F /* MoodCheckView.swift in Sources */,
 				1146B2F32F23446E004767C9 /* AddFoodFormView.swift in Sources */,
+				BE102D902FDBF72B00E9744F /* ActivityFeedSection.swift in Sources */,
 				BEF96ABF2F7CC81E00FB0F83 /* UserProfile.swift in Sources */,
 				1146B2EB2F2343FF004767C9 /* NutritionManager.swift in Sources */,
+				BE102AC02FD9356D00E9744F /* FriendDTO.swift in Sources */,
 				1111E1402F285EF3006EF76F /* AllQuestsCompleteView.swift in Sources */,
 				1111E1982F32DFEE006EF76F /* StreakMilestoneToast.swift in Sources */,
 				BEF96B532F88510B00FB0F83 /* BadgeProgress.swift in Sources */,
@@ -752,9 +821,12 @@
 				CC770AB12F500000000000E1 /* TimeOfDayTheme.swift in Sources */,
 				BEF9698E2F7B48B500FB0F83 /* AddCustomFoodView.swift in Sources */,
 				BE77873E2F70E62E00666EE3 /* ProfileView.swift in Sources */,
+				BE102AC22FD9358000E9744F /* FriendsView.swift in Sources */,
 				BE1029442FD8A2E700E9744F /* ClaimUsernameViewModel.swift in Sources */,
 				BEF96B552F88511800FB0F83 /* BadgeDefinition.swift in Sources */,
 				BEF96A972F7CC7A200FB0F83 /* UserProfileDTO.swift in Sources */,
+				BE102D922FDBF73200E9744F /* StatComparisonView.swift in Sources */,
+				BE102C3C2FDBE88C00E9744F /* LeaderboardSection.swift in Sources */,
 				1111E13C2F285EBA006EF76F /* DailyGoalsView.swift in Sources */,
 				1111E18D2F29B129006EF76F /* PurityScoreInfoSheet.swift in Sources */,
 				BEF96AAC2F7CC7F600FB0F83 /* OpenFoodFactsModels.swift in Sources */,
@@ -762,15 +834,18 @@
 				BEF96AAE2F7CC7F600FB0F83 /* DailyGoal.swift in Sources */,
 				BEF96AAF2F7CC7F600FB0F83 /* Date+Helpers.swift in Sources */,
 				BEF96AB02F7CC7F600FB0F83 /* FoodFingerprint.swift in Sources */,
+				BE102BC82FD9F60100E9744F /* FriendProfileViewModel.swift in Sources */,
 				BEF96AB12F7CC7F600FB0F83 /* SavedMeal.swift in Sources */,
 				BEF96AC42F7CC86500FB0F83 /* OnboardingView.swift in Sources */,
 				BE1029482FD8A32A00E9744F /* UsernameError.swift in Sources */,
 				BEF96AB22F7CC7F600FB0F83 /* FoodEntry.swift in Sources */,
 				BEF96AB32F7CC7F600FB0F83 /* Mood.swift in Sources */,
+				BE102B542FD9EAAB00E9744F /* LeaderboardView.swift in Sources */,
 				BEF96AB42F7CC7F600FB0F83 /* DailyQuest.swift in Sources */,
 				BEF96AB52F7CC7F600FB0F83 /* PersonalBaseline.swift in Sources */,
 				BEF96AB62F7CC7F600FB0F83 /* CustomFood.swift in Sources */,
 				BEF96AB72F7CC7F600FB0F83 /* StreakMilestone.swift in Sources */,
+				BE102EE62FDC979900E9744F /* SharedInboxSection.swift in Sources */,
 				BEF96AB82F7CC7F600FB0F83 /* MealType.swift in Sources */,
 				BEF96AB92F7CC7F600FB0F83 /* XP+Helpers.swift in Sources */,
 				BEF96ABB2F7CC7F600FB0F83 /* UserProgress.swift in Sources */,
@@ -779,23 +854,30 @@
 				BEF96B5B2F88519800FB0F83 /* BadgeToast.swift in Sources */,
 				BEF969F02F7BA74500FB0F83 /* CalculatorViews.swift in Sources */,
 				BE7787962F72699800666EE3 /* FirebaseAuthService.swift in Sources */,
+				BE102F5A2FDD018600E9744F /* SharedItemDTO.swift in Sources */,
 				1111E1AE2F32E129006EF76F /* DailyInsightsCard.swift in Sources */,
 				1146B2F12F234466004767C9 /* FoodLogViewModel.swift in Sources */,
 				1111E1B22F32E13B006EF76F /* AccessibilitySettingsView.swift in Sources */,
+				BE102EE82FDC97A200E9744F /* FriendPickerSheet.swift in Sources */,
 				1111E1AC2F32E122006EF76F /* WeeklySummaryView.swift in Sources */,
 				1146B3042F247FA7004767C9 /* CameraPickerView.swift in Sources */,
 				1146B2E92F2343C3004767C9 /* AppCoordinator.swift in Sources */,
+				BE102B522FD9EA8600E9744F /* PublicStatsDTO .swift in Sources */,
 				1146B2E02F2341D1004767C9 /* AddFoodViewModel.swift in Sources */,
 				1111E13A2F285E98006EF76F /* EditMealView.swift in Sources */,
+				BE102AB82FD9353900E9744F /* FriendRequest.swift in Sources */,
 				1146B3002F247828004767C9 /* ProfileViewModel.swift in Sources */,
 				BEF9698A2F7B48A300FB0F83 /* MealBuilderView.swift in Sources */,
 				1111E1AA2F32E0FC006EF76F /* NotificationManager.swift in Sources */,
 				1111E1892F29B0EE006EF76F /* SettingsManager.swift in Sources */,
 				BEF96AC72F7CC87700FB0F83 /* OnboardingViewModel.swift in Sources */,
+				BE102D8E2FDBF71400E9744F /* FeedEventDTO.swift in Sources */,
 				1111E0C82F248958006EF76F /* BarcodeService.swift in Sources */,
+				BE102ABE2FD9356600E9744F /* IncomingRequestDTO.swift in Sources */,
 				1111E0CA2F248975006EF76F /* BarcodeScannerView.swift in Sources */,
 				BEF969F22F7BA74D00FB0F83 /* ToolsView.swift in Sources */,
 				BE1029462FD8A2F000E9744F /* ClaimUsernameView.swift in Sources */,
+				BE102E042FDC8E6200E9744F /* CheerDTO.swift in Sources */,
 				1146B2EF2F234414004767C9 /* DataManager.swift in Sources */,
 				1111E13E2F285ECD006EF76F /* DailyGoalsViewModel.swift in Sources */,
 				BEF969922F7B48C800FB0F83 /* FoodDatabaseViewModel.swift in Sources */,
@@ -817,6 +899,7 @@
 				BEF96B592F88515A00FB0F83 /* AccountInfoDTO.swift in Sources */,
 				CC110AB32F300000000000B3 /* AuthViewModel.swift in Sources */,
 				CC110AB42F300000000000B4 /* LoginView.swift in Sources */,
+				BE102B562FD9EAB300E9744F /* LeaderboardViewModel.swift in Sources */,
 				CC110AB52F300000000000B5 /* SignUpView.swift in Sources */,
 				CC220AB12F400000000000C1 /* FirestoreService.swift in Sources */,
 				CC220AB22F400000000000C2 /* FoodEntryDTO.swift in Sources */,
@@ -825,16 +908,21 @@
 				CC220AB42F400000000000C4 /* DailyGoalDTO.swift in Sources */,
 				CC220AB52F400000000000C5 /* PersonalBaselineDTO.swift in Sources */,
 				CC220AB62F400000000000C6 /* FoodFingerprintDTO.swift in Sources */,
+				BE102BCA2FD9F60700E9744F /* FriendProfileView.swift in Sources */,
+				BE102AC42FD9358600E9744F /* FriendsViewModel.swift in Sources */,
 				CC220AB72F400000000000C7 /* MoodEntryDTO.swift in Sources */,
 				CC220AB82F400000000000C8 /* UserProgressDTO.swift in Sources */,
 				CC220AB92F400000000000C9 /* DailyQuestDTO.swift in Sources */,
+				BE102F5C2FDD019B00E9744F /* SaveQuickLogSheet.swift in Sources */,
 				CC550AB12F600000000000D1 /* CustomFoodDTO.swift in Sources */,
 				CC550AB22F600000000000D2 /* SavedMealDTO.swift in Sources */,
 				CC550AB32F600000000000D3 /* SavedRecipeDTO.swift in Sources */,
 				BEF96B572F88515200FB0F83 /* BadgeProgressDTO.swift in Sources */,
 				BEF969042F77A7E900FB0F83 /* FoodDatabaseView.swift in Sources */,
+				BE102ABA2FD9355600E9744F /* FriendError.swift in Sources */,
 				BEF969942F7B493300FB0F83 /* FoodDatabase.swift in Sources */,
 				BEF96D0B2FC8F47900FB0F83 /* AIFoodRecognitionService.swift in Sources */,
+				BE102AB62FD9352E00E9744F /* Friend.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

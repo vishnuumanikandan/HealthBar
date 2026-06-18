@@ -537,6 +537,12 @@ struct HomeView: View {
     // MARK: - Properties
 
     @State private var viewModel: HomeViewModel
+
+    /// Friend leaderboard (Friend System Phase 5): owned here so it loads on its
+    /// own async path and renders as a section below the dashboard. Ranking and
+    /// fetch logic stay in the view model — never duplicated into HomeViewModel.
+    @State private var leaderboardViewModel: LeaderboardViewModel
+
     @Binding var selectedTab: Int
     @State private var showingPurityScoreInfo: Bool = false
     @State private var settings = SettingsManager.shared
@@ -544,6 +550,14 @@ struct HomeView: View {
     @State private var currentTheme: TimeOfDayTheme = SettingsManager.shared.activeTheme
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("insightsCardDismissedDate") private var insightsCardDismissedDate: String = ""
+
+    /// Retained to construct the FriendProfileView sheet presented from the
+    /// leaderboard section (Friend System Phase 4/5).
+    private let coordinator: AppCoordinator
+
+    /// Read-only — gates the leaderboard's guest state and its load trigger so
+    /// guests never fetch.
+    private let authService: any AuthService
 
     /// Whether the clean UI theme is active
     private var isClean: Bool { settings.isCleanUI }
@@ -598,8 +612,15 @@ struct HomeView: View {
 
     // MARK: - Initialization
 
-    init(coordinator: AppCoordinator, selectedTab: Binding<Int>) {
+    init(
+        coordinator: AppCoordinator,
+        selectedTab: Binding<Int>,
+        authService: any AuthService = FirebaseAuthService.shared
+    ) {
         self._viewModel = State(initialValue: HomeViewModel(coordinator: coordinator))
+        self._leaderboardViewModel = State(initialValue: LeaderboardViewModel(coordinator: coordinator))
+        self.coordinator = coordinator
+        self.authService = authService
         self._selectedTab = selectedTab
     }
 
@@ -627,13 +648,30 @@ struct HomeView: View {
             .animation(.easeInOut(duration: 0.8), value: currentTheme)
             .toolbar(.hidden, for: .navigationBar)
             .refreshable {
-                await viewModel.refresh()
+                // Dashboard and leaderboard refresh concurrently — the dashboard
+                // refresh must never wait on the leaderboard's per-friend fetch.
+                // Guests skip the leaderboard entirely (it would fetch nothing
+                // and surface a false error).
+                if authService.isGuest {
+                    await viewModel.refresh()
+                } else {
+                    async let dashboard: Void = viewModel.refresh()
+                    async let leaderboard: Void = leaderboardViewModel.refresh()
+                    _ = await (dashboard, leaderboard)
+                }
             }
             .task {
                 await viewModel.loadData()
                 await viewModel.checkForStreakMilestone()
                 await viewModel.loadDailyInsights()
                 await viewModel.loadWeeklySummary()
+            }
+            // Independent leaderboard load: its own async path so it never delays
+            // or fails the dashboard. A plain .task runs exactly once per Home
+            // appearance (cancels on disappear) — not on every body recompute.
+            .task {
+                guard !authService.isGuest else { return }
+                await leaderboardViewModel.refresh()
             }
             .task(id: "themeAutoRefresh") {
                 // Auto-refresh theme every 60s when preference is "auto"
@@ -844,6 +882,18 @@ struct HomeView: View {
 
                     // 11-13. Weekly content
                     weeklyContent
+
+                    // 14. Friend leaderboard (Friend System Phase 5) — the last
+                    // block on Home. A LazyVStack of rows (no nested scroll) so
+                    // the whole page scrolls as one; loads on its own path so the
+                    // dashboard above stays interactive while it fetches.
+                    LeaderboardSection(
+                        viewModel: leaderboardViewModel,
+                        coordinator: coordinator,
+                        authService: authService,
+                        onAddFriends: { selectedTab = 3 }
+                    )
+                    .padding(.top, 8)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)

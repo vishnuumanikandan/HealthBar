@@ -2,37 +2,295 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Existing users/{userId} rules — owner-only read/write
+    // True when `sender` has a pending request in `owner`'s space.
+    function pendingReq(owner, sender) {
+      return exists(/databases/$(database)/documents/users/$(owner)/friendRequests/$(sender));
+    }
+
+    // Owner-only read/write for everything under users/{userId}
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
     // Username uniqueness index (Friend System Phase 1)
     match /usernames/{handleKey} {
-      // Any authenticated user may read (availability checks + Phase 2 discovery).
       allow read: if request.auth != null;
 
-      // Create only an unclaimed handle (document ID = the lock), only pointing to
-      // your own uid, only the exact three expected fields, with the handleKey itself
-      // validated against the SAME format + reserved rules the client enforces.
+      // Create only an unclaimed handle, pointing to your own uid,
+      // exact field set, same format + reserved rules as the client.
       allow create: if request.auth != null
-                    && request.resource.data.keys().hasOnly(['uid', 'username', 'claimedAt'])
-                    && request.resource.data.uid == request.auth.uid
-                    && request.resource.data.username == handleKey
-                    && handleKey.matches('^[a-z][a-z0-9_]{2,19}$')
-                    && !(handleKey in [
-                         'admin', 'root', 'support', 'system', 'healthbar',
-                         'healthbarapp', 'guest', 'null', 'undefined', 'me', 'you',
-                         'official', 'staff', 'team', 'founder', 'developer',
-                         'mod', 'moderator'
-                       ]);
+        && request.resource.data.keys().hasOnly(['uid', 'username', 'claimedAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.username == handleKey
+        && handleKey.matches('^[a-z][a-z0-9_]{2,19}$')
+        && !(handleKey in [
+             'admin', 'root', 'support', 'system', 'healthbar',
+             'healthbarapp', 'guest', 'null', 'undefined', 'me', 'you',
+             'official', 'staff', 'team', 'founder', 'developer',
+             'mod', 'moderator'
+           ]);
 
-      // No in-place renames. Username changes use delete + create (atomic transaction).
+      // No in-place renames. Changes use delete + create (transaction).
       allow update: if false;
 
-      // Only the owner may release their handle (used by account deletion and username changes).
+      // Only the owner may release their handle.
       allow delete: if request.auth != null
-                    && resource.data.uid == request.auth.uid;
+        && resource.data.uid == request.auth.uid;
+    }
+
+    // Username → login-email mapping for username sign-in.
+    // Single-doc get is public: the login screen resolves a username to its
+    // email BEFORE the user is authenticated. List is denied so emails
+    // cannot be bulk-harvested.
+    match /loginHandles/{handleKey} {
+      allow get: if true;
+      allow list: if false;
+
+      // Only the signed-in owner of the matching username may write,
+      // and only with their own uid and the email on their auth token.
+      allow create, update: if request.auth != null
+        && request.resource.data.keys().hasOnly(['uid', 'email'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email is string
+        && request.resource.data.email == request.auth.token.email
+        && get(/databases/$(database)/documents/usernames/$(handleKey)).data.uid
+             == request.auth.uid;
+
+      // Only the owner may release their mapping.
+      allow delete: if request.auth != null
+        && resource.data.uid == request.auth.uid;
+    }
+
+    // Friend System Phase 2 — incoming friend requests (written cross-user).
+    match /users/{ownerUid}/friendRequests/{fromUid} {
+      allow read: if request.auth != null && request.auth.uid == ownerUid;
+
+      // Sender creates in the recipient's space: doc id == sender uid,
+      // stamped fromUid == sender, no self-request, exact field set.
+      allow create: if request.auth != null
+        && request.auth.uid == fromUid
+        && fromUid != ownerUid
+        && request.resource.data.fromUid == fromUid
+        && request.resource.data.keys().hasOnly(
+             ['fromUid', 'fromUsername', 'fromDisplayName', 'createdAt'])
+        && request.resource.data.fromUsername is string
+        && request.resource.data.fromDisplayName is string
+        && request.resource.data.fromUsername.size() < 300
+        && request.resource.data.fromDisplayName.size() < 300;
+
+      allow update: if false;
+
+      // Recipient (accept/decline) or sender (cancel) may delete.
+      allow delete: if request.auth != null
+        && (request.auth.uid == ownerUid || request.auth.uid == fromUid);
+    }
+
+    // Sender's own mirror of an outgoing request.
+    match /users/{ownerUid}/sentRequests/{toUid} {
+      allow read: if request.auth != null && request.auth.uid == ownerUid;
+
+      allow create: if request.auth != null
+        && request.auth.uid == ownerUid
+        && toUid != ownerUid
+        && request.resource.data.toUid == toUid
+        && request.resource.data.keys().hasOnly(
+             ['toUid', 'toUsername', 'createdAt'])
+        && request.resource.data.toUsername is string
+        && request.resource.data.toUsername.size() < 300;
+
+      allow update: if false;
+
+      // Owner (cancel) or recipient (accept/decline clears mirror) may delete.
+      allow delete: if request.auth != null
+        && (request.auth.uid == ownerUid || request.auth.uid == toUid);
+    }
+
+    // Friend edges. Creation requires a matching pending request, so
+    // neither party can unilaterally insert themselves into a list.
+    match /users/{ownerUid}/friends/{friendUid} {
+      allow read: if request.auth != null && request.auth.uid == ownerUid;
+
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(
+             ['friendUid', 'friendUsername', 'friendDisplayName', 'since'])
+        && request.resource.data.friendUid == friendUid
+        && request.resource.data.friendUsername is string
+        && request.resource.data.friendDisplayName is string
+        && request.resource.data.friendUsername.size() < 300
+        && request.resource.data.friendDisplayName.size() < 300
+        && (
+             (request.auth.uid == ownerUid
+               && pendingReq(ownerUid, friendUid))
+             || (request.auth.uid == friendUid
+               && pendingReq(friendUid, ownerUid))
+           );
+
+      allow update: if false;
+
+      // Either party may delete (unfriend is mutual). Account deletion
+      // also uses this: the doc id equals the deleter's uid. Intentional.
+      allow delete: if request.auth != null
+        && (request.auth.uid == ownerUid || request.auth.uid == friendUid);
+    }
+
+    // Friend Leaderboard (Friend System Phase 3) — owner-published stats
+    // projection. The friend-edge existence check is the cross-user read
+    // boundary: a non-friend (or former friend) gets permission-denied,
+    // which the client treats as "no entry."
+    match /users/{ownerUid}/public/stats {
+      // Owner, or any user in the owner's friends list, may read. Friendship
+      // is mutual (both edges exist after accept), so friends read each other.
+      allow read: if request.auth != null
+        && (
+             request.auth.uid == ownerUid
+             || exists(/databases/$(database)/documents/users/$(ownerUid)/friends/$(request.auth.uid))
+           );
+
+      // Only the owner publishes their own stats, with the exact field set
+      // and value ranges. updatedAt is intentionally not type-checked: the
+      // serverTimestamp sentinel can trip a type rule at evaluation time
+      // (same reasoning as usernames.claimedAt). joinedAt is likewise not
+      // type-checked — it is copied from account/info.createdAt, which may
+      // itself hold a server-timestamp value.
+      allow create, update: if request.auth != null
+        && request.auth.uid == ownerUid
+        && request.resource.data.keys().hasOnly(
+             ['username', 'displayName', 'level', 'totalXP', 'currentStreak',
+              'rank', 'weeklyGoalsMet', 'weeklyAdherence', 'updatedAt',
+              'longestStreak', 'joinedAt', 'badgeCount', 'earnedBadgeIds'])
+        && request.resource.data.username is string
+        && request.resource.data.displayName is string
+        && request.resource.data.rank is string
+        && request.resource.data.username.size() < 300
+        && request.resource.data.displayName.size() < 300
+        && request.resource.data.level is int
+        && request.resource.data.level >= 1
+        && request.resource.data.totalXP is int
+        && request.resource.data.totalXP >= 0
+        && request.resource.data.currentStreak is int
+        && request.resource.data.currentStreak >= 0
+        && request.resource.data.weeklyGoalsMet is int
+        && request.resource.data.weeklyGoalsMet >= 0
+        && request.resource.data.weeklyGoalsMet <= 7
+        && request.resource.data.weeklyAdherence is number
+        && request.resource.data.weeklyAdherence >= 0
+        && request.resource.data.weeklyAdherence <= 1
+        && request.resource.data.longestStreak is int
+        && request.resource.data.longestStreak >= 0
+        && request.resource.data.badgeCount is int
+        && request.resource.data.badgeCount >= 0
+        && request.resource.data.earnedBadgeIds is list
+        && request.resource.data.earnedBadgeIds.size() <= 50;
+
+      // Owner-only delete: no field validation is possible on delete, and
+      // account deletion must be able to remove this doc.
+      allow delete: if request.auth != null && request.auth.uid == ownerUid;
+    }
+
+    // Friend Activity Feed (Friend System Phase 7) — owner-published milestone
+    // events. Same friend-edge read boundary as public/stats: a non-friend
+    // (or former friend) gets permission-denied, which the client treats as
+    // "no events." Events are immutable; the deterministic doc id makes
+    // emission idempotent (re-emit = same id, no duplicate).
+    match /users/{ownerUid}/feedEvents/{eventId} {
+      // Owner, or any user in the owner's friends list, may read (list + get).
+      allow read: if request.auth != null
+        && (
+             request.auth.uid == ownerUid
+             || exists(/databases/$(database)/documents/users/$(ownerUid)/friends/$(request.auth.uid))
+           );
+
+      // Owner-only create, exact shape, known types. createdAt is intentionally
+      // not type-checked (server-timestamp sentinel, same as public/stats.updatedAt).
+      allow create: if request.auth != null
+        && request.auth.uid == ownerUid
+        && request.resource.data.keys().hasOnly(['type', 'value', 'username', 'displayName', 'createdAt'])
+        && request.resource.data.type in ['badge', 'level', 'rank', 'streak']
+        && request.resource.data.value is string
+        && request.resource.data.value.size() < 100
+        && request.resource.data.username is string
+        && request.resource.data.displayName is string
+        && request.resource.data.username.size() < 300
+        && request.resource.data.displayName.size() < 300;
+
+      // Events are immutable; owner may delete (pruning + account deletion).
+      allow update: if false;
+      allow delete: if request.auth != null && request.auth.uid == ownerUid;
+    }
+
+    // Cheers (Friend System Phase 8) — one 💪 per friend per event. Doc id =
+    // cheerer's uid ⇒ idempotent by construction. Cross-user write into the
+    // owner's space with zero cross-user private reads (cheerer stamps their
+    // own identity snapshot), same posture as friend requests.
+    match /users/{ownerUid}/feedEvents/{eventId}/cheers/{cheererUid} {
+      // Owner and the owner's friends may read (counts + names render for both).
+      allow read: if request.auth != null
+        && (
+             request.auth.uid == ownerUid
+             || exists(/databases/$(database)/documents/users/$(ownerUid)/friends/$(request.auth.uid))
+           );
+
+      // Only a friend of the owner may cheer, only as themselves (doc id ==
+      // auth uid), never the owner, exact field shape. Re-cheer is blocked by
+      // update:false below. createdAt is not type-checked (server-timestamp
+      // sentinel, consistent with prior prompts).
+      allow create: if request.auth != null
+        && request.auth.uid == cheererUid
+        && cheererUid != ownerUid
+        && exists(/databases/$(database)/documents/users/$(ownerUid)/friends/$(cheererUid))
+        && request.resource.data.cheererUid == cheererUid
+        && request.resource.data.keys().hasOnly(['cheererUid', 'username', 'displayName', 'createdAt'])
+        && request.resource.data.username is string
+        && request.resource.data.displayName is string
+        && request.resource.data.username.size() < 300
+        && request.resource.data.displayName.size() < 300;
+
+      allow update: if false;
+
+      // Cheerer may retract; owner may clean up (pruning, account deletion).
+      allow delete: if request.auth != null
+        && (request.auth.uid == cheererUid || request.auth.uid == ownerUid);
+    }
+
+    // Meal/Recipe Sharing (Friend System Phase 9) — a friend delivers a snapshot
+    // into the recipient's private inbox. Cross-user write of stamped data, zero
+    // cross-user private reads (the share carries the full payload). No unsend:
+    // delivered shares belong to the recipient.
+    match /users/{recipientUid}/sharedItems/{shareId} {
+      // Inbox is private to the recipient.
+      allow read: if request.auth != null && request.auth.uid == recipientUid;
+
+      // Only a friend of the recipient may deliver, only as themselves, never to
+      // self, exact shape, bounded sizes, known kinds. The friend-edge check uses
+      // request.resource.data.fromUid (== auth uid by the first condition) since
+      // the sender uid is not in the path here. createdAt is not type-checked
+      // (server-timestamp sentinel, consistent throughout).
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.fromUid
+        && request.resource.data.fromUid != recipientUid
+        && exists(/databases/$(database)/documents/users/$(recipientUid)/friends/$(request.resource.data.fromUid))
+        && request.resource.data.keys().hasOnly(
+             ['fromUid', 'fromUsername', 'fromDisplayName', 'kind', 'name',
+              'contentJSON', 'yield', 'purityScore', 'createdAt'])
+        && request.resource.data.kind in ['meal', 'recipe']
+        && request.resource.data.fromUsername is string
+        && request.resource.data.fromDisplayName is string
+        && request.resource.data.name is string
+        && request.resource.data.fromUsername.size() < 300
+        && request.resource.data.fromDisplayName.size() < 300
+        && request.resource.data.name.size() < 300
+        && request.resource.data.contentJSON is string
+        && request.resource.data.contentJSON.size() < 200000
+        && request.resource.data.yield is int
+        && request.resource.data.yield >= 0
+        && request.resource.data.purityScore is int
+        && request.resource.data.purityScore >= 0
+        && request.resource.data.purityScore <= 100;
+
+      allow update: if false;
+
+      // Recipient-only delete (save / dismiss / cleanup). No sender unsend.
+      allow delete: if request.auth != null && request.auth.uid == recipientUid;
     }
   }
 }
