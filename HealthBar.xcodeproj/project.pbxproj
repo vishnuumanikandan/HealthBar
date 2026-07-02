@@ -63,6 +63,15 @@
 		BE102EE82FDC97A200E9744F /* FriendPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102EE72FDC97A200E9744F /* FriendPickerSheet.swift */; };
 		BE102F5A2FDD018600E9744F /* SharedItemDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102F592FDD018600E9744F /* SharedItemDTO.swift */; };
 		BE102F5C2FDD019B00E9744F /* SaveQuickLogSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102F5B2FDD019B00E9744F /* SaveQuickLogSheet.swift */; };
+		BE1030442FE49A7000E9744F /* GuildDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1030432FE49A7000E9744F /* GuildDTO.swift */; };
+		BE1030462FE49AAD00E9744F /* GuildView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1030452FE49AAD00E9744F /* GuildView.swift */; };
+		BE1030482FE49AB500E9744F /* GuildLeaderboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1030472FE49AB500E9744F /* GuildLeaderboardView.swift */; };
+		BE10304A2FE49ABF00E9744F /* GuildLeaderboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1030492FE49ABF00E9744F /* GuildLeaderboardViewModel.swift */; };
+		BE10304C2FE49AC700E9744F /* CreateGuildSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE10304B2FE49AC700E9744F /* CreateGuildSheet.swift */; };
+		BE10304E2FE49AD200E9744F /* GuildViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE10304D2FE49AD200E9744F /* GuildViewModel.swift */; };
+		BE10306C2FE8A15500E9744F /* GuildMessageDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE10306B2FE8A15500E9744F /* GuildMessageDTO.swift */; };
+		BE10306E2FE8A17800E9744F /* GuildChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE10306D2FE8A17800E9744F /* GuildChatView.swift */; };
+		BE1030702FE8A18000E9744F /* GuildChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE10306F2FE8A18000E9744F /* GuildChatViewModel.swift */; };
 		BE47B6372F67739C007F48F5 /* FirebaseAI in Frameworks */ = {isa = PBXBuildFile; productRef = BE47B6362F67739C007F48F5 /* FirebaseAI */; };
 		BE47B6392F67739C007F48F5 /* FirebaseAILogic in Frameworks */ = {isa = PBXBuildFile; productRef = BE47B6382F67739C007F48F5 /* FirebaseAILogic */; };
 		BE47B63B2F67739C007F48F5 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = BE47B63A2F67739C007F48F5 /* FirebaseAnalytics */; };
@@ -238,6 +247,15 @@
 		BE102EE72FDC97A200E9744F /* FriendPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendPickerSheet.swift; sourceTree = "<group>"; };
 		BE102F592FDD018600E9744F /* SharedItemDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedItemDTO.swift; sourceTree = "<group>"; };
 		BE102F5B2FDD019B00E9744F /* SaveQuickLogSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveQuickLogSheet.swift; sourceTree = "<group>"; };
+		BE1030432FE49A7000E9744F /* GuildDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuildDTO.swift; sourceTree = "<group>"; };
+		BE1030452FE49AAD00E9744F /* GuildView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuildView.swift; sourceTree = "<group>"; };
+		BE1030472FE49AB500E9744F /* GuildLeaderboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuildLeaderboardView.swift; sourceTree = "<group>"; };
+		BE1030492FE49ABF00E9744F /* GuildLeaderboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuildLeaderboardViewModel.swift; sourceTree = "<group>"; };
+		BE10304B2FE49AC700E9744F /* CreateGuildSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateGuildSheet.swift; sourceTree = "<group>"; };
+		BE10304D2FE49AD200E9744F /* GuildViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuildViewModel.swift; sourceTree = "<group>"; };
+		BE10306B2FE8A15500E9744F /* GuildMessageDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuildMessageDTO.swift; sourceTree = "<group>"; };
+		BE10306D2FE8A17800E9744F /* GuildChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuildChatView.swift; sourceTree = "<group>"; };
+		BE10306F2FE8A18000E9744F /* GuildChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuildChatViewModel.swift; sourceTree = "<group>"; };
 		BE47B6812F6D16A0007F48F5 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		BE77873D2F70E62E00666EE3 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		BE7787952F72699800666EE3 /* FirebaseAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseAuthService.swift; sourceTree = "<group>"; };
@@ -431,6 +449,13 @@
 		1146B2612F1F37BD004767C9 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				BE10306F2FE8A18000E9744F /* GuildChatViewModel.swift */,
+				BE10306D2FE8A17800E9744F /* GuildChatView.swift */,
+				BE10304D2FE49AD200E9744F /* GuildViewModel.swift */,
+				BE10304B2FE49AC700E9744F /* CreateGuildSheet.swift */,
+				BE1030492FE49ABF00E9744F /* GuildLeaderboardViewModel.swift */,
+				BE1030472FE49AB500E9744F /* GuildLeaderboardView.swift */,
+				BE1030452FE49AAD00E9744F /* GuildView.swift */,
 				BE102F5B2FDD019B00E9744F /* SaveQuickLogSheet.swift */,
 				BE102EE72FDC97A200E9744F /* FriendPickerSheet.swift */,
 				BE102EE52FDC979900E9744F /* SharedInboxSection.swift */,
@@ -597,6 +622,8 @@
 		CC220AA02F400000000000C0 /* Firestore */ = {
 			isa = PBXGroup;
 			children = (
+				BE10306B2FE8A15500E9744F /* GuildMessageDTO.swift */,
+				BE1030432FE49A7000E9744F /* GuildDTO.swift */,
 				BE102F592FDD018600E9744F /* SharedItemDTO.swift */,
 				BE102E032FDC8E6200E9744F /* CheerDTO.swift */,
 				BE102D8D2FDBF71400E9744F /* FeedEventDTO.swift */,
@@ -805,9 +832,11 @@
 				BEF96D0D2FC8F4A700FB0F83 /* RecognizedFoodsReviewView.swift in Sources */,
 				1146B2ED2F234408004767C9 /* GamificationManager.swift in Sources */,
 				BE102ABC2FD9355C00E9744F /* SentRequestDTO.swift in Sources */,
+				BE10304A2FE49ABF00E9744F /* GuildLeaderboardViewModel.swift in Sources */,
 				BEF96DF12FCAAA7E00FB0F83 /* FoodClarification.swift in Sources */,
 				1146B2F22F23446A004767C9 /* HomeViewModel.swift in Sources */,
 				1111E1B02F32E133006EF76F /* MoodCheckView.swift in Sources */,
+				BE10304C2FE49AC700E9744F /* CreateGuildSheet.swift in Sources */,
 				1146B2F32F23446E004767C9 /* AddFoodFormView.swift in Sources */,
 				BE102D902FDBF72B00E9744F /* ActivityFeedSection.swift in Sources */,
 				BEF96ABF2F7CC81E00FB0F83 /* UserProfile.swift in Sources */,
@@ -821,13 +850,16 @@
 				CC770AB12F500000000000E1 /* TimeOfDayTheme.swift in Sources */,
 				BEF9698E2F7B48B500FB0F83 /* AddCustomFoodView.swift in Sources */,
 				BE77873E2F70E62E00666EE3 /* ProfileView.swift in Sources */,
+				BE10304E2FE49AD200E9744F /* GuildViewModel.swift in Sources */,
 				BE102AC22FD9358000E9744F /* FriendsView.swift in Sources */,
 				BE1029442FD8A2E700E9744F /* ClaimUsernameViewModel.swift in Sources */,
+				BE1030442FE49A7000E9744F /* GuildDTO.swift in Sources */,
 				BEF96B552F88511800FB0F83 /* BadgeDefinition.swift in Sources */,
 				BEF96A972F7CC7A200FB0F83 /* UserProfileDTO.swift in Sources */,
 				BE102D922FDBF73200E9744F /* StatComparisonView.swift in Sources */,
 				BE102C3C2FDBE88C00E9744F /* LeaderboardSection.swift in Sources */,
 				1111E13C2F285EBA006EF76F /* DailyGoalsView.swift in Sources */,
+				BE1030702FE8A18000E9744F /* GuildChatViewModel.swift in Sources */,
 				1111E18D2F29B129006EF76F /* PurityScoreInfoSheet.swift in Sources */,
 				BEF96AAC2F7CC7F600FB0F83 /* OpenFoodFactsModels.swift in Sources */,
 				BEF96AAD2F7CC7F600FB0F83 /* Rank.swift in Sources */,
@@ -840,12 +872,14 @@
 				BE1029482FD8A32A00E9744F /* UsernameError.swift in Sources */,
 				BEF96AB22F7CC7F600FB0F83 /* FoodEntry.swift in Sources */,
 				BEF96AB32F7CC7F600FB0F83 /* Mood.swift in Sources */,
+				BE1030462FE49AAD00E9744F /* GuildView.swift in Sources */,
 				BE102B542FD9EAAB00E9744F /* LeaderboardView.swift in Sources */,
 				BEF96AB42F7CC7F600FB0F83 /* DailyQuest.swift in Sources */,
 				BEF96AB52F7CC7F600FB0F83 /* PersonalBaseline.swift in Sources */,
 				BEF96AB62F7CC7F600FB0F83 /* CustomFood.swift in Sources */,
 				BEF96AB72F7CC7F600FB0F83 /* StreakMilestone.swift in Sources */,
 				BE102EE62FDC979900E9744F /* SharedInboxSection.swift in Sources */,
+				BE10306C2FE8A15500E9744F /* GuildMessageDTO.swift in Sources */,
 				BEF96AB82F7CC7F600FB0F83 /* MealType.swift in Sources */,
 				BEF96AB92F7CC7F600FB0F83 /* XP+Helpers.swift in Sources */,
 				BEF96ABB2F7CC7F600FB0F83 /* UserProgress.swift in Sources */,
@@ -902,6 +936,7 @@
 				BE102B562FD9EAB300E9744F /* LeaderboardViewModel.swift in Sources */,
 				CC110AB52F300000000000B5 /* SignUpView.swift in Sources */,
 				CC220AB12F400000000000C1 /* FirestoreService.swift in Sources */,
+				BE1030482FE49AB500E9744F /* GuildLeaderboardView.swift in Sources */,
 				CC220AB22F400000000000C2 /* FoodEntryDTO.swift in Sources */,
 				CC220AB32F400000000000C3 /* FirestoreServiceImpl.swift in Sources */,
 				BEF96D092FC8F45B00FB0F83 /* RecognizedFoodItem.swift in Sources */,
@@ -912,6 +947,7 @@
 				BE102AC42FD9358600E9744F /* FriendsViewModel.swift in Sources */,
 				CC220AB72F400000000000C7 /* MoodEntryDTO.swift in Sources */,
 				CC220AB82F400000000000C8 /* UserProgressDTO.swift in Sources */,
+				BE10306E2FE8A17800E9744F /* GuildChatView.swift in Sources */,
 				CC220AB92F400000000000C9 /* DailyQuestDTO.swift in Sources */,
 				BE102F5C2FDD019B00E9744F /* SaveQuickLogSheet.swift in Sources */,
 				CC550AB12F600000000000D1 /* CustomFoodDTO.swift in Sources */,

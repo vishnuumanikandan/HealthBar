@@ -358,6 +358,76 @@ protocol FirestoreService {
     /// Recipient removes a share (after save or dismiss). Absent ⇒ no-op.
     func deleteSharedItem(id: String, userId: String) async throws
 
+    // MARK: - Guilds (G1)
+
+    /// Create a guild + the founder's owner member doc + the founder's guildMemberships lock,
+    /// all in one batch. Caller supplies a candidate guildCode and its own stamped identity.
+    /// Throws on code collision OR if the lock already exists (caller already in a guild).
+    func createGuild(code: String, name: String, joinPolicy: String, description: String?,
+                     ownerUid: String, ownerUsername: String, ownerDisplayName: String) async throws
+
+    /// Read a guild by code (for the join screen). nil if not found.
+    func fetchGuild(code: String) async throws -> GuildDTO?
+
+    /// The current user's guild via an O(1) read of guildMemberships/{uid} → its guildCode →
+    /// fetchGuild(code:). Returns nil if the lock doc is absent (not in a guild). No collectionGroup.
+    func fetchMyGuild(uid: String) async throws -> GuildDTO?
+
+    /// Roster (members) and pending requests (owner-only read on requests).
+    func fetchGuildMembers(code: String) async throws -> [GuildMemberDTO]
+    func fetchJoinRequests(code: String) async throws -> [GuildJoinRequestDTO]
+
+    /// Open-policy self-join: batch create my member doc (role "member") + my guildMemberships lock.
+    func joinOpenGuild(code: String, uid: String, username: String, displayName: String) async throws
+
+    /// Request-policy: create my own join-request doc (no lock yet — lock is written on approval).
+    func requestToJoinGuild(code: String, uid: String, username: String, displayName: String) async throws
+
+    /// Cancel my own pending request.
+    func cancelJoinRequest(code: String, uid: String) async throws
+
+    /// Owner approves: batch create the requester's member doc (stamped from the request) +
+    /// the requester's guildMemberships lock + delete the request. The lock create fails if the
+    /// requester is already in a guild, which correctly aborts the approval.
+    func approveJoinRequest(code: String, request: GuildJoinRequestDTO) async throws
+
+    /// Owner denies: delete the request.
+    func denyJoinRequest(code: String, requesterUid: String) async throws
+
+    /// Member leaves: batch delete own member doc + own guildMemberships lock. (Owner must disband.)
+    func leaveGuild(code: String, uid: String) async throws
+
+    /// Owner kicks: batch delete the member's doc + that member's guildMemberships lock.
+    func kickMember(code: String, memberUid: String) async throws
+
+    /// Owner updates settings (name and/or joinPolicy and/or description). ownerUid/createdAt immutable.
+    func updateGuildSettings(code: String, name: String, joinPolicy: String, description: String?) async throws
+
+    /// Owner disbands: delete ALL member docs + ALL request docs + ALL members' guildMemberships
+    /// locks + ALL messages (chunked ≤450/batch) THEN the guild doc.
+    func disbandGuild(code: String) async throws
+
+    // MARK: - Guild chat (G3)
+
+    /// Start the screen-scoped live listener on the latest 50 messages of a guild
+    /// (order createdAt desc, limit 50). onUpdate fires on every snapshot with the messages
+    /// in CHRONOLOGICAL order (the impl reverses the desc query). onError fires on a terminal
+    /// listener error (e.g. permission-denied after the user leaves/guild disbands) so the VM
+    /// can tear down and exit. The service holds the single registration internally — this is
+    /// the only screen-scoped listener in the app and is NOT part of the global registry.
+    func startGuildChatListener(code: String,
+                                onUpdate: @escaping ([GuildMessageDTO]) -> Void,
+                                onError: @escaping (Error) -> Void)
+
+    /// Remove the chat listener (idempotent). Called on chat screen disappear.
+    func stopGuildChatListener()
+
+    /// Send a message (member-gated by rules). Caller stamps its own identity; text pre-validated.
+    func sendGuildMessage(code: String, msg: GuildMessageDTO) async throws
+
+    /// Delete a message: sender (own) or owner (moderation) — enforced by rules.
+    func deleteGuildMessage(code: String, msgId: String) async throws
+
     // MARK: - Account Deletion
 
     /// Deletes all Firestore data under users/{userId}/ in batches.

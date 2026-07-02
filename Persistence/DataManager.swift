@@ -63,6 +63,15 @@ final class DataManager {
     /// comparison's `canCompare` gate (Friend System Phase 6).
     var isGuest: Bool { authService.isGuest }
 
+    /// The current authenticated user's uid (Firebase UID), or nil for guests and
+    /// unauthenticated sessions. Exposed (read-only) so the Guild UI can identify
+    /// the owner and the current user within a roster — all guild logic still keys
+    /// on uids stamped server-side; this never widens write access.
+    var authenticatedUserId: String? {
+        guard !isGuest, let id = currentUserId, !id.isEmpty else { return nil }
+        return id
+    }
+
     // MARK: - Initialization
 
     /// Initializes the data manager with a SwiftData model context, auth service, and Firestore sync service.
@@ -2859,6 +2868,261 @@ final class DataManager {
         try await firestoreService.removeFriend(friendUid: friendUid, meUid: me)
     }
 
+    // MARK: - Guilds (G1)
+
+    /// Soft member cap. Enforced reliably only where the caller can read the
+    /// roster (the owner, during approval). On open self-join the prospective
+    /// member cannot read the roster by the security rules, so the cap there is a
+    /// best-effort no-op and a rare over-cap race is accepted (per the G1 spec).
+    static let maxMembers = 30
+
+    /// 8-char uppercase code from an unambiguous alphabet (no 0/O/1/I). Created
+    /// create-only; collisions are retried in createGuild.
+    static func generateGuildCode() -> String {
+        let alphabet = Array("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
+        var code = ""
+        for _ in 0..<8 { code.append(alphabet.randomElement()!) }
+        return code
+    }
+
+    /// Validates name/description/policy and returns the cleaned tuple, throwing
+    /// GuildError on invalid input. Shared by createGuild and updateGuildSettings.
+    private func validatedGuildFields(name: String, joinPolicy: String, description: String?) throws -> (name: String, description: String?) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty, trimmedName.count <= 30 else {
+            throw GuildError.network("Guild name must be 1–30 characters.")
+        }
+        guard joinPolicy == "open" || joinPolicy == "request" else {
+            throw GuildError.network("Invalid join policy.")
+        }
+        let trimmedDesc = description?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalDesc: String?
+        if let trimmedDesc, !trimmedDesc.isEmpty {
+            guard trimmedDesc.count <= 140 else {
+                throw GuildError.network("Description must be 140 characters or fewer.")
+            }
+            finalDesc = trimmedDesc
+        } else {
+            finalDesc = nil
+        }
+        return (trimmedName, finalDesc)
+    }
+
+    /// Fetches the guild and asserts the current user owns it. Throws notFound /
+    /// notAuthorized / network. Used by all owner-only actions.
+    private func requireOwnedGuild(code: String, me: String) async throws -> GuildDTO {
+        let guildOpt: GuildDTO?
+        do { guildOpt = try await firestoreService.fetchGuild(code: code) }
+        catch { throw GuildError.network(error.localizedDescription) }
+        guard let guild = guildOpt else { throw GuildError.notFound }
+        guard guild.ownerUid == me else { throw GuildError.notAuthorized }
+        return guild
+    }
+
+    /// Creates a guild owned by the current user. Validates input, stamps identity
+    /// from account/info, generates a code, and retries on collision up to 5×.
+    func createGuild(name: String, joinPolicy: String, description: String?) async throws -> GuildDTO {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw GuildError.network("You must be signed in to create a guild.")
+        }
+        // One guild per user (UX guard; the server lock is authoritative).
+        if await myGuild() != nil { throw GuildError.alreadyInGuild }
+
+        let fields = try validatedGuildFields(name: name, joinPolicy: joinPolicy, description: description)
+        let identity = try await fetchMyFriendIdentity(userId: me)
+
+        for _ in 0..<5 {
+            let code = DataManager.generateGuildCode()
+            do {
+                try await firestoreService.createGuild(
+                    code: code, name: fields.name, joinPolicy: joinPolicy, description: fields.description,
+                    ownerUid: me, ownerUsername: identity.username, ownerDisplayName: identity.displayName
+                )
+                // Prefer the authoritative server copy; fall back to a local build.
+                if let created = try? await firestoreService.fetchGuild(code: code) {
+                    return created
+                }
+                return GuildDTO(id: code, name: fields.name, ownerUid: me,
+                                joinPolicy: joinPolicy, description: fields.description, createdAt: Date())
+            } catch {
+                // Create-only collision (or transient failure) — try a new code.
+                continue
+            }
+        }
+        throw GuildError.codeCollision
+    }
+
+    /// The current user's guild via the O(1) membership-lock lookup. nil for guests.
+    func myGuild() async -> GuildDTO? {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return nil }
+        return try? await firestoreService.fetchMyGuild(uid: me)
+    }
+
+    /// The roster for a guild. Readable by members (and the owner); empty for guests
+    /// or when the caller is not permitted to read it.
+    func guildMembers(code: String) async -> [GuildMemberDTO] {
+        guard !isGuest else { return [] }
+        return (try? await firestoreService.fetchGuildMembers(code: code)) ?? []
+    }
+
+    /// Pending join requests for a guild (owner-only by rules). Empty otherwise.
+    func joinRequests(code: String) async -> [GuildJoinRequestDTO] {
+        guard !isGuest else { return [] }
+        return (try? await firestoreService.fetchJoinRequests(code: code)) ?? []
+    }
+
+    /// Joins a guild by code. Open guilds self-join; request guilds create a
+    /// pending request. Throws alreadyInGuild / notFound / full / network.
+    func joinGuild(code: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw GuildError.network("You must be signed in to join a guild.")
+        }
+        let trimmedCode = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !trimmedCode.isEmpty else { throw GuildError.notFound }
+
+        if await myGuild() != nil { throw GuildError.alreadyInGuild }
+
+        let guildOpt: GuildDTO?
+        do { guildOpt = try await firestoreService.fetchGuild(code: trimmedCode) }
+        catch { throw GuildError.network(error.localizedDescription) }
+        guard let guild = guildOpt, let guildCode = guild.id else { throw GuildError.notFound }
+
+        // Soft cap. Best-effort: the roster read is permitted only for members, so
+        // for an open self-join (the joiner is not yet a member) this read is
+        // typically denied — `try?` then skips the check and the join proceeds.
+        // The cap is enforced reliably in approveRequest, where the owner can read.
+        if let members = try? await firestoreService.fetchGuildMembers(code: guildCode),
+           members.count >= DataManager.maxMembers {
+            throw GuildError.full
+        }
+
+        let identity = try await fetchMyFriendIdentity(userId: me)
+        if guild.joinPolicy == "open" {
+            try await firestoreService.joinOpenGuild(code: guildCode, uid: me,
+                                                     username: identity.username, displayName: identity.displayName)
+        } else {
+            try await firestoreService.requestToJoinGuild(code: guildCode, uid: me,
+                                                          username: identity.username, displayName: identity.displayName)
+        }
+    }
+
+    /// Cancels my own pending join request for a guild.
+    func cancelMyJoinRequest(code: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw GuildError.network("You must be signed in.")
+        }
+        try await firestoreService.cancelJoinRequest(code: code, uid: me)
+    }
+
+    /// Owner approves a pending request. Re-checks the member cap first (the owner
+    /// can read the roster), so approvals can never exceed the cap.
+    func approveRequest(code: String, request: GuildJoinRequestDTO) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw GuildError.network("You must be signed in.")
+        }
+        _ = try await requireOwnedGuild(code: code, me: me)
+
+        let members: [GuildMemberDTO]
+        do { members = try await firestoreService.fetchGuildMembers(code: code) }
+        catch { throw GuildError.network(error.localizedDescription) }
+        guard members.count < DataManager.maxMembers else { throw GuildError.full }
+
+        try await firestoreService.approveJoinRequest(code: code, request: request)
+    }
+
+    /// Owner denies a pending request.
+    func denyRequest(code: String, requesterUid: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw GuildError.network("You must be signed in.")
+        }
+        _ = try await requireOwnedGuild(code: code, me: me)
+        try await firestoreService.denyJoinRequest(code: code, requesterUid: requesterUid)
+    }
+
+    /// Owner removes a member. The owner cannot kick themselves (they must disband).
+    func kickMember(code: String, memberUid: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw GuildError.network("You must be signed in.")
+        }
+        let guild = try await requireOwnedGuild(code: code, me: me)
+        guard memberUid != guild.ownerUid else { throw GuildError.notAuthorized }
+        try await firestoreService.kickMember(code: code, memberUid: memberUid)
+    }
+
+    /// Leaves a guild. The owner cannot leave — they must disband instead.
+    func leaveGuild(code: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw GuildError.network("You must be signed in.")
+        }
+        let guildOpt: GuildDTO?
+        do { guildOpt = try await firestoreService.fetchGuild(code: code) }
+        catch { throw GuildError.network(error.localizedDescription) }
+        guard let guild = guildOpt else { throw GuildError.notFound }
+        if guild.ownerUid == me { throw GuildError.ownerMustDisband }
+        try await firestoreService.leaveGuild(code: code, uid: me)
+    }
+
+    /// Owner updates the guild's name, join policy, and/or description.
+    func updateGuildSettings(code: String, name: String, joinPolicy: String, description: String?) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw GuildError.network("You must be signed in.")
+        }
+        _ = try await requireOwnedGuild(code: code, me: me)
+        let fields = try validatedGuildFields(name: name, joinPolicy: joinPolicy, description: description)
+        try await firestoreService.updateGuildSettings(code: code, name: fields.name,
+                                                       joinPolicy: joinPolicy, description: fields.description)
+    }
+
+    /// Owner disbands the guild (cascades members + requests + locks + messages, then the doc).
+    func disbandGuild(code: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw GuildError.network("You must be signed in.")
+        }
+        _ = try await requireOwnedGuild(code: code, me: me)
+        try await firestoreService.disbandGuild(code: code)
+    }
+
+    // MARK: - Guild chat (G3)
+
+    /// Start the screen-scoped chat listener. The VM supplies the update/error
+    /// callbacks; the single ListenerRegistration lives in the service. No-op for guests.
+    func startGuildChat(code: String,
+                        onUpdate: @escaping ([GuildMessageDTO]) -> Void,
+                        onError: @escaping (Error) -> Void) {
+        guard !isGuest else { return }
+        firestoreService.startGuildChatListener(code: code, onUpdate: onUpdate, onError: onError)
+    }
+
+    /// Stop the chat listener (idempotent). MUST be called when the chat screen disappears.
+    func stopGuildChat() {
+        firestoreService.stopGuildChatListener()
+    }
+
+    /// Send a chat message. Trims + validates (1–500), stamps identity, writes with
+    /// a server timestamp. Rules also enforce membership + 1–500 bounds.
+    func sendGuildMessage(code: String, text: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { throw GuildChatError.notAuthenticated }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw GuildChatError.empty }
+        guard trimmed.count <= 500 else { throw GuildChatError.tooLong }
+
+        let identity = try await fetchMyFriendIdentity(userId: me)
+        let msg = GuildMessageDTO(
+            senderUid: me,
+            senderUsername: identity.username,
+            senderDisplayName: identity.displayName,
+            text: trimmed,
+            createdAt: nil
+        )
+        try await firestoreService.sendGuildMessage(code: code, msg: msg)
+    }
+
+    /// Delete a chat message. Rules enforce sender-or-owner.
+    func deleteGuildMessage(code: String, msgId: String) async throws {
+        guard !isGuest else { throw GuildChatError.notAuthenticated }
+        try await firestoreService.deleteGuildMessage(code: code, msgId: msgId)
+    }
+
     // MARK: - Public Stats / Leaderboard (Friend System Phase 3)
 
     /// Computes the rolling 7-day macro-goal adherence from the current user's
@@ -3514,6 +3778,93 @@ final class DataManager {
         )
     }
 
+    // MARK: - Guild Leaderboard (G2)
+
+    /// Builds the ranked entries for the current user's guild: my own locally
+    /// computed row plus each guild-mate's published `public/stats` projection,
+    /// fetched concurrently and ranked client-side by the view.
+    ///
+    /// Reuses the friend-leaderboard machinery (LeaderboardEntry, fetchPublicStats,
+    /// buildMyLeaderboardEntry). Fetch-on-view only — no listeners, nothing
+    /// persisted. Returns [] for guests / not-in-a-guild (the screen isn't
+    /// reachable in those states). Guild-mate reads require the G2 same-guild
+    /// `public/stats` read-rule extension; until it is deployed, other members
+    /// resolve to nil and render as "no data yet".
+    func loadGuildLeaderboard() async -> [LeaderboardEntry] {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return [] }
+        guard let guild = await myGuild(), let code = guild.id else { return [] }
+
+        // Roster snapshot (G1). My own row is built locally, so exclude me from
+        // the fan-out — never self-read public/stats.
+        let roster = await guildMembers(code: code)
+        let others = roster.filter { $0.uid != me }
+
+        // Friendship resolved ONCE here (not per-row in the view): the view drives
+        // the friend-only profile tap from each entry's isFriend flag.
+        let friendModels = (try? await fetchFriends()) ?? []
+        let friendUids = Set(friendModels.map { $0.friendUid })
+
+        // Concurrent per-member fetch (task-group fan-out — guilds are small).
+        // nil (unpublished / permission-denied / network) ⇒ a zeroed "no data
+        // yet" row, never a wholesale failure.
+        var statsByUid: [String: PublicStatsDTO] = [:]
+        await withTaskGroup(of: (uid: String, stats: PublicStatsDTO?).self) { group in
+            for member in others {
+                group.addTask { [firestoreService] in
+                    (member.uid, try? await firestoreService.fetchPublicStats(friendUid: member.uid))
+                }
+            }
+            for await result in group {
+                if let stats = result.stats { statsByUid[result.uid] = stats }
+            }
+        }
+
+        // Deduplicate by uid via the dictionary; my own row is written last so it
+        // always wins a conflict (concrete keep-one, current-user precedence).
+        var entriesByUid: [String: LeaderboardEntry] = [:]
+        for member in others {
+            let isFriend = friendUids.contains(member.uid)
+            if let stats = statsByUid[member.uid] {
+                entriesByUid[member.uid] = LeaderboardEntry(
+                    uid: member.uid,
+                    username: stats.username,
+                    displayName: stats.displayName,
+                    level: stats.level,
+                    totalXP: stats.totalXP,
+                    currentStreak: stats.currentStreak,
+                    rank: stats.rank,
+                    weeklyGoalsMet: stats.weeklyGoalsMet,
+                    weeklyAdherence: stats.weeklyAdherence,
+                    isCurrentUser: false,
+                    hasData: true,
+                    isFriend: isFriend
+                )
+            } else {
+                // Identity from the roster snapshot only — never read another
+                // user's account/info.
+                entriesByUid[member.uid] = LeaderboardEntry(
+                    uid: member.uid,
+                    username: member.username,
+                    displayName: member.displayName,
+                    level: 1,
+                    totalXP: 0,
+                    currentStreak: 0,
+                    rank: Rank.iron.rawValue,
+                    weeklyGoalsMet: 0,
+                    weeklyAdherence: 0.0,
+                    isCurrentUser: false,
+                    hasData: false,
+                    isFriend: isFriend
+                )
+            }
+        }
+
+        entriesByUid[me] = await buildMyLeaderboardEntry(userId: me)
+
+        // Unsorted: the view applies the metric-specific comparator + tie-breakers.
+        return Array(entriesByUid.values)
+    }
+
     // MARK: - Guest Mode Methods
 
     /// Migrates all SwiftData records from userId=="guest" to the new authenticated userId.
@@ -3854,6 +4205,13 @@ struct LeaderboardEntry: Identifiable, Equatable {
     /// "no data yet" and always sorted to the bottom.
     let hasData: Bool
 
+    /// True when this entry's uid is a friend of the current user. Populated by
+    /// the guild leaderboard (G2) — resolved once during load so the view can
+    /// drive the friend-only profile tap from this flag (no per-row lookup).
+    /// Unused by the friend leaderboard (every row there is already a friend),
+    /// where it harmlessly stays `false`.
+    var isFriend: Bool = false
+
     /// Identifiable keys on the uid only.
     var id: String { uid }
 }
@@ -3951,6 +4309,50 @@ enum BadgeTrigger {
     case streakUpdated
     case questsChecked
     case xpAwarded
+}
+
+// MARK: - Guild Error (Guilds Prompt G1)
+
+/// Errors surfaced by the guild flow, mirroring FriendError's user-facing style.
+enum GuildError: LocalizedError {
+    case alreadyInGuild
+    case notFound
+    case full
+    case ownerMustDisband
+    case codeCollision
+    case notAuthorized
+    case network(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .alreadyInGuild:   return "You're already in a guild. Leave it before joining another."
+        case .notFound:         return "No guild was found for that code."
+        case .full:             return "This guild is full."
+        case .ownerMustDisband: return "As the owner, you can't leave — disband the guild instead."
+        case .codeCollision:    return "Couldn't generate a unique guild code. Please try again."
+        case .notAuthorized:    return "You don't have permission to do that."
+        case .network(let m):   return "Couldn't reach the server. Try again. (\(m))"
+        }
+    }
+}
+
+// MARK: - Guild Chat Error (Guilds Prompt G3)
+
+/// Errors surfaced by guild chat, mirroring GuildError's user-facing style.
+enum GuildChatError: LocalizedError {
+    case empty
+    case tooLong
+    case notAuthenticated
+    case network(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .empty:            return "Message can't be empty."
+        case .tooLong:          return "Messages are limited to 500 characters."
+        case .notAuthenticated: return "You must be signed in to chat."
+        case .network(let m):   return "Couldn't send. Try again. (\(m))"
+        }
+    }
 }
 
 // MARK: - Share Error (Friend System Phase 9)
