@@ -30,5 +30,19 @@
       "Bash(node *)",
       "Bash(SIMCTL_CHILD_HB_PREVIEW=leaderboard xcrun simctl launch booted com.vishnu.myapp)"
     ]
+  },
+  "skillOverrides": {
+    "brandkit": "off",
+    "design-taste-frontend": "off",
+    "design-taste-frontend-v1": "off",
+    "gpt-taste": "off",
+    "high-end-visual-design": "off",
+    "image-to-code": "off",
+    "imagegen-frontend-mobile": "off",
+    "imagegen-frontend-web": "off",
+    "industrial-brutalist-ui": "off",
+    "minimalist-ui": "off",
+    "redesign-existing-projects": "off",
+    "stitch-design-taste": "off"
   }
 }

@@ -30,9 +30,19 @@ final class UserProgress {
     /// Used to determine if streak should continue or reset
     var lastActiveDate: Date
 
-    /// Current rank tier as a string (e.g., "iron", "bronze")
-    /// Computed from totalXP using Rank enum
-    var rank: String
+    /// Ranked Rating — the sole basis for rank. Server-authoritative (synced via
+    /// UserProgressDTO) and NON-monotonic (duel losses lower it). Starts at Copper 2.
+    ///
+    /// The inline literal default is required for SwiftData lightweight migration of
+    /// existing records; it equals `Rank.startingRR`.
+    var rr: Int = 450
+
+    /// Current rank tier as a string (e.g., "copper"). Computed from `rr` — never
+    /// stored, never derived from XP. Parallels `currentLevel` (computed from XP).
+    var rank: String { Rank.getRank(from: rr).rawValue }
+
+    /// Rank plus the tier (1…3) within it, e.g. "Copper 2". For RR-0b display.
+    var rankTier: RankTier { Rank.rankTier(from: rr) }
 
     /// Scopes this record to an authenticated user.
     /// Defaults to "legacy" so pre-migration records remain valid without crashing.
@@ -84,20 +94,20 @@ final class UserProgress {
     ///   - currentStreak: Starting streak (defaults to 0)
     ///   - longestStreak: Record streak (defaults to 0)
     ///   - lastActiveDate: Last activity date (defaults to now)
-    ///   - rank: Starting rank (defaults to "iron")
+    ///   - rr: Starting Ranked Rating (defaults to Copper 2 via Rank.startingRR)
     init(
         id: UUID = UUID(),
         totalXP: Int = 0,
         currentStreak: Int = 0,
         longestStreak: Int = 0,
         lastActiveDate: Date = Date(),
-        rank: String = "iron"
+        rr: Int = Rank.startingRR
     ) {
         self.id = id
         self.totalXP = totalXP
         self.currentStreak = currentStreak
         self.longestStreak = longestStreak
         self.lastActiveDate = lastActiveDate
-        self.rank = rank
+        self.rr = rr
     }
 }

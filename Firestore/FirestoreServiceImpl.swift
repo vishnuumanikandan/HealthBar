@@ -1045,11 +1045,367 @@ final class FirestoreServiceImpl: FirestoreService {
         try await deleteDocument(ref: sharedItemsCollection(for: userId).document(id))
     }
 
+    // MARK: - FirestoreService: Guilds (G1)
+
+    /// Top-level guild document: guilds/{guildCode}.
+    private func guildDocument(code: String) -> DocumentReference {
+        db.collection("guilds").document(code)
+    }
+
+    /// Roster subcollection: guilds/{guildCode}/members.
+    private func guildMembers(code: String) -> CollectionReference {
+        guildDocument(code: code).collection("members")
+    }
+
+    /// Pending requests subcollection: guilds/{guildCode}/joinRequests.
+    private func guildJoinRequests(code: String) -> CollectionReference {
+        guildDocument(code: code).collection("joinRequests")
+    }
+
+    /// Top-level one-guild lock: guildMemberships/{uid} (uid == doc id).
+    private func guildMembershipDocument(for uid: String) -> DocumentReference {
+        db.collection("guildMemberships").document(uid)
+    }
+
+    /// Commits a guild WriteBatch, mapping any failure to GuildError.network.
+    /// A create over an existing guild code or an existing membership lock fails
+    /// here (create-only rules) — the caller treats that as a collision/abort.
+    private func commitGuildBatch(_ batch: WriteBatch) async throws {
+        do {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                batch.commit { error in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
+                }
+            }
+        } catch {
+            throw GuildError.network(error.localizedDescription)
+        }
+    }
+
+    /// Deletes a single guild-related document, mapping failure to GuildError.network.
+    private func deleteGuildDocument(_ ref: DocumentReference) async throws {
+        do {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                ref.delete { error in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
+                }
+            }
+        } catch {
+            throw GuildError.network(error.localizedDescription)
+        }
+    }
+
+    func createGuild(code: String, name: String, joinPolicy: String, description: String?,
+                     ownerUid: String, ownerUsername: String, ownerDisplayName: String) async throws {
+        let batch = db.batch()
+
+        // Guild doc — create-only by rules (a collision over an existing code fails).
+        // description is omitted when nil so the written key set stays within the
+        // rules' hasOnly([name, ownerUid, joinPolicy, description, createdAt]).
+        var guildData: [String: Any] = [
+            "name": name,
+            "ownerUid": ownerUid,
+            "joinPolicy": joinPolicy,
+            "createdAt": FieldValue.serverTimestamp()
+        ]
+        if let description, !description.isEmpty {
+            guildData["description"] = description
+        }
+        batch.setData(guildData, forDocument: guildDocument(code: code))
+
+        // Founder's owner member doc.
+        batch.setData([
+            "uid": ownerUid,
+            "username": ownerUsername,
+            "displayName": ownerDisplayName,
+            "role": "owner",
+            "joinedAt": FieldValue.serverTimestamp()
+        ], forDocument: guildMembers(code: code).document(ownerUid))
+
+        // Founder's one-guild lock (create-only; an existing lock means the caller
+        // is already in a guild and the whole batch is rejected).
+        batch.setData([
+            "uid": ownerUid,
+            "guildCode": code,
+            "role": "owner",
+            "joinedAt": FieldValue.serverTimestamp()
+        ], forDocument: guildMembershipDocument(for: ownerUid))
+
+        try await commitGuildBatch(batch)
+    }
+
+    func fetchGuild(code: String) async throws -> GuildDTO? {
+        let snapshot = try await guildDocument(code: code).getDocument()
+        guard snapshot.exists else { return nil }
+        // .estimate resolves a not-yet-committed createdAt sentinel; guildCode
+        // (the doc id) is not a stored field, so stamp it from documentID.
+        guard var dto = try? snapshot.data(as: GuildDTO.self, with: .estimate) else { return nil }
+        dto.id = snapshot.documentID
+        return dto
+    }
+
+    func fetchMyGuild(uid: String) async throws -> GuildDTO? {
+        let snapshot = try await guildMembershipDocument(for: uid).getDocument()
+        guard snapshot.exists else { return nil }
+        // Prefer the typed decode; fall back to a raw read so a pending/legacy
+        // timestamp can never hide an existing membership. No collectionGroup, no index.
+        let code: String?
+        if let membership = try? snapshot.data(as: GuildMembershipDTO.self, with: .estimate) {
+            code = membership.guildCode
+        } else {
+            code = snapshot.data()?["guildCode"] as? String
+        }
+        guard let guildCode = code else { return nil }
+        return try await fetchGuild(code: guildCode)
+    }
+
+    func fetchGuildMembers(code: String) async throws -> [GuildMemberDTO] {
+        let snapshot = try await guildMembers(code: code).getDocuments()
+        return snapshot.documents.compactMap { try? $0.data(as: GuildMemberDTO.self, with: .estimate) }
+    }
+
+    func fetchJoinRequests(code: String) async throws -> [GuildJoinRequestDTO] {
+        do {
+            let snapshot = try await guildJoinRequests(code: code).getDocuments()
+            return snapshot.documents.compactMap { try? $0.data(as: GuildJoinRequestDTO.self, with: .estimate) }
+        } catch {
+            // Owner-only by rules: a non-owner read is permission-denied. Treat as
+            // empty (consistent with fetchCheers / fetchPublicStats) rather than crash.
+            return []
+        }
+    }
+
+    func joinOpenGuild(code: String, uid: String, username: String, displayName: String) async throws {
+        let batch = db.batch()
+        batch.setData([
+            "uid": uid,
+            "username": username,
+            "displayName": displayName,
+            "role": "member",
+            "joinedAt": FieldValue.serverTimestamp()
+        ], forDocument: guildMembers(code: code).document(uid))
+        batch.setData([
+            "uid": uid,
+            "guildCode": code,
+            "role": "member",
+            "joinedAt": FieldValue.serverTimestamp()
+        ], forDocument: guildMembershipDocument(for: uid))
+        try await commitGuildBatch(batch)
+    }
+
+    func requestToJoinGuild(code: String, uid: String, username: String, displayName: String) async throws {
+        // No lock yet — the lock is written on approval. Awaiting the dictionary
+        // setData surfaces a rules rejection (e.g. wrong-policy guild) as a throw.
+        do {
+            try await guildJoinRequests(code: code).document(uid).setData([
+                "uid": uid,
+                "username": username,
+                "displayName": displayName,
+                "createdAt": FieldValue.serverTimestamp()
+            ])
+        } catch {
+            throw GuildError.network(error.localizedDescription)
+        }
+    }
+
+    func cancelJoinRequest(code: String, uid: String) async throws {
+        try await deleteGuildDocument(guildJoinRequests(code: code).document(uid))
+    }
+
+    func approveJoinRequest(code: String, request: GuildJoinRequestDTO) async throws {
+        let batch = db.batch()
+        // Member doc stamped from the request (identity the requester provided).
+        batch.setData([
+            "uid": request.uid,
+            "username": request.username,
+            "displayName": request.displayName,
+            "role": "member",
+            "joinedAt": FieldValue.serverTimestamp()
+        ], forDocument: guildMembers(code: code).document(request.uid))
+        // The requester's one-guild lock (create fails if they joined elsewhere meanwhile).
+        batch.setData([
+            "uid": request.uid,
+            "guildCode": code,
+            "role": "member",
+            "joinedAt": FieldValue.serverTimestamp()
+        ], forDocument: guildMembershipDocument(for: request.uid))
+        // Consume the request.
+        batch.deleteDocument(guildJoinRequests(code: code).document(request.uid))
+        try await commitGuildBatch(batch)
+    }
+
+    func denyJoinRequest(code: String, requesterUid: String) async throws {
+        try await deleteGuildDocument(guildJoinRequests(code: code).document(requesterUid))
+    }
+
+    func leaveGuild(code: String, uid: String) async throws {
+        let batch = db.batch()
+        batch.deleteDocument(guildMembers(code: code).document(uid))
+        batch.deleteDocument(guildMembershipDocument(for: uid))
+        try await commitGuildBatch(batch)
+    }
+
+    func kickMember(code: String, memberUid: String) async throws {
+        let batch = db.batch()
+        batch.deleteDocument(guildMembers(code: code).document(memberUid))
+        batch.deleteDocument(guildMembershipDocument(for: memberUid))
+        try await commitGuildBatch(batch)
+    }
+
+    func updateGuildSettings(code: String, name: String, joinPolicy: String, description: String?) async throws {
+        // updateData leaves ownerUid/createdAt untouched (rules require them
+        // immutable). A cleared description removes the field entirely.
+        var data: [String: Any] = [
+            "name": name,
+            "joinPolicy": joinPolicy
+        ]
+        if let description, !description.isEmpty {
+            data["description"] = description
+        } else {
+            data["description"] = FieldValue.delete()
+        }
+        do {
+            try await guildDocument(code: code).updateData(data)
+        } catch {
+            throw GuildError.network(error.localizedDescription)
+        }
+    }
+
+    func disbandGuild(code: String) async throws {
+        do {
+            // Gather members + requests. Each member's lock is deleted alongside
+            // the member doc; the guild doc is deleted LAST so the lock-delete
+            // rule's get(guild) still resolves while the locks are removed.
+            let membersSnapshot = try await guildMembers(code: code).getDocuments()
+            let requestsSnapshot = try await guildJoinRequests(code: code).getDocuments()
+
+            // Messages (G3) — subcollections do NOT cascade, so disband must
+            // delete chat history too, before the guild doc.
+            let messagesSnapshot = try await guildMessages(code: code).getDocuments()
+
+            var refs: [DocumentReference] = []
+            for doc in membersSnapshot.documents {
+                refs.append(doc.reference)                                   // member doc
+                refs.append(guildMembershipDocument(for: doc.documentID))    // that member's lock
+            }
+            for doc in requestsSnapshot.documents {
+                refs.append(doc.reference)                                   // request doc
+            }
+            for doc in messagesSnapshot.documents {
+                refs.append(doc.reference)                                   // message doc
+            }
+
+            try await deleteInBatches(refs)                                  // ≤450/batch, BEFORE the guild doc
+            try await deleteGuildDocument(guildDocument(code: code))         // finally the guild itself
+        } catch let error as GuildError {
+            throw error
+        } catch {
+            throw GuildError.network(error.localizedDescription)
+        }
+    }
+
+    // MARK: - FirestoreService: Guild chat (G3)
+
+    /// guilds/{code}/messages — the chat subcollection.
+    private func guildMessages(code: String) -> CollectionReference {
+        guildDocument(code: code).collection("messages")
+    }
+
+    /// The SINGLE screen-scoped chat listener. Deliberately separate from the
+    /// always-on global registry: it is owned by the chat screen's lifecycle, not
+    /// by login/logout. The ListenerRegistration stays inside this service so no
+    /// Firestore type leaks into the view layer.
+    private var guildChatListener: ListenerRegistration?
+
+    func startGuildChatListener(code: String,
+                                onUpdate: @escaping ([GuildMessageDTO]) -> Void,
+                                onError: @escaping (Error) -> Void) {
+        // Defensive: a second chat screen can never orphan the first listener.
+        stopGuildChatListener()
+        // Secondary documentID() ordering is a deterministic tie-break — Firestore
+        // timestamps are not unique, so two messages sharing a createdAt would
+        // otherwise reorder unstably across snapshots. Same (descending) direction
+        // as createdAt ⇒ served by the automatic single-field index (no composite).
+        guildChatListener = guildMessages(code: code)
+            .order(by: "createdAt", descending: true)
+            .order(by: FieldPath.documentID(), descending: true)
+            .limit(to: 50)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    Task { @MainActor in onError(error) }
+                    return
+                }
+                guard let snapshot = snapshot else { return }
+                // Decode-tolerant; stamp the doc id; reverse desc → chronological.
+                let messages: [GuildMessageDTO] = snapshot.documents.compactMap { doc in
+                    guard var dto = try? doc.data(as: GuildMessageDTO.self) else { return nil }
+                    dto.id = doc.documentID
+                    return dto
+                }.reversed()
+                Task { @MainActor in onUpdate(messages) }
+            }
+    }
+
+    func stopGuildChatListener() {
+        guildChatListener?.remove()
+        guildChatListener = nil
+    }
+
+    func sendGuildMessage(code: String, msg: GuildMessageDTO) async throws {
+        // Dictionary write with a generated auto-id: awaiting setData surfaces a
+        // rules rejection (e.g. a raced eject) as a throw; createdAt is the server
+        // sentinel. The DTO is a field carrier — its id/createdAt are unused here.
+        do {
+            try await guildMessages(code: code).document().setData([
+                "senderUid": msg.senderUid,
+                "senderUsername": msg.senderUsername,
+                "senderDisplayName": msg.senderDisplayName,
+                "text": msg.text,
+                "createdAt": FieldValue.serverTimestamp()
+            ])
+        } catch {
+            throw GuildChatError.network(error.localizedDescription)
+        }
+    }
+
+    func deleteGuildMessage(code: String, msgId: String) async throws {
+        do {
+            try await guildMessages(code: code).document(msgId).delete()
+        } catch {
+            throw GuildChatError.network(error.localizedDescription)
+        }
+    }
+
     // MARK: - FirestoreService: Account Deletion
 
     /// Deletes all Firestore data under users/{userId}/ in batches of ≤500.
     /// Deletes all known subcollections first, then the root users/{userId} document.
     func deleteAllUserData(userId: String) async throws {
+        // Guild teardown FIRST (G1). Read the one-guild lock; if this user owns a
+        // guild, disband it; if they are a plain member, leave. If the teardown
+        // throws (or the lock read fails), the whole deletion aborts here — we do
+        // NOT proceed to delete the user, so a guild can never be orphaned under a
+        // deleted owner. disband/leave are idempotent, so a retry is safe. The lock
+        // and member doc are removed by disband/leave, so no guild data survives.
+        let membershipSnapshot = try await guildMembershipDocument(for: userId).getDocument()
+        if let membershipData = membershipSnapshot.data(),
+           let guildCode = membershipData["guildCode"] as? String {
+            let role = membershipData["role"] as? String
+            if role == "owner" {
+                try await disbandGuild(code: guildCode)
+            } else {
+                try await leaveGuild(code: guildCode, uid: userId)
+            }
+        }
+
         // Release the username handle (top-level, not a subcollection) before deleting user data.
         // Only delete if the doc's uid matches this user (guard against reassigned handles).
         if let username = try? await fetchUsername(userId: userId), !username.isEmpty {

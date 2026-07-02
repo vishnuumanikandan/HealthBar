@@ -138,12 +138,20 @@ service cloud.firestore {
     // boundary: a non-friend (or former friend) gets permission-denied,
     // which the client treats as "no entry."
     match /users/{ownerUid}/public/stats {
-      // Owner, or any user in the owner's friends list, may read. Friendship
-      // is mutual (both edges exist after accept), so friends read each other.
+      // Owner, any friend, or any guild-mate may read.
+      //  - Friendship is mutual (both edges exist after accept), so friends read each other.
+      //  - Guild branch (G2): the reader is in a guild (their guildMemberships lock
+      //    exists) AND the stats owner is a member of that same guild. The exists()
+      //    guard precedes the get().data.guildCode so the get is only evaluated when
+      //    the reader actually has a lock (&& short-circuits — never .data on a null get).
       allow read: if request.auth != null
         && (
              request.auth.uid == ownerUid
              || exists(/databases/$(database)/documents/users/$(ownerUid)/friends/$(request.auth.uid))
+             || (
+                  exists(/databases/$(database)/documents/guildMemberships/$(request.auth.uid))
+                  && exists(/databases/$(database)/documents/guilds/$(get(/databases/$(database)/documents/guildMemberships/$(request.auth.uid)).data.guildCode)/members/$(ownerUid))
+                )
            );
 
       // Only the owner publishes their own stats, with the exact field set
@@ -291,6 +299,175 @@ service cloud.firestore {
 
       // Recipient-only delete (save / dismiss / cleanup). No sender unsend.
       allow delete: if request.auth != null && request.auth.uid == recipientUid;
+    }
+
+    // ===================================================================
+    // Guilds (Prompt G1) — the first shared entity not owned by one user.
+    // Two top-level collections: guilds/{guildCode} (the shared entity) and
+    // guildMemberships/{uid} (the one-guild lock, doc-id-as-lock pattern).
+    // ===================================================================
+
+    // Top-level guilds
+    match /guilds/{guildId} {
+      // Anyone authenticated may read a guild doc (needed to view a guild by its
+      // code before joining). Codes are random and unguessable; this is
+      // intentional, not a leak.
+      allow read: if request.auth != null;
+
+      // Create: founder creates a guild they own, valid shape, with a 'create'
+      // (the rules reject a create over an existing code, giving the client its
+      // collision signal).
+      allow create: if request.auth != null
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.joinPolicy in ['open','request']
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() >= 1
+                    && request.resource.data.name.size() <= 30
+                    && (!('description' in request.resource.data) || (request.resource.data.description is string && request.resource.data.description.size() <= 140))
+                    && request.resource.data.keys().hasOnly(['name','ownerUid','joinPolicy','description','createdAt']);
+
+      // Update: owner only; ownerUid and createdAt are immutable; name/policy/description bounded.
+      allow update: if request.auth != null
+                    && request.auth.uid == resource.data.ownerUid
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && request.resource.data.joinPolicy in ['open','request']
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() >= 1
+                    && request.resource.data.name.size() <= 30
+                    && (!('description' in request.resource.data) || (request.resource.data.description is string && request.resource.data.description.size() <= 140));
+
+      // Delete (disband): owner only.
+      allow delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
+
+      match /members/{memberUid} {
+        // Read: your own membership (covers the find-my-guild path, which filters
+        // uid == me), or any member of this guild reading the roster.
+        allow read: if request.auth != null
+                    && (request.auth.uid == memberUid
+                        || exists(/databases/$(database)/documents/guilds/$(guildId)/members/$(request.auth.uid)));
+
+        // Create — three legitimate paths, all stamping uid == doc id, exact shape:
+        allow create: if request.auth != null
+                      && request.resource.data.uid == memberUid
+                      && request.resource.data.keys().hasOnly(['uid','username','displayName','role','joinedAt'])
+                      && request.resource.data.username is string && request.resource.data.username.size() < 300
+                      && request.resource.data.displayName is string && request.resource.data.displayName.size() < 300
+                      && (
+                           // a) founder adds self as owner (they own the guild)
+                           (request.auth.uid == memberUid
+                              && request.resource.data.role == 'owner'
+                              && get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid == request.auth.uid)
+                           ||
+                           // b) self-join an OPEN guild as member (and not already in any guild)
+                           (request.auth.uid == memberUid
+                              && request.resource.data.role == 'member'
+                              && get(/databases/$(database)/documents/guilds/$(guildId)).data.joinPolicy == 'open'
+                              && !exists(/databases/$(database)/documents/guildMemberships/$(memberUid)))
+                           ||
+                           // c) owner approves a requester (member doc for someone else, who has a pending request)
+                           (request.auth.uid == get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid
+                              && memberUid != request.auth.uid
+                              && request.resource.data.role == 'member'
+                              && exists(/databases/$(database)/documents/guilds/$(guildId)/joinRequests/$(memberUid)))
+                         );
+
+        allow update: if false;  // no role changes in G1
+
+        // Delete: a member leaves (but the owner cannot leave), or the owner kicks / disbands.
+        allow delete: if request.auth != null
+                      && (
+                           (request.auth.uid == memberUid
+                              && memberUid != get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid)
+                           || request.auth.uid == get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid
+                         );
+      }
+
+      match /joinRequests/{requesterUid} {
+        // Read: the requester (own) or the owner (to review).
+        allow read: if request.auth != null
+                    && (request.auth.uid == requesterUid
+                        || request.auth.uid == get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid);
+
+        // Create: a non-member requests to join a REQUEST-policy guild, as themselves.
+        allow create: if request.auth != null
+                      && request.resource.data.uid == requesterUid
+                      && request.auth.uid == requesterUid
+                      && request.resource.data.keys().hasOnly(['uid','username','displayName','createdAt'])
+                      && request.resource.data.username is string && request.resource.data.username.size() < 300
+                      && request.resource.data.displayName is string && request.resource.data.displayName.size() < 300
+                      && get(/databases/$(database)/documents/guilds/$(guildId)).data.joinPolicy == 'request'
+                      && !exists(/databases/$(database)/documents/guilds/$(guildId)/members/$(requesterUid))
+                      && !exists(/databases/$(database)/documents/guildMemberships/$(requesterUid));
+
+        allow update: if false;
+
+        // Delete: requester cancels, or owner approves/denies.
+        allow delete: if request.auth != null
+                      && (request.auth.uid == requesterUid
+                          || request.auth.uid == get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid);
+      }
+
+      // Guild chat (G3) — messages readable/sendable by members; deletable by
+      // the sender (own) or the owner (moderation). Leaving/being kicked/disband
+      // makes the members/{me} exists() false, so the listener's read drops to a
+      // terminal permission error — which the client converts to ejection.
+      match /messages/{msgId} {
+        // Read: members of this guild only.
+        allow read: if request.auth != null
+                    && exists(/databases/$(database)/documents/guilds/$(guildId)/members/$(request.auth.uid));
+
+        // Create: a member sends as themselves, exact shape, bounded non-empty text.
+        allow create: if request.auth != null
+                      && exists(/databases/$(database)/documents/guilds/$(guildId)/members/$(request.auth.uid))
+                      && request.resource.data.senderUid == request.auth.uid
+                      && request.resource.data.keys().hasOnly(['senderUid','senderUsername','senderDisplayName','text','createdAt'])
+                      && request.resource.data.senderUsername is string && request.resource.data.senderUsername.size() < 300
+                      && request.resource.data.senderDisplayName is string && request.resource.data.senderDisplayName.size() < 300
+                      && request.resource.data.text is string
+                      && request.resource.data.text.size() >= 1
+                      && request.resource.data.text.size() <= 500;
+
+        allow update: if false;  // messages immutable (no edit in v1)
+
+        // Delete: the sender (own) or the guild owner (moderation).
+        allow delete: if request.auth != null
+                      && (request.auth.uid == resource.data.senderUid
+                          || request.auth.uid == get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid);
+      }
+    }
+
+    // Top-level one-guild lock
+    match /guildMemberships/{uid} {
+      // Read your own lock (this is the "find my guild" read).
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      // Create: doc id == uid, exact shape, and either you create your OWN lock
+      // (founder/open-join) or the owner of the referenced guild creates a
+      // requester's lock on approval (pending request must exist). The
+      // doc-id-as-lock makes a second concurrent membership impossible.
+      allow create: if request.auth != null
+                    && request.resource.data.uid == uid
+                    && request.resource.data.keys().hasOnly(['uid','guildCode','role','joinedAt'])
+                    && request.resource.data.guildCode is string
+                    && (
+                         request.auth.uid == uid
+                         ||
+                         (request.auth.uid == get(/databases/$(database)/documents/guilds/$(request.resource.data.guildCode)).data.ownerUid
+                            && uid != request.auth.uid
+                            && exists(/databases/$(database)/documents/guilds/$(request.resource.data.guildCode)/joinRequests/$(uid)))
+                       );
+
+      allow update: if false;
+
+      // Delete: a member releases their own lock (but not the owner — owner must
+      // disband), or the owner of the referenced guild removes it (kick / disband).
+      allow delete: if request.auth != null
+                    && (
+                         (request.auth.uid == uid
+                            && get(/databases/$(database)/documents/guilds/$(resource.data.guildCode)).data.ownerUid != uid)
+                         || request.auth.uid == get(/databases/$(database)/documents/guilds/$(resource.data.guildCode)).data.ownerUid
+                       );
     }
   }
 }

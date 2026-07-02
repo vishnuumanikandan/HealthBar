@@ -164,7 +164,7 @@ final class AppCoordinator {
 
         let currentLevel = gamificationManager.calculateLevel(from: progress.totalXP)
         let xpForNext = gamificationManager.xpForNextLevel(currentXP: progress.totalXP)
-        let currentRank = gamificationManager.getCurrentRank(from: progress.totalXP)
+        let currentRank = gamificationManager.getCurrentRank(from: progress.rr)
 
         return TodaySummary(
             entries: entries,
@@ -878,6 +878,52 @@ final class AppCoordinator {
     func declineIncomingRequest(fromUid: String) async throws { try await dataManager.declineIncomingRequest(fromUid: fromUid) }
     func cancelSentRequest(toUid: String) async throws { try await dataManager.cancelSentRequest(toUid: toUid) }
     func removeFriend(friendUid: String) async throws { try await dataManager.removeFriend(friendUid: friendUid) }
+
+    // MARK: - Guilds (G1)
+
+    /// The current authenticated user's uid (nil for guests). Used by the Guild UI
+    /// to identify the owner and the current user within a roster.
+    var currentUserId: String? { dataManager.authenticatedUserId }
+
+    func createGuild(name: String, joinPolicy: String, description: String?) async throws -> GuildDTO {
+        try await dataManager.createGuild(name: name, joinPolicy: joinPolicy, description: description)
+    }
+    func myGuild() async -> GuildDTO? { await dataManager.myGuild() }
+    func guildMembers(code: String) async -> [GuildMemberDTO] { await dataManager.guildMembers(code: code) }
+    func joinRequests(code: String) async -> [GuildJoinRequestDTO] { await dataManager.joinRequests(code: code) }
+    func joinGuild(code: String) async throws { try await dataManager.joinGuild(code: code) }
+    func cancelMyJoinRequest(code: String) async throws { try await dataManager.cancelMyJoinRequest(code: code) }
+    func approveRequest(code: String, request: GuildJoinRequestDTO) async throws {
+        try await dataManager.approveRequest(code: code, request: request)
+    }
+    func denyRequest(code: String, requesterUid: String) async throws {
+        try await dataManager.denyRequest(code: code, requesterUid: requesterUid)
+    }
+    func kickMember(code: String, memberUid: String) async throws {
+        try await dataManager.kickMember(code: code, memberUid: memberUid)
+    }
+    func leaveGuild(code: String) async throws { try await dataManager.leaveGuild(code: code) }
+    func updateGuildSettings(code: String, name: String, joinPolicy: String, description: String?) async throws {
+        try await dataManager.updateGuildSettings(code: code, name: name, joinPolicy: joinPolicy, description: description)
+    }
+    func disbandGuild(code: String) async throws { try await dataManager.disbandGuild(code: code) }
+
+    /// Ranked entries for the current user's guild (G2). Empty for guests / not in a guild.
+    func loadGuildLeaderboard() async -> [LeaderboardEntry] { await dataManager.loadGuildLeaderboard() }
+
+    // Guild chat (G3)
+    func startGuildChat(code: String,
+                        onUpdate: @escaping ([GuildMessageDTO]) -> Void,
+                        onError: @escaping (Error) -> Void) {
+        dataManager.startGuildChat(code: code, onUpdate: onUpdate, onError: onError)
+    }
+    func stopGuildChat() { dataManager.stopGuildChat() }
+    func sendGuildMessage(code: String, text: String) async throws {
+        try await dataManager.sendGuildMessage(code: code, text: text)
+    }
+    func deleteGuildMessage(code: String, msgId: String) async throws {
+        try await dataManager.deleteGuildMessage(code: code, msgId: msgId)
+    }
 
     // MARK: - Leaderboard (Friend System Phase 3)
 

@@ -36,6 +36,9 @@ struct ProfileView: View {
     /// Show account management screen
     @State private var showingAccount = false
 
+    /// Show the guild screen (Guilds Prompt G1)
+    @State private var showingGuild = false
+
     /// Selected badge for detail sheet
     @State private var selectedBadge: BadgeDefinition? = nil
 
@@ -115,6 +118,13 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showingAccount) {
                 AccountView(coordinator: coordinator, authService: FirebaseAuthService.shared)
+            }
+            .sheet(isPresented: $showingGuild) {
+                GuildView(
+                    coordinator: coordinator,
+                    authService: authService,
+                    onCreateAccount: onCreateAccount
+                )
             }
             .sheet(item: $selectedBadge) { badge in
                 BadgeDetailSheet(
@@ -476,6 +486,15 @@ struct ProfileView: View {
                     action: { showingOnboarding = true }
                 )
 
+                // Guild — create or join a guild (shows a sign-in card for guests)
+                settingButton(
+                    icon: "person.3.fill",
+                    title: "Guild",
+                    subtitle: "Create or join a guild",
+                    iconColor: tc.primary,
+                    action: { showingGuild = true }
+                )
+
                 // Account button — hidden for guest users (requires a real account)
                 if !authService.isGuest {
                     settingButton(
@@ -650,8 +669,7 @@ struct BadgeDetailSheet: View {
         totalXP: 1250,
         currentStreak: 7,
         longestStreak: 12,
-        lastActiveDate: Date(),
-        rank: Rank.silver.rawValue
+        lastActiveDate: Date()
     )
 
     let sampleGoal = DailyGoal(

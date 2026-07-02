@@ -1292,8 +1292,7 @@ private struct SwipeableEntryCard: View {
         totalXP: 0,
         currentStreak: 0,
         longestStreak: 0,
-        lastActiveDate: Date(),
-        rank: Rank.iron.rawValue
+        lastActiveDate: Date()
     )
 
     context.insert(sampleEntry1)
@@ -1323,8 +1322,7 @@ private struct SwipeableEntryCard: View {
         totalXP: 0,
         currentStreak: 0,
         longestStreak: 0,
-        lastActiveDate: Date(),
-        rank: Rank.iron.rawValue
+        lastActiveDate: Date()
     )
 
     context.insert(sampleGoal)
