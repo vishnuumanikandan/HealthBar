@@ -164,7 +164,7 @@ final class AppCoordinator {
 
         let currentLevel = gamificationManager.calculateLevel(from: progress.totalXP)
         let xpForNext = gamificationManager.xpForNextLevel(currentXP: progress.totalXP)
-        let currentRank = gamificationManager.getCurrentRank(from: progress.rr)
+        let currentRankTier = Rank.rankTier(from: progress.rr)
 
         return TodaySummary(
             entries: entries,
@@ -180,7 +180,7 @@ final class AppCoordinator {
             xpForNextLevel: xpForNext,
             currentStreak: progress.currentStreak,
             longestStreak: progress.longestStreak,
-            currentRank: currentRank,
+            currentRankTier: currentRankTier,
             quests: quests
         )
     }
@@ -1027,6 +1027,95 @@ final class AppCoordinator {
         try await dataManager.fetchPublicStats(friendUid: friendUid)
     }
 
+    // MARK: - Duels (D1a)
+
+    func fetchChallengeablePeople() async -> [DuelOpponentCandidate] {
+        await dataManager.fetchChallengeablePeople()
+    }
+
+    func sendChallenge(to opponent: DuelOpponentCandidate, league: Int) async throws {
+        try await dataManager.sendChallenge(to: opponent, league: league)
+    }
+
+    func loadMyDuels() async -> [DuelDTO] {
+        await dataManager.loadMyDuels()
+    }
+
+    func acceptChallenge(_ duel: DuelDTO) async throws {
+        try await dataManager.acceptChallenge(duel)
+    }
+
+    func declineChallenge(_ duel: DuelDTO) async throws {
+        try await dataManager.declineChallenge(duel)
+    }
+
+    func cancelChallenge(_ duel: DuelDTO) async throws {
+        try await dataManager.cancelChallenge(duel)
+    }
+
+    // MARK: - Duels (D1b)
+
+    func forfeitDuel(_ duel: DuelDTO) async throws {
+        try await dataManager.forfeitDuel(duel)
+    }
+
+    func rematch(_ duel: DuelDTO) async throws {
+        try await dataManager.rematch(duel)
+    }
+
+    /// Claim toasts from the most recent `loadMyDuels()` — read by BattleViewModel after load.
+    var recentDuelClaims: [String] { dataManager.recentDuelClaims }
+
+    func markDuelsSeen(_ duels: [DuelDTO], isFullList: Bool) async {
+        await dataManager.markDuelsSeen(duels, isFullList: isFullList)
+    }
+
+    // MARK: - Matchmaking (D2)
+
+    func joinQueue(league: Int) async throws {
+        try await dataManager.joinQueue(league: league)
+    }
+
+    func pollQueue(league: Int, elapsed: TimeInterval) async throws -> DuelDTO? {
+        try await dataManager.pollQueue(league: league, elapsed: elapsed)
+    }
+
+    func leaveQueue() async {
+        await dataManager.leaveQueue()
+    }
+
+    /// Per-league starting-path slot usage (active + my outgoing pendings), zero-filled for
+    /// every league — powers the disabled-league treatment in the pickers (D2.6).
+    func duelSlotUsageByLeague() async -> [Int: Int] {
+        await dataManager.duelSlotUsageByLeague()
+    }
+
+    // MARK: - Global Leaderboard (D3)
+
+    func fetchGlobalLeaderboard(metric: LeaderboardMetric, league: Int) async -> [GlobalLeaderboardDTO] {
+        await dataManager.fetchGlobalLeaderboard(metric: metric, league: league)
+    }
+
+    func fetchMyLeaderboardRow() async -> (entry: GlobalLeaderboardDTO?, rrPosition: Int?) {
+        await dataManager.fetchMyLeaderboardRow()
+    }
+
+    // MARK: - QTEs (D1d)
+
+    func todayQTEState() async -> QTEDay? { await dataManager.todayQTEState() }
+
+    func awardSparkQTE(points: Int, dateKey: String) async -> Int {
+        await dataManager.awardSparkQTE(points: points, dateKey: dateKey)
+    }
+
+    func awardCleanLogQTE(points: Int, dateKey: String) async -> Int {
+        await dataManager.awardCleanLogQTE(points: points, dateKey: dateKey)
+    }
+
+    func awardMacroGuessQTE(points: Int, dateKey: String) async -> Int {
+        await dataManager.awardMacroGuessQTE(points: points, dateKey: dateKey)
+    }
+
     /// Fetches all friends' published projections keyed by uid (friends-list
     /// detail rows). Friends without a published projection are absent.
     func fetchFriendStats() async -> [String: PublicStatsDTO] {
@@ -1071,6 +1160,6 @@ struct TodaySummary {
     let xpForNextLevel: Int
     let currentStreak: Int
     let longestStreak: Int
-    let currentRank: Rank
+    let currentRankTier: RankTier
     let quests: [DailyQuest]
 }

@@ -428,6 +428,90 @@ protocol FirestoreService {
     /// Delete a message: sender (own) or owner (moderation) — enforced by rules.
     func deleteGuildMessage(code: String, msgId: String) async throws
 
+    // MARK: - Duels (D1a)
+
+    /// Create a pending challenge. Caller supplies the fully-stamped DTO (both
+    /// identities); returns the new duelId (Firestore auto-id).
+    func createDuel(_ duel: DuelDTO) async throws -> String
+
+    /// My duels, newest first (`participantUids` arrayContains), limited to ~50.
+    /// Requires the composite index (participantUids CONTAINS + createdAt DESC).
+    func fetchMyDuels(uid: String) async throws -> [DuelDTO]
+
+    /// Opponent accepts: status pending→active, sets acceptedAt (server) + endAt (client date).
+    func acceptDuel(duelId: String, endAt: Date) async throws
+
+    /// Opponent declines: status pending→declined.
+    func declineDuel(duelId: String) async throws
+
+    /// Either participant flips a stale pending duel: status pending→expired.
+    func expireDuel(duelId: String) async throws
+
+    /// Challenger cancels own pending challenge: deletes the doc.
+    func cancelDuel(duelId: String) async throws
+
+    // MARK: - Duels (D1b)
+
+    /// Own-side score write: sets my score/dayScores/scoreUpdatedAt(server) on an active duel.
+    func updateDuelScore(duelId: String, isChallenger: Bool, score: Double, dayScores: [Double]) async throws
+
+    /// Resolver writes the outcome of an ended duel (winner per scores; deltas pre-rolled by caller).
+    func resolveDuel(duelId: String, winnerUid: String?, challengerDelta: Int, opponentDelta: Int) async throws
+
+    /// Forfeit an active duel (caller is the forfeiter; deltas deterministic per DuelDTO.forfeitDeltas).
+    func forfeitDuel(duelId: String, forfeiterUid: String, challengerDelta: Int, opponentDelta: Int) async throws
+
+    /// Own-side applied flag, false→true. Throws (permission-denied) if already applied — callers
+    /// treat that as "do not apply RR".
+    func markDuelRRApplied(duelId: String, isChallenger: Bool) async throws
+
+    // MARK: - QTE Days (D1d)
+
+    /// Upserts users/{userId}/qteDays/{dateKey} (setData merge:true).
+    func uploadQTEDay(_ day: QTEDayDTO, userId: String) async throws
+
+    /// All QTE day docs for the user (bounded — at most one per active day; no index needed).
+    func fetchQTEDays(userId: String) async throws -> [QTEDayDTO]
+
+    // MARK: - Matchmaking (D2)
+
+    /// Creates/overwrites MY queue ticket (setData; rules restrict overwrite to unclaimed).
+    func enqueueDuelTicket(_ ticket: DuelQueueTicketDTO) async throws
+
+    /// My own ticket, or nil.
+    func fetchMyDuelTicket(uid: String) async throws -> DuelQueueTicketDTO?
+
+    /// Unclaimed candidates for a league within [rrLo, rrHi], ordered by rr, limited.
+    /// Requires the composite index (league ASC, claimedBy ASC, rr ASC).
+    func fetchQueueCandidates(league: Int, rrLo: Int, rrHi: Int, limit: Int) async throws -> [DuelQueueTicketDTO]
+
+    /// Deletes a ticket (own cancel/sweep, or anyone's expired ticket — rules enforce).
+    func deleteDuelTicket(uid: String) async throws
+
+    /// The claim transaction (pairing protocol step 3). Reads my own ticket (aborting with
+    /// `DuelError.alreadyMatched` if someone matched me first), verifies the candidate's
+    /// ticket, then atomically claims it (`claimedBy`/`claimedAt`/`matchedDuelId`), creates
+    /// the born-active matchmade duel, and deletes my own ticket. Returns the new duelId.
+    /// Throws `DuelError.candidateUnavailable` when in-transaction verification fails.
+    func claimTicketAndCreateDuel(candidate: DuelQueueTicketDTO, myTicketUid: String,
+                                  duel: DuelDTO) async throws -> String
+
+    // MARK: - Global Leaderboard (D3)
+
+    /// Upserts leaderboard/{userId} (setData WITHOUT merge — the doc is small and the rule pins
+    /// the exact field set; a full overwrite keeps stale keys impossible).
+    func upsertLeaderboardEntry(_ entry: GlobalLeaderboardDTO, userId: String) async throws
+
+    /// Top rows for a board: orderBy(field, descending) + limit. Single-field orderBy — no
+    /// composite index.
+    func fetchLeaderboard(orderField: String, limit: Int) async throws -> [GlobalLeaderboardDTO]
+
+    /// My own row (nil if never published).
+    func fetchMyLeaderboardEntry(userId: String) async throws -> GlobalLeaderboardDTO?
+
+    /// RR-board position: count(rr > myRR) + 1 via the count() aggregation.
+    func fetchLeaderboardPosition(myRR: Int) async throws -> Int
+
     // MARK: - Account Deletion
 
     /// Deletes all Firestore data under users/{userId}/ in batches.

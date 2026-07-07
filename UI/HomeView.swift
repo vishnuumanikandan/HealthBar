@@ -547,6 +547,9 @@ struct HomeView: View {
     @State private var showingPurityScoreInfo: Bool = false
     @State private var settings = SettingsManager.shared
     @State private var showMoodCheck: Bool = false
+    /// Daily Spark QTE (D1d) — presented from the Home card; the gate reloads on finish.
+    @State private var showSparkQTE: Bool = false
+    @State private var sparkPlayedToday: Bool = false
     @State private var currentTheme: TimeOfDayTheme = SettingsManager.shared.activeTheme
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("insightsCardDismissedDate") private var insightsCardDismissedDate: String = ""
@@ -657,7 +660,8 @@ struct HomeView: View {
                 } else {
                     async let dashboard: Void = viewModel.refresh()
                     async let leaderboard: Void = leaderboardViewModel.refresh()
-                    _ = await (dashboard, leaderboard)
+                    async let duels: Void = viewModel.loadDuels(myUid: authService.currentUserEmail ?? "")
+                    _ = await (dashboard, leaderboard, duels)
                 }
             }
             .task {
@@ -671,7 +675,15 @@ struct HomeView: View {
             // appearance (cancels on disappear) — not on every body recompute.
             .task {
                 guard !authService.isGuest else { return }
-                await leaderboardViewModel.refresh()
+                async let leaderboard: Void = leaderboardViewModel.refresh()
+                async let duels: Void = viewModel.loadDuels(myUid: authService.currentUserEmail ?? "")
+                _ = await (leaderboard, duels)
+                sparkPlayedToday = (await coordinator.todayQTEState())?.sparkPlayed ?? false
+            }
+            .sheet(isPresented: $showSparkQTE) {
+                SparkQTESheet(coordinator: coordinator, dateKey: QTEDay.dateKey(for: Date())) {
+                    Task { sparkPlayedToday = (await coordinator.todayQTEState())?.sparkPlayed ?? false }
+                }
             }
             .task(id: "themeAutoRefresh") {
                 // Auto-refresh theme every 60s when preference is "auto"
@@ -841,6 +853,12 @@ struct HomeView: View {
                     // 1. XP / Rank Card
                     xpAndStreakSection
 
+                    // 1a. Daily Spark QTE (D1d) — non-guests mid-duel who haven't played today.
+                    sparkQTECard
+
+                    // 1b. Active duels strip (D1c) — non-guests with active duels only.
+                    duelStripSection
+
                     // 2. Today's Nutrition heading
                     sectionLabel("Nutrition")
                         .padding(.top, 8)
@@ -902,6 +920,97 @@ struct HomeView: View {
         .scrollIndicators(.hidden)
     }
 
+    // MARK: - Active Duels Strip (D1c)
+
+    @ViewBuilder
+    private var duelStripSection: some View {
+        if !viewModel.activeDuels.isEmpty {
+            VStack(spacing: 8) {
+                sectionLabel("Active Duels")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 8)
+                ForEach(viewModel.activeDuels) { duel in
+                    duelStripCard(duel)
+                }
+            }
+        }
+    }
+
+    // MARK: - Daily Spark QTE (D1d)
+
+    @ViewBuilder
+    private var sparkQTECard: some View {
+        if !authService.isGuest && !viewModel.activeDuels.isEmpty && !sparkPlayedToday {
+            Button { showSparkQTE = true } label: {
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    Image(systemName: "bolt.fill").foregroundColor(tc.primary)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Daily Spark").font(AppFont.bold(14)).foregroundColor(tc.textPrimary)
+                        Text("Tap to earn duel points").font(AppFont.regular(12)).foregroundColor(tc.textSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(AppFont.regular(12)).foregroundColor(tc.textTertiary)
+                }
+                .padding(DesignSystem.Spacing.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .adaptiveCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.cardBackground)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 8)
+        }
+    }
+
+    private func duelStripCard(_ duel: DuelDTO) -> some View {
+        let myUid = authService.currentUserEmail ?? ""
+        let mine = Int(duel.myScore(myUid).rounded())
+        let theirs = Int(duel.theirScore(myUid).rounded())
+        let iLead = Int((duel.myScore(myUid) * 10).rounded()) > Int((duel.theirScore(myUid) * 10).rounded())
+        let isEndgame = duel.endAt.map { $0.timeIntervalSinceNow < DuelConstants.secondsPerDay } ?? false
+        let opponent = duel.opponentLabel(of: myUid)
+        return Button {
+            DuelUIState.shared.pendingArenaDuelId = duel.id
+            selectedTab = 2
+        } label: {
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                Image(systemName: "flag.2.crossed.fill") // TODO: swap for a custom crossed-swords pixel asset
+                    .foregroundColor(tc.primary)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(opponent).font(AppFont.bold(14)).foregroundColor(tc.textPrimary)
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        Text("You \(mine) — \(theirs) \(opponent)")
+                            .font(AppFont.regular(12))
+                            .foregroundColor(iLead ? tc.primary : tc.textSecondary)
+                        if let delta = viewModel.deltaSinceSeen(for: duel, myUid: myUid) {
+                            deltaChip(delta, opponent: opponent)
+                        }
+                    }
+                }
+                Spacer()
+                if let endAt = duel.endAt {
+                    Text(endAt, style: .relative)
+                        .font(AppFont.regular(11))
+                        .foregroundColor(isEndgame ? DesignSystem.Colors.danger : tc.textTertiary)
+                }
+            }
+            .padding(DesignSystem.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .adaptiveCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.cardBackground)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func deltaChip(_ delta: Double, opponent: String) -> some View {
+        let rounded = Int(delta.rounded())
+        let sign = rounded >= 0 ? "+" : ""
+        return Text("\(opponent) \(sign)\(rounded) since you looked")
+            .font(AppFont.bold(10))
+            .foregroundColor(tc.primary)
+            .padding(.horizontal, DesignSystem.Spacing.sm)
+            .padding(.vertical, 2)
+            .background(tc.primary.opacity(0.15))
+            .clipShape(Capsule())
+    }
+
     // MARK: - XP and Streak Section
 
     private var xpAndStreakSection: some View {
@@ -947,7 +1056,7 @@ struct HomeView: View {
                 if let summary = viewModel.summary {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(summary.currentRank.displayName)
+                            Text(summary.currentRankTier.displayName)
                                 .font(.system(size: 20, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white)
                                 .tracking(-0.3)
@@ -1023,7 +1132,7 @@ struct HomeView: View {
                         .frame(width: 50, height: 50)
 
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(summary.currentRank.displayName)
+                            Text(summary.currentRankTier.displayName)
                                 .font(AppFont.regular(20))
                                 .foregroundColor(tc.textPrimary)
                             Text("Level \(summary.currentLevel)")

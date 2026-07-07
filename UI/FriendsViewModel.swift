@@ -31,6 +31,7 @@ final class FriendsViewModel {
         var level: Int? = nil
         var currentStreak: Int? = nil
         var rank: String? = nil
+        var rr: Int? = nil
     }
 
     struct RequestRow: Identifiable, Equatable {
@@ -116,11 +117,21 @@ final class FriendsViewModel {
                 row.level = stats.level
                 row.currentStreak = stats.currentStreak
                 row.rank = stats.rank
+                row.rr = stats.rr
             }
             return row
         }
         friends = friendRows
-            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            .sorted { lhs, rhs in
+                // D3: implicit rank ladder — RR descending, nil-rr rows last, displayName tiebreak.
+                switch (lhs.rr, rhs.rr) {
+                case let (l?, r?) where l != r: return l > r
+                case (nil, _?): return false   // lhs unranked → after a ranked rhs
+                case (_?, nil): return true    // lhs ranked → before an unranked rhs
+                default:
+                    return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+                }
+            }
 
         let incomingModels = (try? await coordinator.fetchRequests(direction: "incoming")) ?? []
         incomingRequests = incomingModels

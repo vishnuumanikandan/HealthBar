@@ -37,11 +37,9 @@ struct ContentView: View {
 
     // MARK: - Tab State
 
-    /// Currently selected tab (0 = Home, 1 = Food, 2 = Tools, 3 = Friends, 4 = Profile).
+    /// Currently selected tab (0 = Home, 1 = Food, 2 = Battle, 3 = Friends, 4 = Profile).
+    /// (Tools moved off the tab bar into a Profile entry when Battle took the center slot.)
     @State private var selectedTab: Int = 0
-
-    /// Shared state for the Tools tab (carries TDEE from Calculator 1 → Calculator 8).
-    @State private var toolsViewModel = ToolsViewModel()
 
     /// Settings for theme-aware tab backgrounds.
     @State private var settings = SettingsManager.shared
@@ -134,11 +132,15 @@ struct ContentView: View {
                     .toolbar(.hidden, for: .tabBar)
                     .tag(1)
 
-                // Tools Tab
-                ToolsView(toolsViewModel: toolsViewModel)
-                    .background(tc.primaryBackground.ignoresSafeArea())
-                    .toolbar(.hidden, for: .tabBar)
-                    .tag(2)
+                // Battle Tab (D1a) — center slot
+                BattleView(
+                    coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
+                    authService: FirebaseAuthService.shared,
+                    onCreateAccount: { showSignUpFromGuest = true }
+                )
+                .background(tc.primaryBackground.ignoresSafeArea())
+                .toolbar(.hidden, for: .tabBar)
+                .tag(2)
 
                 // Friends Tab
                 FriendsView(
@@ -208,6 +210,19 @@ struct ContentView: View {
                 friendUid: PlaceholderFriend.uid,
                 username: PlaceholderFriend.username,
                 displayName: PlaceholderFriend.displayName
+            )
+        }
+        // Clean-log QTE (D1d): presented root-level so a qualifying low-toxin meal logged from
+        // ANY flow (Home quick-add, Food log, Describe-a-meal) surfaces the same power moment.
+        // DataManager sets the pending state; `.sheet(item:)` clears it on dismiss.
+        .sheet(item: Binding(
+            get: { DuelUIState.shared.pendingCleanLogQTE },
+            set: { DuelUIState.shared.pendingCleanLogQTE = $0 }
+        )) { pending in
+            CleanLogQTESheet(
+                coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
+                pending: pending,
+                dateKey: QTEDay.dateKey(for: Date())
             )
         }
         .task {
@@ -295,7 +310,7 @@ struct WoodenTabBar: View {
     private let tabs: [(icon: String, label: String, tag: Int)] = [
         ("house.fill", "Home", 0),
         ("fork.knife", "Food", 1),
-        ("wrench.and.screwdriver.fill", "Tools", 2),
+        ("flag.2.crossed.fill", "Battle", 2), // TODO: swap for a custom crossed-swords pixel asset
         ("person.2.fill", "Friends", 3),
         ("person.fill", "Profile", 4)
     ]
@@ -309,6 +324,7 @@ struct WoodenTabBar: View {
                     VStack(spacing: 4) {
                         Image(systemName: tab.icon)
                             .font(.system(size: 22))
+                            .overlay(alignment: .topTrailing) { BattleTabBadge(tag: tab.tag, tc: tc) }
                         Text(tab.label)
                             .font(DesignSystem.Typography.pixel(12))
                     }
@@ -355,7 +371,7 @@ struct CleanTabBar: View {
     private let tabs: [(icon: String, label: String, tag: Int)] = [
         ("house.fill", "Home", 0),
         ("fork.knife", "Food", 1),
-        ("wrench.and.screwdriver.fill", "Tools", 2),
+        ("flag.2.crossed.fill", "Battle", 2), // TODO: swap for a custom crossed-swords pixel asset
         ("person.2.fill", "Friends", 3),
         ("person.fill", "Profile", 4)
     ]
@@ -373,6 +389,7 @@ struct CleanTabBar: View {
                             Image(systemName: tab.icon)
                                 .font(.system(size: 19, weight: .medium))
                                 .scaleEffect(selectedTab == tab.tag ? 1.08 : 1.0)
+                                .overlay(alignment: .topTrailing) { BattleTabBadge(tag: tab.tag, tc: tc) }
                             Text(tab.label)
                                 .font(.system(size: 10, weight: selectedTab == tab.tag ? .medium : .regular, design: .rounded))
                         }
@@ -406,6 +423,35 @@ struct CleanTabBar: View {
             .padding(.bottom, 4)
         }
         .background(tc.primaryBackground.ignoresSafeArea(edges: .bottom))
+    }
+}
+
+// MARK: - Duel Tab Badge (D1c)
+
+/// Active-duel count badge with an unseen-changes pulse, overlaid on the Battle tab icon in
+/// both tab bars. Self-observes `DuelUIState`; absent when the count is 0 (guests are always
+/// 0 via `reset()`). Extracted to one view so both bars share identical badge behavior.
+private struct BattleTabBadge: View {
+    let tag: Int
+    let tc: ThemeColors
+    @State private var duelUI = DuelUIState.shared
+    @State private var animate = false
+
+    var body: some View {
+        if tag == 2 && duelUI.activeDuelCount > 0 {
+            Text("\(duelUI.activeDuelCount)")
+                .font(AppFont.bold(9))
+                .foregroundColor(.white)
+                .frame(width: 16, height: 16)
+                .background(Circle().fill(tc.tabActive))
+                .scaleEffect(duelUI.hasUnseenChanges && animate ? 1.25 : 1.0)
+                .offset(x: 9, y: -7)
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                        animate = true
+                    }
+                }
+        }
     }
 }
 

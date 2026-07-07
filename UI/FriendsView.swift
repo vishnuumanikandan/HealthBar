@@ -296,7 +296,7 @@ struct FriendsView: View {
                         HStack(spacing: DesignSystem.Spacing.sm) {
                             statBadge(icon: "star.fill", text: "Lv \(level)", color: DesignSystem.Colors.growth)
                             statBadge(icon: "flame.fill", text: "\(streak)", color: DesignSystem.Colors.energy)
-                            statBadge(icon: "shield.fill", text: rank.capitalized, color: rankColor(rank))
+                            statBadge(icon: "shield.fill", text: Rank.displayString(rr: friend.rr, legacyRank: rank), color: rankColor(rank))
                         }
                         .padding(.top, 1)
                     } else {
@@ -346,11 +346,17 @@ struct FriendsView: View {
 
     private func rankColor(_ rank: String) -> Color {
         switch rank {
-        case "bronze": return Color(hex: "#CD7F32")   // RR-0a: legacy rank string; case removed from Rank
-        case "silver": return Color(hex: "#9CA3AF")   // RR-0a: legacy rank string; case removed from Rank
+        case Rank.stone.rawValue: return Color(hex: "#A8A29E")
+        case Rank.copper.rawValue: return Color(hex: "#B87333")
+        case Rank.iron.rawValue: return tc.textTertiary
         case Rank.gold.rawValue: return DesignSystem.Colors.goldMid
+        case Rank.platinum.rawValue: return Color(hex: "#5EEAD4")
         case Rank.diamond.rawValue: return Color(hex: "#38BDF8")
-        default: return tc.textTertiary // iron / unknown
+        case Rank.rankVII.rawValue, Rank.rankVIII.rawValue, Rank.rankIX.rawValue:
+            return Color(hex: "#38BDF8") // TODO: replace placeholder styling before public launch
+        case "bronze": return Color(hex: "#CD7F32") // retired pre-RR-0a legacy string
+        case "silver": return Color(hex: "#9CA3AF") // retired pre-RR-0a legacy string
+        default: return tc.textTertiary
         }
     }
 

@@ -50,12 +50,16 @@ final class ProfileViewModel {
         return (progress.totalXP / 100) + 1
     }
 
-    /// Current rank based on total XP
+    /// Current rank, derived from RR (RR-0a invariant — never from XP).
     var currentRank: Rank {
-        guard let progress = userProgress else { return .iron }
-
-        // Rank derives from RR only (never XP) — RR-0a invariant.
+        guard let progress = userProgress else { return .stone }
         return Rank.getRank(from: progress.rr)
+    }
+
+    /// Tiered rank label ("Copper 2") for display. Own data always has rr, so this
+    /// is always tiered; routes through the shared helper (RR-0b).
+    var currentRankDisplay: String {
+        Rank.displayString(rr: userProgress?.rr, legacyRank: userProgress?.rank ?? Rank.stone.rawValue)
     }
 
     /// Formatted total XP (e.g., "1,250 XP")

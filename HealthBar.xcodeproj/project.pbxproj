@@ -103,6 +103,25 @@
 		BE47B6842F6D16A0007F48F5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = BE47B6812F6D16A0007F48F5 /* GoogleService-Info.plist */; };
 		BE77873E2F70E62E00666EE3 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE77873D2F70E62E00666EE3 /* ProfileView.swift */; };
 		BE7787962F72699800666EE3 /* FirebaseAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7787952F72699800666EE3 /* FirebaseAuthService.swift */; };
+		BED60B332FFA316A00F9E190 /* QTEDay.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B322FFA316A00F9E190 /* QTEDay.swift */; };
+		BED60B352FFA318800F9E190 /* QTEDayDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B342FFA318800F9E190 /* QTEDayDTO.swift */; };
+		BED60B372FFA318F00F9E190 /* DuelDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B362FFA318F00F9E190 /* DuelDTO.swift */; };
+		BED60B392FFA31B100F9E190 /* MacroGuessQTESheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B382FFA31B100F9E190 /* MacroGuessQTESheet.swift */; };
+		BED60B3B2FFA31B800F9E190 /* BattleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B3A2FFA31B800F9E190 /* BattleView.swift */; };
+		BED60B3D2FFA31BF00F9E190 /* CleanLogQTESheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B3C2FFA31BF00F9E190 /* CleanLogQTESheet.swift */; };
+		BED60B3F2FFA31C600F9E190 /* SparkQTESheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B3E2FFA31C600F9E190 /* SparkQTESheet.swift */; };
+		BED60B412FFA31CD00F9E190 /* DuelUIState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B402FFA31CD00F9E190 /* DuelUIState.swift */; };
+		BED60B432FFA31D300F9E190 /* BattleViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B422FFA31D300F9E190 /* BattleViewModel.swift */; };
+		BED60B452FFA31DB00F9E190 /* DuelRecapSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B442FFA31DB00F9E190 /* DuelRecapSheet.swift */; };
+		BED60B472FFA31E300F9E190 /* ArenaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B462FFA31E300F9E190 /* ArenaView.swift */; };
+		BED60B492FFA31EA00F9E190 /* ArenaViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B482FFA31EA00F9E190 /* ArenaViewModel.swift */; };
+		BED60B4B2FFA31F400F9E190 /* DuelSeenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B4A2FFA31F400F9E190 /* DuelSeenStore.swift */; };
+		BED60B4D2FFA31FB00F9E190 /* ChallengeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B4C2FFA31FB00F9E190 /* ChallengeSheet.swift */; };
+		BED60B6B2FFC612400F9E190 /* DuelQueueTicketDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B6A2FFC612400F9E190 /* DuelQueueTicketDTO.swift */; };
+		BED60B6D2FFC614100F9E190 /* MatchmakingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B6C2FFC614100F9E190 /* MatchmakingSheet.swift */; };
+		BED60B8B2FFCBAFE00F9E190 /* GlobalLeaderboardDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B8A2FFCBAFE00F9E190 /* GlobalLeaderboardDTO.swift */; };
+		BED60B8D2FFCBB3000F9E190 /* GlobalLeaderboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B8C2FFCBB3000F9E190 /* GlobalLeaderboardView.swift */; };
+		BED60B8F2FFCBB3800F9E190 /* GlobalLeaderboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B8E2FFCBB3800F9E190 /* GlobalLeaderboardViewModel.swift */; };
 		BEF969042F77A7E900FB0F83 /* FoodDatabaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF969032F77A7E900FB0F83 /* FoodDatabaseView.swift */; };
 		BEF969062F77A7F200FB0F83 /* BarcodeOptionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF969052F77A7F200FB0F83 /* BarcodeOptionsView.swift */; };
 		BEF969082F77A7F900FB0F83 /* AddFoodChoiceSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF969072F77A7F900FB0F83 /* AddFoodChoiceSheet.swift */; };
@@ -259,6 +278,25 @@
 		BE47B6812F6D16A0007F48F5 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		BE77873D2F70E62E00666EE3 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		BE7787952F72699800666EE3 /* FirebaseAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseAuthService.swift; sourceTree = "<group>"; };
+		BED60B322FFA316A00F9E190 /* QTEDay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QTEDay.swift; sourceTree = "<group>"; };
+		BED60B342FFA318800F9E190 /* QTEDayDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QTEDayDTO.swift; sourceTree = "<group>"; };
+		BED60B362FFA318F00F9E190 /* DuelDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuelDTO.swift; sourceTree = "<group>"; };
+		BED60B382FFA31B100F9E190 /* MacroGuessQTESheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacroGuessQTESheet.swift; sourceTree = "<group>"; };
+		BED60B3A2FFA31B800F9E190 /* BattleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattleView.swift; sourceTree = "<group>"; };
+		BED60B3C2FFA31BF00F9E190 /* CleanLogQTESheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanLogQTESheet.swift; sourceTree = "<group>"; };
+		BED60B3E2FFA31C600F9E190 /* SparkQTESheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkQTESheet.swift; sourceTree = "<group>"; };
+		BED60B402FFA31CD00F9E190 /* DuelUIState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuelUIState.swift; sourceTree = "<group>"; };
+		BED60B422FFA31D300F9E190 /* BattleViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattleViewModel.swift; sourceTree = "<group>"; };
+		BED60B442FFA31DB00F9E190 /* DuelRecapSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuelRecapSheet.swift; sourceTree = "<group>"; };
+		BED60B462FFA31E300F9E190 /* ArenaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArenaView.swift; sourceTree = "<group>"; };
+		BED60B482FFA31EA00F9E190 /* ArenaViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArenaViewModel.swift; sourceTree = "<group>"; };
+		BED60B4A2FFA31F400F9E190 /* DuelSeenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuelSeenStore.swift; sourceTree = "<group>"; };
+		BED60B4C2FFA31FB00F9E190 /* ChallengeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChallengeSheet.swift; sourceTree = "<group>"; };
+		BED60B6A2FFC612400F9E190 /* DuelQueueTicketDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuelQueueTicketDTO.swift; sourceTree = "<group>"; };
+		BED60B6C2FFC614100F9E190 /* MatchmakingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchmakingSheet.swift; sourceTree = "<group>"; };
+		BED60B8A2FFCBAFE00F9E190 /* GlobalLeaderboardDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalLeaderboardDTO.swift; sourceTree = "<group>"; };
+		BED60B8C2FFCBB3000F9E190 /* GlobalLeaderboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalLeaderboardView.swift; sourceTree = "<group>"; };
+		BED60B8E2FFCBB3800F9E190 /* GlobalLeaderboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalLeaderboardViewModel.swift; sourceTree = "<group>"; };
 		BEF969032F77A7E900FB0F83 /* FoodDatabaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodDatabaseView.swift; sourceTree = "<group>"; };
 		BEF969052F77A7F200FB0F83 /* BarcodeOptionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeOptionsView.swift; sourceTree = "<group>"; };
 		BEF969072F77A7F900FB0F83 /* AddFoodChoiceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddFoodChoiceSheet.swift; sourceTree = "<group>"; };
@@ -449,6 +487,20 @@
 		1146B2612F1F37BD004767C9 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				BED60B8E2FFCBB3800F9E190 /* GlobalLeaderboardViewModel.swift */,
+				BED60B8C2FFCBB3000F9E190 /* GlobalLeaderboardView.swift */,
+				BED60B6C2FFC614100F9E190 /* MatchmakingSheet.swift */,
+				BED60B4C2FFA31FB00F9E190 /* ChallengeSheet.swift */,
+				BED60B4A2FFA31F400F9E190 /* DuelSeenStore.swift */,
+				BED60B482FFA31EA00F9E190 /* ArenaViewModel.swift */,
+				BED60B462FFA31E300F9E190 /* ArenaView.swift */,
+				BED60B442FFA31DB00F9E190 /* DuelRecapSheet.swift */,
+				BED60B422FFA31D300F9E190 /* BattleViewModel.swift */,
+				BED60B402FFA31CD00F9E190 /* DuelUIState.swift */,
+				BED60B3E2FFA31C600F9E190 /* SparkQTESheet.swift */,
+				BED60B3C2FFA31BF00F9E190 /* CleanLogQTESheet.swift */,
+				BED60B3A2FFA31B800F9E190 /* BattleView.swift */,
+				BED60B382FFA31B100F9E190 /* MacroGuessQTESheet.swift */,
 				BE10306F2FE8A18000E9744F /* GuildChatViewModel.swift */,
 				BE10306D2FE8A17800E9744F /* GuildChatView.swift */,
 				BE10304D2FE49AD200E9744F /* GuildViewModel.swift */,
@@ -579,6 +631,7 @@
 		BEF96AAB2F7CC7F600FB0F83 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				BED60B322FFA316A00F9E190 /* QTEDay.swift */,
 				BE102AB72FD9353900E9744F /* FriendRequest.swift */,
 				BE102AB52FD9352E00E9744F /* Friend.swift */,
 				BEF96DF02FCAAA7E00FB0F83 /* FoodClarification.swift */,
@@ -622,6 +675,10 @@
 		CC220AA02F400000000000C0 /* Firestore */ = {
 			isa = PBXGroup;
 			children = (
+				BED60B8A2FFCBAFE00F9E190 /* GlobalLeaderboardDTO.swift */,
+				BED60B6A2FFC612400F9E190 /* DuelQueueTicketDTO.swift */,
+				BED60B362FFA318F00F9E190 /* DuelDTO.swift */,
+				BED60B342FFA318800F9E190 /* QTEDayDTO.swift */,
 				BE10306B2FE8A15500E9744F /* GuildMessageDTO.swift */,
 				BE1030432FE49A7000E9744F /* GuildDTO.swift */,
 				BE102F592FDD018600E9744F /* SharedItemDTO.swift */,
@@ -829,15 +886,18 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BED60B4B2FFA31F400F9E190 /* DuelSeenStore.swift in Sources */,
 				BEF96D0D2FC8F4A700FB0F83 /* RecognizedFoodsReviewView.swift in Sources */,
 				1146B2ED2F234408004767C9 /* GamificationManager.swift in Sources */,
 				BE102ABC2FD9355C00E9744F /* SentRequestDTO.swift in Sources */,
 				BE10304A2FE49ABF00E9744F /* GuildLeaderboardViewModel.swift in Sources */,
+				BED60B8B2FFCBAFE00F9E190 /* GlobalLeaderboardDTO.swift in Sources */,
 				BEF96DF12FCAAA7E00FB0F83 /* FoodClarification.swift in Sources */,
 				1146B2F22F23446A004767C9 /* HomeViewModel.swift in Sources */,
 				1111E1B02F32E133006EF76F /* MoodCheckView.swift in Sources */,
 				BE10304C2FE49AC700E9744F /* CreateGuildSheet.swift in Sources */,
 				1146B2F32F23446E004767C9 /* AddFoodFormView.swift in Sources */,
+				BED60B452FFA31DB00F9E190 /* DuelRecapSheet.swift in Sources */,
 				BE102D902FDBF72B00E9744F /* ActivityFeedSection.swift in Sources */,
 				BEF96ABF2F7CC81E00FB0F83 /* UserProfile.swift in Sources */,
 				1146B2EB2F2343FF004767C9 /* NutritionManager.swift in Sources */,
@@ -849,22 +909,28 @@
 				1146B26C2F1F493D004767C9 /* DesignSystem.swift in Sources */,
 				CC770AB12F500000000000E1 /* TimeOfDayTheme.swift in Sources */,
 				BEF9698E2F7B48B500FB0F83 /* AddCustomFoodView.swift in Sources */,
+				BED60B6D2FFC614100F9E190 /* MatchmakingSheet.swift in Sources */,
 				BE77873E2F70E62E00666EE3 /* ProfileView.swift in Sources */,
 				BE10304E2FE49AD200E9744F /* GuildViewModel.swift in Sources */,
 				BE102AC22FD9358000E9744F /* FriendsView.swift in Sources */,
 				BE1029442FD8A2E700E9744F /* ClaimUsernameViewModel.swift in Sources */,
 				BE1030442FE49A7000E9744F /* GuildDTO.swift in Sources */,
+				BED60B8D2FFCBB3000F9E190 /* GlobalLeaderboardView.swift in Sources */,
+				BED60B332FFA316A00F9E190 /* QTEDay.swift in Sources */,
+				BED60B3F2FFA31C600F9E190 /* SparkQTESheet.swift in Sources */,
 				BEF96B552F88511800FB0F83 /* BadgeDefinition.swift in Sources */,
 				BEF96A972F7CC7A200FB0F83 /* UserProfileDTO.swift in Sources */,
 				BE102D922FDBF73200E9744F /* StatComparisonView.swift in Sources */,
 				BE102C3C2FDBE88C00E9744F /* LeaderboardSection.swift in Sources */,
 				1111E13C2F285EBA006EF76F /* DailyGoalsView.swift in Sources */,
 				BE1030702FE8A18000E9744F /* GuildChatViewModel.swift in Sources */,
+				BED60B372FFA318F00F9E190 /* DuelDTO.swift in Sources */,
 				1111E18D2F29B129006EF76F /* PurityScoreInfoSheet.swift in Sources */,
 				BEF96AAC2F7CC7F600FB0F83 /* OpenFoodFactsModels.swift in Sources */,
 				BEF96AAD2F7CC7F600FB0F83 /* Rank.swift in Sources */,
 				BEF96AAE2F7CC7F600FB0F83 /* DailyGoal.swift in Sources */,
 				BEF96AAF2F7CC7F600FB0F83 /* Date+Helpers.swift in Sources */,
+				BED60B4D2FFA31FB00F9E190 /* ChallengeSheet.swift in Sources */,
 				BEF96AB02F7CC7F600FB0F83 /* FoodFingerprint.swift in Sources */,
 				BE102BC82FD9F60100E9744F /* FriendProfileViewModel.swift in Sources */,
 				BEF96AB12F7CC7F600FB0F83 /* SavedMeal.swift in Sources */,
@@ -872,10 +938,13 @@
 				BE1029482FD8A32A00E9744F /* UsernameError.swift in Sources */,
 				BEF96AB22F7CC7F600FB0F83 /* FoodEntry.swift in Sources */,
 				BEF96AB32F7CC7F600FB0F83 /* Mood.swift in Sources */,
+				BED60B3D2FFA31BF00F9E190 /* CleanLogQTESheet.swift in Sources */,
 				BE1030462FE49AAD00E9744F /* GuildView.swift in Sources */,
 				BE102B542FD9EAAB00E9744F /* LeaderboardView.swift in Sources */,
 				BEF96AB42F7CC7F600FB0F83 /* DailyQuest.swift in Sources */,
 				BEF96AB52F7CC7F600FB0F83 /* PersonalBaseline.swift in Sources */,
+				BED60B8F2FFCBB3800F9E190 /* GlobalLeaderboardViewModel.swift in Sources */,
+				BED60B352FFA318800F9E190 /* QTEDayDTO.swift in Sources */,
 				BEF96AB62F7CC7F600FB0F83 /* CustomFood.swift in Sources */,
 				BEF96AB72F7CC7F600FB0F83 /* StreakMilestone.swift in Sources */,
 				BE102EE62FDC979900E9744F /* SharedInboxSection.swift in Sources */,
@@ -893,10 +962,13 @@
 				1146B2F12F234466004767C9 /* FoodLogViewModel.swift in Sources */,
 				1111E1B22F32E13B006EF76F /* AccessibilitySettingsView.swift in Sources */,
 				BE102EE82FDC97A200E9744F /* FriendPickerSheet.swift in Sources */,
+				BED60B492FFA31EA00F9E190 /* ArenaViewModel.swift in Sources */,
 				1111E1AC2F32E122006EF76F /* WeeklySummaryView.swift in Sources */,
 				1146B3042F247FA7004767C9 /* CameraPickerView.swift in Sources */,
 				1146B2E92F2343C3004767C9 /* AppCoordinator.swift in Sources */,
 				BE102B522FD9EA8600E9744F /* PublicStatsDTO .swift in Sources */,
+				BED60B3B2FFA31B800F9E190 /* BattleView.swift in Sources */,
+				BED60B472FFA31E300F9E190 /* ArenaView.swift in Sources */,
 				1146B2E02F2341D1004767C9 /* AddFoodViewModel.swift in Sources */,
 				1111E13A2F285E98006EF76F /* EditMealView.swift in Sources */,
 				BE102AB82FD9353900E9744F /* FriendRequest.swift in Sources */,
@@ -908,11 +980,13 @@
 				BE102D8E2FDBF71400E9744F /* FeedEventDTO.swift in Sources */,
 				1111E0C82F248958006EF76F /* BarcodeService.swift in Sources */,
 				BE102ABE2FD9356600E9744F /* IncomingRequestDTO.swift in Sources */,
+				BED60B412FFA31CD00F9E190 /* DuelUIState.swift in Sources */,
 				1111E0CA2F248975006EF76F /* BarcodeScannerView.swift in Sources */,
 				BEF969F22F7BA74D00FB0F83 /* ToolsView.swift in Sources */,
 				BE1029462FD8A2F000E9744F /* ClaimUsernameView.swift in Sources */,
 				BE102E042FDC8E6200E9744F /* CheerDTO.swift in Sources */,
 				1146B2EF2F234414004767C9 /* DataManager.swift in Sources */,
+				BED60B432FFA31D300F9E190 /* BattleViewModel.swift in Sources */,
 				1111E13E2F285ECD006EF76F /* DailyGoalsViewModel.swift in Sources */,
 				BEF969922F7B48C800FB0F83 /* FoodDatabaseViewModel.swift in Sources */,
 				1111E1462F285F22006EF76F /* XPToast.swift in Sources */,
@@ -942,6 +1016,7 @@
 				BEF96D092FC8F45B00FB0F83 /* RecognizedFoodItem.swift in Sources */,
 				CC220AB42F400000000000C4 /* DailyGoalDTO.swift in Sources */,
 				CC220AB52F400000000000C5 /* PersonalBaselineDTO.swift in Sources */,
+				BED60B6B2FFC612400F9E190 /* DuelQueueTicketDTO.swift in Sources */,
 				CC220AB62F400000000000C6 /* FoodFingerprintDTO.swift in Sources */,
 				BE102BCA2FD9F60700E9744F /* FriendProfileView.swift in Sources */,
 				BE102AC42FD9358600E9744F /* FriendsViewModel.swift in Sources */,
@@ -957,6 +1032,7 @@
 				BEF969042F77A7E900FB0F83 /* FoodDatabaseView.swift in Sources */,
 				BE102ABA2FD9355600E9744F /* FriendError.swift in Sources */,
 				BEF969942F7B493300FB0F83 /* FoodDatabase.swift in Sources */,
+				BED60B392FFA31B100F9E190 /* MacroGuessQTESheet.swift in Sources */,
 				BEF96D0B2FC8F47900FB0F83 /* AIFoodRecognitionService.swift in Sources */,
 				BE102AB62FD9352E00E9744F /* Friend.swift in Sources */,
 			);

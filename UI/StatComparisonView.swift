@@ -57,7 +57,8 @@ struct StatComparisonView: View {
     /// Ordered array (never a dictionary) so the row order is deterministic:
     /// adherence → level → XP → current streak → longest streak → badges → rank.
     private var metrics: [Metric] {
-        [
+        let rankScores = rankComparisonScores()
+        return [
             Metric(
                 label: "Weekly adherence",
                 mineDisplay: "\(mine.weeklyGoalsMet)/7",
@@ -102,12 +103,12 @@ struct StatComparisonView: View {
             ),
             Metric(
                 label: "Rank",
-                mineDisplay: rankTitle(mine.rank),
-                theirsDisplay: rankTitle(theirs.rank),
-                // Higher TIER wins — compare by index in Rank.allCases. An
-                // unknown/missing rank string sorts lowest (-1).
-                mineScore: Double(rankTier(mine.rank)),
-                theirsScore: Double(rankTier(theirs.rank))
+                mineDisplay: Rank.displayString(rr: mine.rr, legacyRank: mine.rank),
+                theirsDisplay: Rank.displayString(rr: theirs.rr, legacyRank: theirs.rank),
+                // Prefer rr (higher wins) when both have it; else fall back to the
+                // Rank.allCases index. Unknown/retired strings tie (see rankComparisonScores).
+                mineScore: rankScores.mine,
+                theirsScore: rankScores.theirs
             )
         ]
     }
@@ -243,17 +244,19 @@ struct StatComparisonView: View {
         return date.formatted(.dateTime.month(.abbreviated).year())
     }
 
-    // MARK: - Rank Helpers
+    // MARK: - Rank Comparison
 
-    /// Tier order index in `Rank.allCases`; an unknown/missing rank string sorts
-    /// lowest (-1) so it never beats a real tier.
-    private func rankTier(_ raw: String) -> Int {
-        guard let rank = Rank(rawValue: raw) else { return -1 }
-        return Rank.allCases.firstIndex(of: rank) ?? -1
-    }
-
-    private func rankTitle(_ raw: String) -> String {
-        Rank(rawValue: raw)?.displayName ?? raw.capitalized
+    /// Comparison scores for the Rank metric. Prefers `rr` (higher wins) when BOTH
+    /// sides have it; otherwise falls back to the rank strings' index in
+    /// `Rank.allCases`. If either string doesn't resolve to a current `Rank` case
+    /// (retired/unknown, e.g. "bronze" from an old build), both score 0 → the metric
+    /// ties (never guessed, never crashes).
+    private func rankComparisonScores() -> (mine: Double, theirs: Double) {
+        if let mr = mine.rr, let tr = theirs.rr { return (Double(mr), Double(tr)) }
+        guard let mi = Rank(rawValue: mine.rank).flatMap({ Rank.allCases.firstIndex(of: $0) }),
+              let ti = Rank(rawValue: theirs.rank).flatMap({ Rank.allCases.firstIndex(of: $0) })
+        else { return (0, 0) }
+        return (Double(mi), Double(ti))
     }
 
     // MARK: - Friend Identity / Color
@@ -265,11 +268,17 @@ struct StatComparisonView: View {
     /// The friend's rank color — same mapping the profile and leaderboard use.
     private var theirAccent: Color {
         switch theirs.rank {
-        case "bronze": return Color(hex: "#CD7F32")   // RR-0a: legacy rank string; case removed from Rank
-        case "silver": return Color(hex: "#9CA3AF")   // RR-0a: legacy rank string; case removed from Rank
+        case Rank.stone.rawValue: return Color(hex: "#A8A29E")
+        case Rank.copper.rawValue: return Color(hex: "#B87333")
+        case Rank.iron.rawValue: return tc.textTertiary
         case Rank.gold.rawValue: return DesignSystem.Colors.goldMid
+        case Rank.platinum.rawValue: return Color(hex: "#5EEAD4")
         case Rank.diamond.rawValue: return Color(hex: "#38BDF8")
-        default: return tc.textTertiary // iron / unknown
+        case Rank.rankVII.rawValue, Rank.rankVIII.rawValue, Rank.rankIX.rawValue:
+            return Color(hex: "#38BDF8") // TODO: replace placeholder styling before public launch
+        case "bronze": return Color(hex: "#CD7F32") // retired pre-RR-0a legacy string
+        case "silver": return Color(hex: "#9CA3AF") // retired pre-RR-0a legacy string
+        default: return tc.textTertiary
         }
     }
 }

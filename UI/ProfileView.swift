@@ -39,6 +39,11 @@ struct ProfileView: View {
     /// Show the guild screen (Guilds Prompt G1)
     @State private var showingGuild = false
 
+    /// Tools (calculators) — relocated off the tab bar into this Profile entry when
+    /// Battle took the center tab slot (D1a).
+    @State private var showingTools = false
+    @State private var toolsViewModel = ToolsViewModel()
+
     /// Selected badge for detail sheet
     @State private var selectedBadge: BadgeDefinition? = nil
 
@@ -118,6 +123,9 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showingAccount) {
                 AccountView(coordinator: coordinator, authService: FirebaseAuthService.shared)
+            }
+            .sheet(isPresented: $showingTools) {
+                ToolsView(toolsViewModel: toolsViewModel)
             }
             .sheet(isPresented: $showingGuild) {
                 GuildView(
@@ -288,7 +296,7 @@ struct ProfileView: View {
                     .font(AppFont.bold(14))
                     .foregroundColor(tc.primary)
 
-                Text(viewModel.currentRank.displayName)
+                Text(viewModel.currentRankDisplay)
                     .font(AppFont.regular(14))
                     .foregroundColor(tc.textSecondary)
             }
@@ -475,6 +483,15 @@ struct ProfileView: View {
                     action: {
                         showingAccessibility = true
                     }
+                )
+
+                // Tools — calculators, relocated off the tab bar (D1a)
+                settingButton(
+                    icon: "wrench.and.screwdriver.fill",
+                    title: "Tools",
+                    subtitle: "Calculators & health tools",
+                    iconColor: tc.primary,
+                    action: { showingTools = true }
                 )
 
                 // Edit Health Profile — opens onboarding in edit mode

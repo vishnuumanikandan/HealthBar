@@ -207,6 +207,21 @@ struct GuildLeaderboardView: View {
         VStack(alignment: .trailing, spacing: 2) {
             if entry.hasData {
                 switch viewModel.metric {
+                case .rank:
+                    Text(entry.displayRank)
+                        .font(AppFont.bold(18))
+                        .foregroundColor(tc.textPrimary)
+                        .lineLimit(1)
+                    if let rr = entry.rr {
+                        Text("\(rr) RR")
+                            .font(AppFont.regular(10))
+                            .foregroundColor(tc.textSecondary)
+                            .monospacedDigit()
+                    } else {
+                        Text("rank")
+                            .font(AppFont.regular(10))
+                            .foregroundColor(tc.textSecondary)
+                    }
                 case .adherence:
                     Text("\(entry.weeklyGoalsMet)/7")
                         .font(AppFont.bold(22))
@@ -256,7 +271,10 @@ struct GuildLeaderboardView: View {
             if viewModel.metric != .adherence {
                 statBadge(icon: "target", text: "\(entry.weeklyGoalsMet)/7", color: tc.primary)
             }
-            statBadge(icon: "shield.fill", text: entry.rank.capitalized, color: rankColor(entry.rank))
+            // D3: the rank shield duplicates the score column on the Rank metric — hide it there.
+            if viewModel.metric != .rank {
+                statBadge(icon: "shield.fill", text: entry.displayRank, color: rankColor(entry.rank))
+            }
         }
     }
 
@@ -319,10 +337,16 @@ struct GuildLeaderboardView: View {
 
     private func rankColor(_ rank: String) -> Color {
         switch rank {
-        case "bronze": return Color(hex: "#CD7F32")   // RR-0a: legacy rank string; case removed from Rank
-        case "silver": return Color(hex: "#9CA3AF")   // RR-0a: legacy rank string; case removed from Rank
+        case Rank.stone.rawValue: return Color(hex: "#A8A29E")
+        case Rank.copper.rawValue: return Color(hex: "#B87333")
+        case Rank.iron.rawValue: return tc.textTertiary
         case Rank.gold.rawValue: return DesignSystem.Colors.goldMid
+        case Rank.platinum.rawValue: return Color(hex: "#5EEAD4")
         case Rank.diamond.rawValue: return Color(hex: "#38BDF8")
+        case Rank.rankVII.rawValue, Rank.rankVIII.rawValue, Rank.rankIX.rawValue:
+            return Color(hex: "#38BDF8") // TODO: replace placeholder styling before public launch
+        case "bronze": return Color(hex: "#CD7F32") // retired pre-RR-0a legacy string
+        case "silver": return Color(hex: "#9CA3AF") // retired pre-RR-0a legacy string
         default: return tc.textTertiary
         }
     }
