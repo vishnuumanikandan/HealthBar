@@ -386,6 +386,18 @@ final class DataManager {
                 }
             }
 
+            // --- QTEDay (D1d) ---
+            if let remoteQTEDTOs = try? await firestoreService.fetchQTEDays(userId: userId) {
+                let remoteKeys = Set(remoteQTEDTOs.map { $0.dateKey })
+                for dto in remoteQTEDTOs {
+                    applyQTEDayMerge(dto, userId: userId) // max-wins into local (create if absent)
+                }
+                let localDays = (try? fetchAllQTEDaysForSync(userId: userId)) ?? []
+                for day in localDays where !remoteKeys.contains(day.dateKey) {
+                    try? await firestoreService.uploadQTEDay(QTEDayDTO(from: day), userId: userId)
+                }
+            }
+
             // --- CustomFood ---
             if let remoteCustomFoodDTOs = try? await firestoreService.fetchCustomFoods(userId: userId) {
                 let remoteIds = Set(remoteCustomFoodDTOs.map { $0.id })
@@ -709,24 +721,42 @@ final class DataManager {
         let localArray = try modelContext.fetch(descriptor)
 
         if let local = localArray.first {
-            // Compute all merged values in-memory before touching SwiftData
+            // Additive fields (monotonic): max()/union wins — never decrease.
             let mergedTotalXP = max(dto.totalXP, local.totalXP)
             let mergedCurrentStreak = max(dto.currentStreak, local.currentStreak)
             let mergedLongestStreak = max(dto.longestStreak, local.longestStreak)
             let mergedLastActiveDate = max(dto.lastActiveDate, local.lastActiveDate)
             let mergedClaimedSet = Set(dto.claimedMilestonesArray).union(local.claimedMilestoneSet)
             let mergedClaimedString = mergedClaimedSet.sorted().map { String($0) }.joined(separator: ",")
-            // `rr` is server-authoritative and NON-monotonic (losses lower it) — Firestore wins,
-            // never `max()`. Legacy docs without `rr` resolve to Rank.startingRR via resolvedRR.
-            let mergedRR = dto.resolvedRR
 
             let isPending = FirestoreServiceImpl.shared.pendingProgressIds.contains(dto.id)
+
+            // Non-monotonic fields — `rr` + the five duel-record fields (fills RR-0a's TODO(D1)).
+            // These are Firestore-authoritative and can DECREASE (rr drops, win streak resets), so
+            // NEVER max(). While a local write is pending, PROTECT the local value until the server
+            // echo MATCHES it (equality) — a stale sync-down must not clobber a just-resolved rr /
+            // streak. Not pending, or echo matches ⇒ apply the Firestore value verbatim.
+            func reconcile<T: Equatable>(_ remote: T, _ localValue: T) -> T {
+                (isPending && remote != localValue) ? localValue : remote
+            }
+            let mergedRR = reconcile(dto.resolvedRR, local.rr)
+            let mergedWins = reconcile(dto.resolvedDuelWins, local.duelWins)
+            let mergedLosses = reconcile(dto.resolvedDuelLosses, local.duelLosses)
+            let mergedDraws = reconcile(dto.resolvedDuelDraws, local.duelDraws)
+            let mergedCurrentWinStreak = reconcile(dto.resolvedCurrentWinStreak, local.currentWinStreak)
+            let mergedBestWinStreak = reconcile(dto.resolvedBestWinStreak, local.bestWinStreak)
+            // D3 per-league counters — same non-monotonic Firestore-authoritative reconcile.
+            let mergedWins1 = reconcile(dto.resolvedDuelWins1, local.duelWins1)
+            let mergedWins3 = reconcile(dto.resolvedDuelWins3, local.duelWins3)
+            let mergedWins5 = reconcile(dto.resolvedDuelWins5, local.duelWins5)
+            let mergedStreak1 = reconcile(dto.resolvedWinStreak1, local.winStreak1)
+            let mergedStreak3 = reconcile(dto.resolvedWinStreak3, local.winStreak3)
+            let mergedStreak5 = reconcile(dto.resolvedWinStreak5, local.winStreak5)
+
             if isPending {
-                // Confirmation: Firestore must be "at least as good" as local for all additive fields.
-                // A strictly higher value from a simultaneous device write is still a valid confirmation.
-                // `rr` is intentionally excluded — it is non-monotonic, not additive.
-                // TODO (D1): when duel resolution writes rr, add non-monotonic reconciliation for rr
-                // here (a stale sync-down must not clobber a just-resolved local rr).
+                // Additive confirmation: Firestore must be "at least as good" as local. A stale
+                // snapshot (lower additive values) is skipped entirely — which also protects the
+                // non-monotonic fields (their equality guard is handled by reconcile() above).
                 let firestoreIsConfirmed = dto.totalXP >= local.totalXP
                     && dto.currentStreak >= local.currentStreak
                     && dto.longestStreak >= local.longestStreak
@@ -742,6 +772,17 @@ final class DataManager {
                 || mergedLastActiveDate != local.lastActiveDate
                 || mergedClaimedSet != local.claimedMilestoneSet
                 || mergedRR != local.rr
+                || mergedWins != local.duelWins
+                || mergedLosses != local.duelLosses
+                || mergedDraws != local.duelDraws
+                || mergedCurrentWinStreak != local.currentWinStreak
+                || mergedBestWinStreak != local.bestWinStreak
+                || mergedWins1 != local.duelWins1
+                || mergedWins3 != local.duelWins3
+                || mergedWins5 != local.duelWins5
+                || mergedStreak1 != local.winStreak1
+                || mergedStreak3 != local.winStreak3
+                || mergedStreak5 != local.winStreak5
 
             if changed {
                 local.totalXP = mergedTotalXP
@@ -750,6 +791,17 @@ final class DataManager {
                 local.lastActiveDate = mergedLastActiveDate
                 local.claimedMilestones = mergedClaimedString
                 local.rr = mergedRR
+                local.duelWins = mergedWins
+                local.duelLosses = mergedLosses
+                local.duelDraws = mergedDraws
+                local.currentWinStreak = mergedCurrentWinStreak
+                local.bestWinStreak = mergedBestWinStreak
+                local.duelWins1 = mergedWins1
+                local.duelWins3 = mergedWins3
+                local.duelWins5 = mergedWins5
+                local.winStreak1 = mergedStreak1
+                local.winStreak3 = mergedStreak3
+                local.winStreak5 = mergedStreak5
                 try modelContext.save()
             }
         } else {
@@ -1094,6 +1146,21 @@ final class DataManager {
         Task {
             if let badges = try? await checkAndUnlockBadges(trigger: .foodLogged), !badges.isEmpty {
                 await MainActor.run { BadgeToastQueue.shared.enqueue(badges) }
+            }
+        }
+
+        // Clean-log QTE (D1d): a low-toxin meal logged mid-duel offers a tap-timing flourish,
+        // presented root-level from ContentView so ALL logging flows are covered. Guest-gated,
+        // duel-gated, cap-gated, one pending at a time (a second qualifying meal while one is
+        // pending is silently skipped — no queue). No local row yet ⇒ 0 clean-log points ⇒ offer.
+        if !isGuest, toxinScore < DuelConstants.cleanLogToxinThreshold {
+            let mealName = name
+            Task { @MainActor in
+                guard DuelUIState.shared.activeDuelCount > 0,
+                      DuelUIState.shared.pendingCleanLogQTE == nil else { return }
+                let cleanLogPoints = (await todayQTEState())?.cleanLogPoints ?? 0
+                guard cleanLogPoints < DuelConstants.cleanLogPointsCap else { return }
+                DuelUIState.shared.pendingCleanLogQTE = PendingCleanLogQTE(mealName: mealName)
             }
         }
 
@@ -3200,6 +3267,28 @@ final class DataManager {
         // identical payload — publish is now a thin wrapper over it.
         guard let dto = await buildMyStatsSnapshot() else { return }
         try? await firestoreService.publishPublicStats(dto, userId: userId)
+
+        // D3: also upsert my world-readable global leaderboard row from the SAME identity
+        // snapshot + local UserProgress (rr + the six per-league counters). Guest-safe: the
+        // buildMyStatsSnapshot guard above already returned for guests. Error-swallowed like the
+        // public/stats publish — a failed upsert self-heals on the next publish.
+        if let progress = try? await getUserProgress() {
+            let entry = GlobalLeaderboardDTO(
+                id: nil,
+                username: dto.username,
+                displayName: dto.displayName,
+                rr: max(0, progress.rr),
+                wins1: progress.duelWins1, wins3: progress.duelWins3, wins5: progress.duelWins5,
+                streak1: progress.winStreak1, streak3: progress.winStreak3, streak5: progress.winStreak5,
+                updatedAt: nil
+            )
+            try? await firestoreService.upsertLeaderboardEntry(entry, userId: userId)
+        }
+
+        // D1b: the publish chokepoints are also where my active-duel scores are pushed.
+        // updateMyDuelScores writes ONLY duel docs (never saveUserProgress/publishMyStats),
+        // so this cannot recurse. Guest / no-op publishes already returned above.
+        await updateMyDuelScores()
     }
 
     /// Builds the current user's stats projection from LOCAL data only (no
@@ -3221,6 +3310,7 @@ final class DataManager {
         let currentStreak = progress.currentStreak
         let longestStreak = progress.longestStreak
         let rank = progress.rank
+        let rr = progress.rr
 
         // Earned badge IDs only (Phase 4 profile) — friends resolve them to
         // emoji/title locally via BadgeDefinition; the badges subcollection
@@ -3242,6 +3332,7 @@ final class DataManager {
             totalXP: totalXP,
             currentStreak: currentStreak,
             rank: rank,
+            rr: rr,
             weeklyGoalsMet: goalsMet,
             weeklyAdherence: adherence,
             longestStreak: longestStreak,
@@ -3250,6 +3341,881 @@ final class DataManager {
             earnedBadgeIds: earnedBadgeIds,
             updatedAt: nil // encoded as FieldValue.serverTimestamp() via @ServerTimestamp
         )
+    }
+
+    // MARK: - Duels (D1a)
+
+    /// Challengeable people: the union of my friends and my guild roster, deduped by
+    /// uid (a person who is both is kept as `.friend`), excluding myself. Sourced from
+    /// the already-readable friend list + guild members — no new private-data reads.
+    /// Empty for guests.
+    func fetchChallengeablePeople() async -> [DuelOpponentCandidate] {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return [] }
+
+        var byUid: [String: DuelOpponentCandidate] = [:]
+
+        // Friends first (they win the dedup).
+        let friends = (try? await fetchFriends()) ?? []
+        for f in friends where f.friendUid != me && !f.friendUid.isEmpty {
+            byUid[f.friendUid] = DuelOpponentCandidate(
+                uid: f.friendUid, username: f.username, displayName: f.displayName, source: .friend
+            )
+        }
+
+        // Guild roster (add only uids not already present as a friend).
+        if let guild = await myGuild(), let code = guild.id {
+            for m in await guildMembers(code: code) where m.uid != me && !m.uid.isEmpty {
+                if byUid[m.uid] == nil {
+                    byUid[m.uid] = DuelOpponentCandidate(
+                        uid: m.uid, username: m.username, displayName: m.displayName, source: .guild
+                    )
+                }
+            }
+        }
+
+        return byUid.values.sorted {
+            $0.displayLabel.localizedCaseInsensitiveCompare($1.displayLabel) == .orderedAscending
+        }
+    }
+
+    // MARK: - Concurrent duel caps (D2.6)
+
+    /// Slot usage for a league from an ALREADY post-lifecycle duel list (lazy expiry/resolution
+    /// already applied — see D3, so a duel that ended yesterday never occupies a slot).
+    /// `includeOutgoingPending: true` for starting paths (send/rematch/queue); `false` for the
+    /// accept path. Counts my actives in the league, plus (when included) my OWN outgoing
+    /// pendings; incoming pendings never count against me. Pure/local — guests never reach it.
+    private func duelSlotUsage(in duels: [DuelDTO], league: Int, myUid: String,
+                               includeOutgoingPending: Bool) -> Int {
+        var usage = 0
+        for duel in duels where duel.league == league {
+            if duel.statusEnum == .active {
+                usage += 1
+            } else if includeOutgoingPending && duel.statusEnum == .pending && duel.challengerUid == myUid {
+                usage += 1
+            }
+        }
+        return usage
+    }
+
+    /// Per-league starting-path slot usage for the challenge/matchmaking pickers, from ONE
+    /// post-lifecycle fetch. ALWAYS zero-filled for every `DuelConstants.leagues` entry, so
+    /// callers never need `?? 0`. Guests get an all-zero map (they cannot reach the pickers).
+    func duelSlotUsageByLeague() async -> [Int: Int] {
+        var result: [Int: Int] = [:]
+        for league in DuelConstants.leagues { result[league] = 0 }
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return result }
+        let mine = await loadMyDuels()
+        for league in DuelConstants.leagues {
+            result[league] = duelSlotUsage(in: mine, league: league, myUid: me, includeOutgoingPending: true)
+        }
+        return result
+    }
+
+    /// Sends a direct challenge to a friend/guild-mate. Throws `DuelError`.
+    func sendChallenge(to opponent: DuelOpponentCandidate, league: Int, rematchOfDuelId: String? = nil) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { throw DuelError.notAuthorized }
+        guard DuelConstants.leagues.contains(league) else { throw DuelError.invalidLeague }
+        guard opponent.uid != me, !opponent.uid.isEmpty else { throw DuelError.notAuthorized }
+
+        // Duplicate check (decision 5): one PENDING challenge per (same pair, same league).
+        // TODO (scale): if duel volume grows large, replace this fetch-and-scan with a
+        // queryable pending index or lock doc — fine at current volumes.
+        let mine = (try? await firestoreService.fetchMyDuels(uid: me)) ?? []
+        let pair = Set([me, opponent.uid])
+        let isDuplicate = mine.contains {
+            $0.statusEnum == .pending && $0.league == league && Set($0.participantUids) == pair
+        }
+        if isDuplicate { throw DuelError.duplicateChallenge }
+
+        // D2.6: per-league concurrent cap (starting path). Reuses the duplicate check's fetch;
+        // `mine` is post-lifecycle in practice (loadMyDuels runs pervasively before any send —
+        // Battle/Home/Arena all funnel through it). active + my outgoing pendings.
+        if duelSlotUsage(in: mine, league: league, myUid: me, includeOutgoingPending: true)
+            >= DuelConstants.maxConcurrentDuels(league: league) {
+            throw DuelError.leagueAtCapacity(league: league)
+        }
+
+        // My identity via the robust path used by publishMyStats / friend requests
+        // (the Codable account/info decode fails for older accounts).
+        let identity: (username: String, displayName: String, createdAt: Date?)
+        do {
+            identity = try await fetchMyFriendIdentity(userId: me)
+        } catch {
+            throw DuelError.network((error as? FriendError)?.errorDescription ?? "Couldn't load your profile.")
+        }
+
+        let duel = DuelDTO(
+            challengerUid: me,
+            opponentUid: opponent.uid,
+            challengerUsername: identity.username,
+            challengerDisplayName: identity.displayName,
+            opponentUsername: opponent.username,
+            opponentDisplayName: opponent.displayName,
+            league: league,
+            respondBy: Date().addingTimeInterval(DuelConstants.responseWindow),
+            rematchOfDuelId: rematchOfDuelId
+        )
+        do {
+            _ = try await firestoreService.createDuel(duel)
+        } catch {
+            throw DuelError.network(error.localizedDescription)
+        }
+    }
+
+    /// One-line RR-claim messages produced by the most recent `loadMyDuels()` claim
+    /// pass (reset each load). BattleViewModel reads these after load to surface a toast.
+    private(set) var recentDuelClaims: [String] = []
+
+    /// Loads my duels (newest first) with the full duel lifecycle. This is the **duel
+    /// synchronization entry point** — score push, lazy expiry, lazy resolution, RR claim,
+    /// recap enqueue, and badge refresh — NOT a plain fetch; every duel surface (Home,
+    /// Battle, Arena) funnels through it. Empty for guests.
+    func loadMyDuels() async -> [DuelDTO] {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            await MainActor.run { DuelUIState.shared.reset() }
+            return []
+        }
+        recentDuelClaims = []
+
+        // Push my latest active-duel scores first, so the read below reflects them.
+        await updateMyDuelScores()
+
+        var duels = (try? await firestoreService.fetchMyDuels(uid: me)) ?? []
+        let now = Date()
+
+        // Pass 1: lazy expiry (D1a) + lazy resolution (D1b).
+        for i in duels.indices {
+            if duels[i].isExpiredNow {
+                if let id = duels[i].id {
+                    Task { try? await firestoreService.expireDuel(duelId: id) } // fire-and-forget
+                }
+                duels[i].status = DuelStatus.expired.rawValue
+                continue
+            }
+
+            // An active duel past endAt resolves on first load. Winner is from the FROZEN
+            // scores; deltas are deterministic (FNV-1a(duelId)-seeded) so every device
+            // computes identical values — a resolve race has no visible effect.
+            if duels[i].statusEnum == .active, let endAt = duels[i].endAt, now > endAt, let id = duels[i].id {
+                let winner = DuelDTO.scoreWinner(challengerScore: duels[i].challengerScore,
+                                                 opponentScore: duels[i].opponentScore)
+                let deltas = DuelDTO.resolveDeltas(duelId: id, league: duels[i].league, winner: winner)
+                let winnerUid: String?
+                switch winner {
+                case .challenger: winnerUid = duels[i].challengerUid
+                case .opponent:   winnerUid = duels[i].opponentUid
+                case .draw:       winnerUid = nil
+                }
+                // Permission-denied ⇒ someone else resolved first with IDENTICAL deltas;
+                // reflect locally regardless and fall through to the claim below.
+                try? await firestoreService.resolveDuel(duelId: id, winnerUid: winnerUid,
+                                                        challengerDelta: deltas.challenger,
+                                                        opponentDelta: deltas.opponent)
+                duels[i].status = DuelStatus.resolved.rawValue
+                duels[i].winnerUid = winnerUid
+                duels[i].challengerRRDelta = deltas.challenger
+                duels[i].opponentRRDelta = deltas.opponent
+            }
+        }
+
+        // Pass 2: RR claim — apply my delta exactly once per resolved/forfeited duel whose
+        // MY applied flag is false. Flag-first: if the flag write fails (already applied /
+        // raced by another device), do NOT apply RR. All claims persist in one save.
+        var progress: UserProgress? = nil
+        for i in duels.indices {
+            let duel = duels[i]
+            guard let id = duel.id,
+                  duel.statusEnum == .resolved || duel.statusEnum == .forfeited,
+                  !duel.rrApplied(for: me),
+                  duel.myRRDelta(me) != nil else { continue }
+
+            let iAmChallenger = duel.isChallenger(me)
+            do {
+                try await firestoreService.markDuelRRApplied(duelId: id, isChallenger: iAmChallenger)
+            } catch {
+                continue // flag already true elsewhere — skip, never double-apply RR
+            }
+            if progress == nil { progress = try? await getUserProgress() }
+            guard let p = progress else { continue }
+            let preRR = p.rr
+            let result = recordDuelOutcome(duel, on: p, me: me)
+            let postRR = p.rr
+            if !result.toast.isEmpty { recentDuelClaims.append(result.toast) }
+            if result.genuineWin {
+                emitFeedEvent(type: "duel_win", value: id) // create-only, deterministic id, swallowed
+            }
+            // D1c: queue an end-of-duel recap (presents from the Battle tab).
+            let myDays = iAmChallenger ? duel.resolvedChallengerDayScores : duel.resolvedOpponentDayScores
+            let theirDays = iAmChallenger ? duel.resolvedOpponentDayScores : duel.resolvedChallengerDayScores
+            let summary = DuelResolutionSummary(
+                duelId: id, opponentLabel: duel.opponentLabel(of: me), outcome: result.outcome,
+                rrDelta: duel.myRRDelta(me) ?? 0, preRR: preRR, postRR: postRR,
+                myScore: duel.myScore(me), theirScore: duel.theirScore(me), league: duel.league,
+                myDayScores: myDays, theirDayScores: theirDays
+            )
+            await MainActor.run { DuelUIState.shared.enqueueResolution(summary) }
+            if iAmChallenger { duels[i].challengerRRApplied = true } else { duels[i].opponentRRApplied = true }
+        }
+        // One save through the existing funnel (uploads + publishes) for all claims.
+        if progress != nil { try? await saveUserProgress() }
+
+        // D2: Battle-load sweep — reap an orphaned own queue ticket (killed app / stale).
+        // Skipped while actively queue-polling (the live ticket must survive). A claimed
+        // ticket ⇒ its duel is already in `duels` above; an unclaimed one is a stale orphan.
+        if !isQueuePolling, let ticket = try? await firestoreService.fetchMyDuelTicket(uid: me), ticket.id != nil {
+            try? await firestoreService.deleteDuelTicket(uid: me)
+        }
+
+        // D1c: refresh the cross-tab badge state (active count + unseen changes).
+        let activeCount = duels.filter { $0.statusEnum == .active }.count
+        let unseen = DuelSeenStore().hasUnseenChanges(in: duels, myUid: me)
+        await MainActor.run {
+            DuelUIState.shared.activeDuelCount = activeCount
+            DuelUIState.shared.hasUnseenChanges = unseen
+        }
+
+        return duels
+    }
+
+    /// Marks duels seen (UserDefaults snapshot) and refreshes the badge unseen flag/count.
+    /// `isFullList: true` when `duels` is a complete loadMyDuels result (enables pruning).
+    /// Guest/no-uid → no-op. Also a no-op when `isFullList && duels.isEmpty` (a swallowed
+    /// fetch failure must never wipe snapshots or zero the badge — the guest path's reset()
+    /// handles the genuine signed-out case).
+    func markDuelsSeen(_ duels: [DuelDTO], isFullList: Bool) async {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return }
+        if isFullList && duels.isEmpty { return }
+
+        let store = DuelSeenStore()
+        if isFullList {
+            store.markSeen(duels, myUid: me)                       // full replace + prune
+        } else {
+            for duel in duels { store.markSeen(duel, myUid: me) }  // single-merge upserts
+        }
+        let unseen = store.hasUnseenChanges(in: duels, myUid: me)
+        await MainActor.run {
+            DuelUIState.shared.hasUnseenChanges = unseen
+            if isFullList {
+                DuelUIState.shared.activeDuelCount = duels.filter { $0.statusEnum == .active }.count
+            }
+        }
+    }
+
+    // MARK: - Matchmaking (D2)
+
+    /// True while the queue flow is actively polling. The Battle-load sweep in `loadMyDuels()`
+    /// checks it so a mid-poll `loadMyDuels()` (which `pollQueue` itself calls on a match) never
+    /// deletes the live ticket. `pollQueue` sets it true on entry and ALWAYS resets it via
+    /// `defer`, so a throw or task cancellation can never leave the sweep disabled.
+    private var isQueuePolling = false
+
+    /// Enqueues me for a league. Guest-guarded. Stamps identity from my profile and rr from
+    /// local UserProgress. Throws `DuelError`.
+    func joinQueue(league: Int) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { throw DuelError.notAuthorized }
+        guard DuelConstants.leagues.contains(league) else { throw DuelError.invalidLeague }
+        // D2.6: starting-path cap (active + my outgoing pendings) from a fresh post-lifecycle list.
+        let mine = await loadMyDuels()
+        if duelSlotUsage(in: mine, league: league, myUid: me, includeOutgoingPending: true)
+            >= DuelConstants.maxConcurrentDuels(league: league) {
+            throw DuelError.leagueAtCapacity(league: league)
+        }
+        try await enqueueTicket(league: league, myUid: me)
+    }
+
+    /// Delete-then-create my queue ticket: a best-effort delete of my own ticket, then a fresh
+    /// create. A plain overwrite (setData over an existing doc) is evaluated as an UPDATE, which
+    /// the ticket rules permit only for the expiresAt keep-alive and the claim — so we always
+    /// delete first. Non-atomic by design (own doc; worst case "not queued"). Reused by enqueue,
+    /// the keep-alive re-stamp, and the 1a recovery.
+    private func enqueueTicket(league: Int, myUid: String) async throws {
+        let identity: (username: String, displayName: String, createdAt: Date?)
+        do {
+            identity = try await fetchMyFriendIdentity(userId: myUid)
+        } catch {
+            throw DuelError.network((error as? FriendError)?.errorDescription ?? "Couldn't load your profile.")
+        }
+        let rr = (try? await getUserProgress())?.rr ?? Rank.startingRR
+        let ticket = DuelQueueTicketDTO(
+            id: nil, uid: myUid,
+            username: identity.username, displayName: identity.displayName,
+            rr: rr, league: league,
+            createdAt: nil,
+            expiresAt: Date().addingTimeInterval(DuelConstants.queueTicketTTL),
+            claimedBy: "", claimedAt: nil, matchedDuelId: nil
+        )
+        try? await firestoreService.deleteDuelTicket(uid: myUid)
+        do {
+            try await firestoreService.enqueueDuelTicket(ticket)
+        } catch {
+            throw DuelError.network(error.localizedDescription)
+        }
+    }
+
+    /// One poll iteration per the pairing protocol. Returns the matched DuelDTO when a match
+    /// completed (either side), else nil. Guest-guarded.
+    func pollQueue(league: Int, elapsed: TimeInterval) async throws -> DuelDTO? {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return nil }
+        isQueuePolling = true
+        defer { isQueuePolling = false }
+
+        // Step 1: check my own ticket (waiting-side match / keep-alive / 1a recovery).
+        if let matched = await checkMyTicket(me: me, league: league) { return matched }
+
+        // Steps 2 + 3: search compatible tickets and claim the best one. May throw
+        // DuelError.leagueAtCapacity (D2.6/D6) → the sheet stops polling and surfaces it.
+        return try await searchAndClaim(me: me, league: league, elapsed: elapsed)
+    }
+
+    /// Protocol step 1: inspect `duelQueue/{me}`.
+    ///  - claimed  → matched as the WAITING side: pull the new duel, clean my ticket, surface it.
+    ///  - missing  → step 1a recovery (matched-and-cleaned / swept): surface a fresh match or re-enqueue.
+    ///  - expired  → keep-alive re-stamp (delete-then-create) so a long wait survives.
+    private func checkMyTicket(me: String, league: Int) async -> DuelDTO? {
+        guard let ticket = try? await firestoreService.fetchMyDuelTicket(uid: me) else {
+            // 1a: my ticket is gone. A genuine match during active polling always leaves my
+            // ticket CLAIMED (handled above or via the alreadyMatched path), so the only
+            // "already matched" signal here is a just-created matchmade duel — distinguished by
+            // having ~full time remaining. Otherwise I was swept while unclaimed → re-enqueue.
+            let duels = await loadMyDuels()
+            let now = Date()
+            if let m = duels.first(where: { d in
+                guard d.isMatchmade, d.statusEnum == .active, d.participantUids.contains(me),
+                      let endAt = d.endAt else { return false }
+                return endAt.timeIntervalSince(now) > Double(d.league) * DuelConstants.secondsPerDay - 120
+            }) {
+                return m
+            }
+            try? await enqueueTicket(league: league, myUid: me)   // stay queued
+            return nil
+        }
+
+        if ticket.isClaimed {
+            // Matched as the waiting side: the new duel arrives via the participantUids query.
+            let duels = await loadMyDuels()
+            try? await firestoreService.deleteDuelTicket(uid: me)  // clean my own ticket
+            return duels.first { $0.id == ticket.matchedDuelId }
+        }
+
+        if ticket.isExpiredNow {
+            // Keep-alive: re-stamp a fresh expiresAt (delete-then-create reuses the enqueue path
+            // and needs no extra service method; the rules also permit an in-place expiresAt
+            // update, which this simply does not exercise).
+            try? await enqueueTicket(league: ticket.league, myUid: me)
+        }
+        return nil
+    }
+
+    /// Protocol steps 2 + 3: search compatible tickets in the current RR band and claim the
+    /// best one (closest rr, then oldest). Deterministic — no randomness anywhere.
+    private func searchAndClaim(me: String, league: Int, elapsed: TimeInterval) async throws -> DuelDTO? {
+        let myRR = (try? await getUserProgress())?.rr ?? Rank.startingRR
+        let band = DuelConstants.queueBand(forElapsed: elapsed)
+        let candidates = (try? await firestoreService.fetchQueueCandidates(
+            league: league, rrLo: myRR - band, rrHi: myRR + band,
+            limit: DuelConstants.queueCandidateLimit)) ?? []
+
+        // Filter out myself + expired tickets; lazily sweep expired ones (fire-and-forget,
+        // rule-gated). Mirrors loadMyDuels' fire-and-forget expiry writes.
+        var viable: [DuelQueueTicketDTO] = []
+        for c in candidates {
+            if c.uid == me { continue }
+            if c.isExpiredNow {
+                let cid = c.uid
+                Task { try? await firestoreService.deleteDuelTicket(uid: cid) }
+                continue
+            }
+            viable.append(c)
+        }
+        // Deterministic preference: closest rr, ties broken by oldest (createdAt asc).
+        viable.sort { a, b in
+            let da = abs(a.rr - myRR), db = abs(b.rr - myRR)
+            if da != db { return da < db }
+            return (a.createdAt ?? Date.distantFuture) < (b.createdAt ?? Date.distantFuture)
+        }
+        guard !viable.isEmpty else { return nil }
+
+        // D2.6 (D6): re-check MY cap from a fresh post-lifecycle list immediately before the claim
+        // transaction — a challenge accepted against me mid-queue may have filled my last slot.
+        // Never from the poll loop's held state (can be a full interval stale). isQueuePolling is
+        // true here, so this loadMyDuels does NOT sweep my live ticket.
+        let mineAtClaim = await loadMyDuels()
+        if duelSlotUsage(in: mineAtClaim, league: league, myUid: me, includeOutgoingPending: true)
+            >= DuelConstants.maxConcurrentDuels(league: league) {
+            throw DuelError.leagueAtCapacity(league: league)
+        }
+
+        // My identity snapshot for the matchmade duel (theirs comes FROM THE TICKET — zero
+        // cross-user private reads). Best-effort so a missing username never blocks a match.
+        let myIdentity = try? await fetchMyFriendIdentity(userId: me)
+        let myUsername = myIdentity?.username ?? ""
+        let myDisplayName = myIdentity?.displayName ?? (authService.currentUserDisplayName ?? "")
+
+        for candidate in viable {
+            // Born active, challenger == me (doc author preserves index-0 = challenger = creator).
+            var duel = DuelDTO(
+                challengerUid: me, opponentUid: candidate.uid,
+                challengerUsername: myUsername, challengerDisplayName: myDisplayName,
+                opponentUsername: candidate.username, opponentDisplayName: candidate.displayName,
+                league: league, respondBy: Date()   // respondBy meaningless for matchmade
+            )
+            duel.status = DuelStatus.active.rawValue
+            duel.matchmade = true
+            duel.endAt = Date().addingTimeInterval(Double(league) * DuelConstants.secondsPerDay)
+
+            do {
+                let duelId = try await firestoreService.claimTicketAndCreateDuel(
+                    candidate: candidate, myTicketUid: me, duel: duel)
+                // Matched as the claiming side: loadMyDuels pushes my day-1 score onto the new
+                // duel via the established funnel and refreshes badge state.
+                let duels = await loadMyDuels()
+                return duels.first { $0.id == duelId }
+            } catch DuelError.candidateUnavailable {
+                continue   // race lost on this ticket — try the next candidate
+            } catch DuelError.alreadyMatched {
+                // Someone matched me while I searched — my ticket is now claimed. Discover it.
+                return await checkMyTicket(me: me, league: league)
+            } catch {
+                continue   // transient — try the next candidate / keep polling
+            }
+        }
+        return nil   // nothing claimed — keep polling (band widens next iteration)
+    }
+
+    /// Cancels my ticket (sheet dismiss / cancel button). Never throws to the UI.
+    func leaveQueue() async {
+        isQueuePolling = false
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return }
+        try? await firestoreService.deleteDuelTicket(uid: me)
+    }
+
+    // MARK: - Global Leaderboard (D3)
+
+    /// Fetches a board (top `leaderboardPageSize`) for the given metric/league. Metric/league
+    /// select the orderBy field (RR ignores league). Guest → []; a failed fetch → [] (the VM
+    /// distinguishes a genuine empty board from an error via its own load state).
+    func fetchGlobalLeaderboard(metric: LeaderboardMetric, league: Int) async -> [GlobalLeaderboardDTO] {
+        guard !isGuest else { return [] }
+        let field = LeaderboardMetric.orderField(metric: metric, league: league)
+        return (try? await firestoreService.fetchLeaderboard(
+            orderField: field, limit: DuelConstants.leaderboardPageSize)) ?? []
+    }
+
+    /// My own leaderboard row + (RR board only) my standing via the count aggregation. Fail-soft:
+    /// a failed position is nil (footer hides the position line, never the footer). Guest → (nil, nil).
+    func fetchMyLeaderboardRow() async -> (entry: GlobalLeaderboardDTO?, rrPosition: Int?) {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return (nil, nil) }
+        guard let entry = try? await firestoreService.fetchMyLeaderboardEntry(userId: userId) else { return (nil, nil) }
+        let position = try? await firestoreService.fetchLeaderboardPosition(myRR: entry.rr)
+        return (entry, position)
+    }
+
+    // MARK: - Duel scoring & resolution (D1b)
+
+    /// Capped QTE points earned on a local calendar date (0…qteBonusCap). Synchronous
+    /// SwiftData fetch (like questsForDate). Primitive for both qteBonus and comeback weighting.
+    private func qtePoints(for date: Date) -> Int {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return 0 }
+        let key = QTEDay.dateKey(for: date)
+        let descriptor = FetchDescriptor<QTEDay>(
+            predicate: #Predicate { $0.userId == userId && $0.dateKey == key }
+        )
+        guard let day = (try? modelContext.fetch(descriptor))?.first else { return 0 }
+        return min(Int(DuelConstants.qteBonusCap), day.sparkPoints + day.cleanLogPoints + day.macroGuessPoints)
+    }
+
+    /// The QTE bonus term added to a duel day-score (D1d). 0 when no row / guest / no user.
+    private func qteBonus(_ date: Date) -> Double { Double(qtePoints(for: date)) }
+
+    // MARK: - QTEs (D1d)
+
+    /// Fetch-or-create a day's QTE row for the current user. Guests never accumulate rows
+    /// (they would later sync). Throws `.notAuthenticated` when there is no user.
+    private func getOrCreateQTEDay(dateKey: String) throws -> QTEDay {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else {
+            throw DataManagerError.notAuthenticated
+        }
+        let descriptor = FetchDescriptor<QTEDay>(
+            predicate: #Predicate { $0.userId == userId && $0.dateKey == dateKey }
+        )
+        if let existing = (try? modelContext.fetch(descriptor))?.first { return existing }
+        let day = QTEDay(userId: userId, dateKey: dateKey)
+        modelContext.insert(day)
+        try modelContext.save()
+        return day
+    }
+
+    /// Read-only today state for gating the QTE cards (nil for guests / no user).
+    func todayQTEState() async -> QTEDay? {
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return nil }
+        let key = QTEDay.dateKey(for: Date())
+        let descriptor = FetchDescriptor<QTEDay>(
+            predicate: #Predicate { $0.userId == userId && $0.dateKey == key }
+        )
+        return (try? modelContext.fetch(descriptor))?.first
+    }
+
+    /// Records the spark attempt (once/day). No-op if already played. Returns points awarded.
+    func awardSparkQTE(points: Int, dateKey: String = QTEDay.dateKey(for: Date())) async -> Int {
+        guard !isGuest, let day = try? getOrCreateQTEDay(dateKey: dateKey), !day.sparkPlayed else { return 0 }
+        let awarded = max(0, min(DuelConstants.sparkPointsCap, points))
+        day.sparkPoints = awarded
+        day.sparkPlayed = true
+        try? modelContext.save()
+        uploadQTEDayAndRescore(day)
+        return awarded
+    }
+
+    /// Adds one clean-log hit. No-op at cap. Returns the new cleanLogPoints total.
+    func awardCleanLogQTE(points: Int, dateKey: String = QTEDay.dateKey(for: Date())) async -> Int {
+        guard !isGuest, let day = try? getOrCreateQTEDay(dateKey: dateKey) else { return 0 }
+        day.cleanLogPoints = min(DuelConstants.cleanLogPointsCap, day.cleanLogPoints + max(0, points))
+        try? modelContext.save()
+        uploadQTEDayAndRescore(day)
+        return day.cleanLogPoints
+    }
+
+    /// Records the macro-guess attempt (once/day). No-op if already played. Returns points awarded.
+    func awardMacroGuessQTE(points: Int, dateKey: String = QTEDay.dateKey(for: Date())) async -> Int {
+        guard !isGuest, let day = try? getOrCreateQTEDay(dateKey: dateKey), !day.macroGuessPlayed else { return 0 }
+        let awarded = max(0, min(DuelConstants.macroGuessPointsCap, points))
+        day.macroGuessPoints = awarded
+        day.macroGuessPlayed = true
+        try? modelContext.save()
+        uploadQTEDayAndRescore(day)
+        return awarded
+    }
+
+    /// Fire-and-forget: upload the QTE row (repaired by the initial-sync block on failure) and
+    /// push updated duel scores. updateMyDuelScores never calls back into the publish funnel.
+    private func uploadQTEDayAndRescore(_ day: QTEDay) {
+        guard let userId = currentUserId, !userId.isEmpty else { return }
+        let dto = QTEDayDTO(from: day)
+        Task { try? await firestoreService.uploadQTEDay(dto, userId: userId) }
+        Task { await updateMyDuelScores() }
+    }
+
+    /// All QTE rows for the user (initial-sync helper).
+    private func fetchAllQTEDaysForSync(userId: String) throws -> [QTEDay] {
+        try modelContext.fetch(FetchDescriptor<QTEDay>(predicate: #Predicate { $0.userId == userId }))
+    }
+
+    /// Field-wise MAX-WINS merge of a remote QTE doc into local (create when absent). Points are
+    /// earn-only (D7); played flags OR — two-device play converges without loss.
+    private func applyQTEDayMerge(_ dto: QTEDayDTO, userId: String) {
+        let key = dto.dateKey
+        let descriptor = FetchDescriptor<QTEDay>(
+            predicate: #Predicate { $0.userId == userId && $0.dateKey == key }
+        )
+        if let local = (try? modelContext.fetch(descriptor))?.first {
+            local.sparkPoints = min(DuelConstants.sparkPointsCap, max(local.sparkPoints, dto.sparkPoints))
+            local.cleanLogPoints = min(DuelConstants.cleanLogPointsCap, max(local.cleanLogPoints, dto.cleanLogPoints))
+            local.macroGuessPoints = min(DuelConstants.macroGuessPointsCap, max(local.macroGuessPoints, dto.macroGuessPoints))
+            local.sparkPlayed = local.sparkPlayed || dto.sparkPlayed
+            local.macroGuessPlayed = local.macroGuessPlayed || dto.macroGuessPlayed
+        } else {
+            modelContext.insert(dto.toQTEDay(userId: userId))
+        }
+        try? modelContext.save()
+    }
+
+    /// Quests for a specific date, scoped to the current user.
+    private func questsForDate(_ date: Date) async throws -> [DailyQuest] {
+        guard let userId = currentUserId, !userId.isEmpty else { return [] }
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: date)
+        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
+        let descriptor = FetchDescriptor<DailyQuest>(
+            predicate: #Predicate { quest in
+                quest.userId == userId && quest.date >= startOfDay && quest.date < endOfDay
+            }
+        )
+        return try modelContext.fetch(descriptor)
+    }
+
+    /// Graded day-score (0…110) for a local calendar date, per the D1b EXACT SPEC.
+    /// Reuses existing per-date machinery (entries/goal-in-effect/quests + NutritionManager).
+    /// Memoized by callers (updateMyDuelScores) per start-of-day.
+    func dayScore(for date: Date) async -> Double {
+        guard let userId = currentUserId, !userId.isEmpty else { return 0 }
+        let entries = (try? await fetchEntriesForDate(date)) ?? []
+
+        // The goal IN EFFECT on the date (goals persist until changed), exactly as adherence does.
+        let goals = ((try? await fetchAllDailyGoalsForSync(userId: userId)) ?? []).sorted { $0.date > $1.date }
+        let dayStart = Calendar.current.startOfDay(for: date)
+        let goal = goalInEffect(on: dayStart, calendar: Calendar.current, goalsByRecency: goals)
+
+        // Gate: no goal in effect OR no entries logged → 0 (no free points for silence; avoids /0).
+        guard let goal, !entries.isEmpty else { return 0 }
+
+        let totalCalories = nutritionManager.calculateTotalCalories(from: entries)
+        let totalProtein = nutritionManager.calculateTotalMacros(from: entries).protein
+        let totalToxin = nutritionManager.calculateTotalToxinScore(from: entries)
+
+        // Calories — up to caloriePoints; over penalized harder than under.
+        let diff = totalCalories - goal.calorieTarget
+        let caloriePts: Double
+        switch diff {
+        case (-100)...100:    caloriePts = DuelConstants.caloriePoints           // full
+        case 101...200:       caloriePts = DuelConstants.caloriePoints / 2       // slight over
+        case (-300)...(-101): caloriePts = DuelConstants.caloriePoints * 2 / 3   // moderate under
+        case let d where d > 200: caloriePts = 0                                 // large over
+        default:              caloriePts = DuelConstants.caloriePoints / 3       // large under (< -300)
+        }
+
+        // Protein — up to proteinPoints (guard target ≤ 0 → full).
+        let proteinPts = goal.proteinTarget <= 0
+            ? DuelConstants.proteinPoints
+            : DuelConstants.proteinPoints * min(1.0, totalProtein / goal.proteinTarget)
+
+        // Purity — up to purityPoints; LOWER toxin is better (linear to 0 at double the target).
+        let purityPts: Double
+        if goal.purityTarget <= 0 {
+            purityPts = totalToxin == 0 ? DuelConstants.purityPoints : 0
+        } else if totalToxin <= goal.purityTarget {
+            purityPts = DuelConstants.purityPoints
+        } else {
+            let target = Double(goal.purityTarget)
+            purityPts = DuelConstants.purityPoints * max(0, (2 * target - Double(totalToxin)) / target)
+        }
+
+        // Quests — up to questPoints; 0 if no quests exist that day.
+        let quests = (try? await questsForDate(date)) ?? []
+        let questPts: Double = quests.isEmpty ? 0 :
+            DuelConstants.questPoints * (Double(quests.filter { $0.isCompleted }.count) / Double(quests.count))
+
+        let raw = caloriePts + proteinPts + purityPts + questPts + qteBonus(date)
+        let clamped = min(DuelConstants.maxDayScore, max(0, raw))
+        return (clamped * 10).rounded() / 10 // 1 decimal place
+    }
+
+    /// Recompute and push MY side of every ACTIVE duel. Memoizes dayScore per start-of-day so
+    /// overlapping duel-days are computed ONCE. Writes ONLY duel docs — NEVER saveUserProgress /
+    /// publishMyStats (it is called FROM that funnel; a call back in would loop).
+    func updateMyDuelScores() async {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { return }
+        let duels = (try? await firestoreService.fetchMyDuels(uid: me)) ?? []
+        let active = duels.filter { $0.statusEnum == .active }
+        guard !active.isEmpty else { return }
+
+        let calendar = Calendar.current
+        let now = Date()
+        var cache: [Date: Double] = [:]  // start-of-day → dayScore (compute each date once)
+        var qteCache: [Date: Int] = [:]  // start-of-day → capped QTE points (comeback weighting)
+
+        for duel in active {
+            guard let id = duel.id, let acceptedAt = duel.acceptedAt else { continue }
+            let iAmChallenger = duel.isChallenger(me)
+            let day1Start = calendar.startOfDay(for: acceptedAt)
+
+            // Duel-days 1…currentDuelDay: calendar days from acceptedAt (decision 1), never
+            // future, never past endAt.
+            var dayScores: [Double] = []
+            var dayStarts: [Date] = []
+            for dayIndex in 0..<duel.league {
+                guard let dayStart = calendar.date(byAdding: .day, value: dayIndex, to: day1Start) else { break }
+                if dayStart > now { break }                              // future duel-day — stop
+                if let endAt = duel.endAt, dayStart >= endAt { break }   // past the window — stop
+                if let cached = cache[dayStart] {
+                    dayScores.append(cached)
+                } else {
+                    let score = await dayScore(for: dayStart)
+                    cache[dayStart] = score
+                    dayScores.append(score)
+                }
+                dayStarts.append(dayStart)
+            }
+
+            // D1d comeback weighting (D6): the TRAILING side's QTE points are worth
+            // ×comebackMultiplier. Strict < on the fetched-doc rounded totals — tied/0–0 is NOT
+            // trailing. Applied to THIS duel's copy only; the base memoized dayScores are never
+            // mutated. Re-clamped per day to maxDayScore, so totals stay ≤ league×110 (no
+            // score-rule change). qteBonus already folded the BASE QTE into dayScore; here we add
+            // only the incremental boost.
+            let iAmTrailing = Int((duel.myScore(me) * 10).rounded()) < Int((duel.theirScore(me) * 10).rounded())
+            if iAmTrailing {
+                for i in dayScores.indices {
+                    let base: Int
+                    if let cached = qteCache[dayStarts[i]] {
+                        base = cached
+                    } else {
+                        let p = qtePoints(for: dayStarts[i])
+                        qteCache[dayStarts[i]] = p
+                        base = p
+                    }
+                    guard base > 0 else { continue }
+                    let boosted = min(Int(DuelConstants.qteBonusCap),
+                                      Int((Double(base) * DuelConstants.comebackMultiplier).rounded()))
+                    let raised = min(DuelConstants.maxDayScore, dayScores[i] + Double(boosted - base))
+                    dayScores[i] = (raised * 10).rounded() / 10
+                }
+            }
+
+            // Round the total to 1 decimal so equal-rounded totals become the IDENTICAL Double.
+            // The resolve rule compares raw scores; this keeps it in lockstep with the client's
+            // rounded-int winner determination (no raw-Double disagreement → no stuck draw).
+            let total = (dayScores.reduce(0, +) * 10).rounded() / 10
+
+            // Skip no-op writes (dayScores identical ⇒ same total; avoids write spam).
+            let current = iAmChallenger ? duel.resolvedChallengerDayScores : duel.resolvedOpponentDayScores
+            if current == dayScores { continue }
+
+            // Swallow permission-denied (duel ended / froze between fetch and write).
+            try? await firestoreService.updateDuelScore(duelId: id, isChallenger: iAmChallenger,
+                                                        score: total, dayScores: dayScores)
+        }
+    }
+
+    /// Applies MY claimed outcome to `progress` (RR floored at 0 + W/L/draw + win-streak).
+    /// Returns the claim toast + whether it was a genuine (non-forfeit) win for feed emission.
+    private func recordDuelOutcome(_ duel: DuelDTO, on progress: UserProgress, me: String) -> (toast: String, genuineWin: Bool, outcome: DuelResolutionSummary.Outcome) {
+        guard let myDelta = duel.myRRDelta(me) else { return ("", false, .draw) }
+        progress.rr = max(0, progress.rr + myDelta)
+
+        let isForfeit = duel.forfeitedBy != nil
+        let label: String
+        let outcome: DuelResolutionSummary.Outcome
+        var genuineWin = false
+        // D3: each branch applies the IDENTICAL wins/currentWinStreak transition to the
+        // league-keyed counters for this duel's league (D4 — mirror, don't reinterpret).
+        if isForfeit {
+            if duel.forfeitedBy == me {
+                progress.duelLosses += 1
+                progress.currentWinStreak = 0
+                resetLeagueStreak(progress, duel.league)
+                label = "FORFEIT"; outcome = .forfeitLoss
+            } else {
+                progress.duelWins += 1
+                progress.currentWinStreak += 1
+                progress.bestWinStreak = max(progress.bestWinStreak, progress.currentWinStreak)
+                applyLeagueWin(progress, duel.league)
+                label = "WON"; outcome = .forfeitWin // unearned; NOT a genuine win → no feed
+            }
+        } else if duel.winnerUid == nil {
+            progress.duelDraws += 1        // draw — win streak unchanged (per-league unchanged too)
+            label = "DREW"; outcome = .draw
+        } else if duel.winnerUid == me {
+            progress.duelWins += 1
+            progress.currentWinStreak += 1
+            progress.bestWinStreak = max(progress.bestWinStreak, progress.currentWinStreak)
+            applyLeagueWin(progress, duel.league)
+            label = "WON"; outcome = .won; genuineWin = true
+        } else {
+            progress.duelLosses += 1
+            progress.currentWinStreak = 0
+            resetLeagueStreak(progress, duel.league)
+            label = "LOST"; outcome = .lost
+        }
+
+        let sign = myDelta >= 0 ? "+" : ""
+        return ("Duel vs \(duel.opponentLabel(of: me)): \(label) \(sign)\(myDelta) RR", genuineWin, outcome)
+    }
+
+    /// D3: a league win — wins+1 and streak+1 for the league-keyed counters (mirrors the global
+    /// win/currentWinStreak transition). Unknown league is a no-op (league is create-validated).
+    private func applyLeagueWin(_ progress: UserProgress, _ league: Int) {
+        switch league {
+        case 1: progress.duelWins1 += 1; progress.winStreak1 += 1
+        case 3: progress.duelWins3 += 1; progress.winStreak3 += 1
+        case 5: progress.duelWins5 += 1; progress.winStreak5 += 1
+        default: break
+        }
+    }
+
+    /// D3: a league loss/forfeit-loss — reset the league-keyed streak (mirrors the global
+    /// currentWinStreak = 0; there is no per-league loss counter).
+    private func resetLeagueStreak(_ progress: UserProgress, _ league: Int) {
+        switch league {
+        case 1: progress.winStreak1 = 0
+        case 3: progress.winStreak3 = 0
+        case 5: progress.winStreak5 = 0
+        default: break
+        }
+    }
+
+    /// Forfeit an active duel. Deltas are deterministic; my RR/record applies via the same
+    /// claim path on the next load (uniform). Throws `DuelError`.
+    func forfeitDuel(_ duel: DuelDTO) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { throw DuelError.notAuthorized }
+        guard let id = duel.id else { throw DuelError.notAuthorized }
+        guard duel.participantUids.contains(me) else { throw DuelError.notAuthorized }
+        guard duel.statusEnum == .active else { throw DuelError.alreadyResolved }
+
+        let deltas = DuelDTO.forfeitDeltas(duelId: id, league: duel.league, forfeiterIsChallenger: duel.isChallenger(me))
+        do {
+            try await firestoreService.forfeitDuel(duelId: id, forfeiterUid: me,
+                                                   challengerDelta: deltas.challenger,
+                                                   opponentDelta: deltas.opponent)
+        } catch {
+            throw DuelError.network(error.localizedDescription)
+        }
+    }
+
+    /// Rematch a resolved/forfeited duel within the 24h window — a fresh challenge to the same
+    /// opponent + league via `sendChallenge` (all D1a checks apply), with `rematchOfDuelId` set.
+    func rematch(_ duel: DuelDTO) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { throw DuelError.notAuthorized }
+        guard let originalId = duel.id, let resolvedAt = duel.resolvedAt else { throw DuelError.rematchExpired }
+        guard Date() < resolvedAt.addingTimeInterval(DuelConstants.rematchWindow) else { throw DuelError.rematchExpired }
+
+        let opponentUid = duel.opponentUid(of: me)
+        let opponentIsChallenger = duel.challengerUid == opponentUid
+        let candidate = DuelOpponentCandidate(
+            uid: opponentUid,
+            username: opponentIsChallenger ? duel.challengerUsername : duel.opponentUsername,
+            displayName: opponentIsChallenger ? duel.challengerDisplayName : duel.opponentDisplayName,
+            source: .friend // display-only for the picker; irrelevant on the direct rematch path
+        )
+        try await sendChallenge(to: candidate, league: duel.league, rematchOfDuelId: originalId)
+    }
+
+    /// Opponent accepts a pending challenge → active, with a fixed window
+    /// `endAt = now + league days`. Throws `DuelError`.
+    func acceptChallenge(_ duel: DuelDTO) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { throw DuelError.notAuthorized }
+        guard let id = duel.id else { throw DuelError.notAuthorized }
+        guard !duel.isExpiredNow else { throw DuelError.expired }
+        guard duel.statusEnum == .pending, duel.opponentUid == me else { throw DuelError.notAuthorized }
+
+        // D2.6: accept-path cap — my ACTIVES in this league only (accepting is the moment it
+        // becomes active). Fresh post-lifecycle list so an ended duel already freed its slot.
+        let mine = await loadMyDuels()
+        if duelSlotUsage(in: mine, league: duel.league, myUid: me, includeOutgoingPending: false)
+            >= DuelConstants.maxConcurrentDuels(league: duel.league) {
+            throw DuelError.leagueAtCapacity(league: duel.league)
+        }
+
+        let endAt = Date().addingTimeInterval(Double(duel.league) * DuelConstants.secondsPerDay)
+        do {
+            try await firestoreService.acceptDuel(duelId: id, endAt: endAt)
+        } catch {
+            throw DuelError.network(error.localizedDescription)
+        }
+    }
+
+    /// Opponent declines a pending challenge. Throws `DuelError`.
+    func declineChallenge(_ duel: DuelDTO) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { throw DuelError.notAuthorized }
+        guard let id = duel.id else { throw DuelError.notAuthorized }
+        guard duel.statusEnum == .pending, duel.opponentUid == me else { throw DuelError.notAuthorized }
+        do {
+            try await firestoreService.declineDuel(duelId: id)
+        } catch {
+            throw DuelError.network(error.localizedDescription)
+        }
+    }
+
+    /// Challenger cancels their own pending challenge (deletes it). Throws `DuelError`.
+    func cancelChallenge(_ duel: DuelDTO) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else { throw DuelError.notAuthorized }
+        guard let id = duel.id else { throw DuelError.notAuthorized }
+        guard duel.statusEnum == .pending, duel.challengerUid == me else { throw DuelError.notAuthorized }
+        do {
+            try await firestoreService.cancelDuel(duelId: id)
+        } catch {
+            throw DuelError.network(error.localizedDescription)
+        }
     }
 
     // MARK: - Activity Feed (Friend System Phase 7)
@@ -3681,6 +4647,7 @@ final class DataManager {
                     totalXP: stats.totalXP,
                     currentStreak: stats.currentStreak,
                     rank: stats.rank,
+                    rr: stats.rr,
                     weeklyGoalsMet: stats.weeklyGoalsMet,
                     weeklyAdherence: stats.weeklyAdherence,
                     isCurrentUser: false,
@@ -3696,7 +4663,8 @@ final class DataManager {
                     level: 1,
                     totalXP: 0,
                     currentStreak: 0,
-                    rank: Rank.iron.rawValue,
+                    rank: Rank.stone.rawValue,
+                    rr: nil,
                     weeklyGoalsMet: 0,
                     weeklyAdherence: 0.0,
                     isCurrentUser: false,
@@ -3715,6 +4683,7 @@ final class DataManager {
             totalXP: PlaceholderFriend.stats.totalXP,
             currentStreak: PlaceholderFriend.stats.currentStreak,
             rank: PlaceholderFriend.stats.rank,
+            rr: PlaceholderFriend.stats.rr,
             weeklyGoalsMet: PlaceholderFriend.stats.weeklyGoalsMet,
             weeklyAdherence: PlaceholderFriend.stats.weeklyAdherence,
             isCurrentUser: false,
@@ -3727,13 +4696,13 @@ final class DataManager {
         if ProcessInfo.processInfo.environment["HB_PREVIEW"] == "leaderboard" {
             entriesByUid["preview-demo-1"] = LeaderboardEntry(
                 uid: "preview-demo-1", username: "pixelpete", displayName: "Pixel Pete",
-                level: 18, totalXP: 7900, currentStreak: 12, rank: Rank.diamond.rawValue,
+                level: 18, totalXP: 7900, currentStreak: 12, rank: Rank.diamond.rawValue, rr: 1550,
                 weeklyGoalsMet: 6, weeklyAdherence: 6.0 / 7.0,
                 isCurrentUser: false, hasData: true
             )
             entriesByUid["preview-demo-2"] = LeaderboardEntry(
                 uid: "preview-demo-2", username: "ironivy", displayName: "Iron Ivy",
-                level: 4, totalXP: 760, currentStreak: 2, rank: "bronze",  // RR-0a: bronze case removed; preview-only literal
+                level: 4, totalXP: 760, currentStreak: 2, rank: Rank.copper.rawValue, rr: 450,
                 weeklyGoalsMet: 3, weeklyAdherence: 3.0 / 7.0,
                 isCurrentUser: false, hasData: true
             )
@@ -3759,7 +4728,8 @@ final class DataManager {
         let level = progress?.currentLevel ?? 1
         let totalXP = progress?.totalXP ?? 0
         let currentStreak = progress?.currentStreak ?? 0
-        let rank = progress?.rank ?? Rank.iron.rawValue
+        let rank = progress?.rank ?? Rank.stone.rawValue
+        let rr = progress?.rr
 
         let (goalsMet, adherence) = await computeWeeklyAdherence()
 
@@ -3777,6 +4747,7 @@ final class DataManager {
             totalXP: totalXP,
             currentStreak: currentStreak,
             rank: rank,
+            rr: rr,
             weeklyGoalsMet: goalsMet,
             weeklyAdherence: adherence,
             isCurrentUser: true,
@@ -3839,6 +4810,7 @@ final class DataManager {
                     totalXP: stats.totalXP,
                     currentStreak: stats.currentStreak,
                     rank: stats.rank,
+                    rr: stats.rr,
                     weeklyGoalsMet: stats.weeklyGoalsMet,
                     weeklyAdherence: stats.weeklyAdherence,
                     isCurrentUser: false,
@@ -3855,7 +4827,8 @@ final class DataManager {
                     level: 1,
                     totalXP: 0,
                     currentStreak: 0,
-                    rank: Rank.iron.rawValue,
+                    rank: Rank.stone.rawValue,
+                    rr: nil,
                     weeklyGoalsMet: 0,
                     weeklyAdherence: 0.0,
                     isCurrentUser: false,
@@ -4203,6 +5176,9 @@ struct LeaderboardEntry: Identifiable, Equatable {
     let totalXP: Int
     let currentStreak: Int
     let rank: String
+    /// RR-derived rank source (RR-0b). nil when the fetched projection predates
+    /// RR-0b — the row then falls back to the legacy `rank` string (untier-ed).
+    let rr: Int?
     let weeklyGoalsMet: Int
     let weeklyAdherence: Double
     let isCurrentUser: Bool
@@ -4218,8 +5194,26 @@ struct LeaderboardEntry: Identifiable, Equatable {
     /// where it harmlessly stays `false`.
     var isFriend: Bool = false
 
+    /// Tiered rank string ("Copper 2") when `rr` is known; the legacy published
+    /// rank string capitalized otherwise. The single rank-render path for the
+    /// leaderboard/guild rows — never re-implement the rr/legacy fallback per view.
+    var displayRank: String { Rank.displayString(rr: rr, legacyRank: rank) }
+
     /// Identifiable keys on the uid only.
     var id: String { uid }
+}
+
+/// The single shared rank-display formatter (RR-0b). Lives here — not in
+/// `Rank.swift` (RR-0a, frozen) — colocated with its primary consumer
+/// `LeaderboardEntry.displayRank`; usable from every rank surface app-wide.
+extension Rank {
+    /// Tiered display ("Copper 2") when `rr` is known; the legacy rank string
+    /// capitalized otherwise (may be a retired name like "Bronze" — never re-map,
+    /// never invent a tier).
+    static func displayString(rr: Int?, legacyRank: String) -> String {
+        if let rr { return Rank.rankTier(from: rr).displayName }
+        return legacyRank.capitalized
+    }
 }
 
 // MARK: - Placeholder Friend (TESTING ONLY)
@@ -4243,6 +5237,7 @@ enum PlaceholderFriend {
         totalXP: 4200,
         currentStreak: 5,
         rank: Rank.gold.rawValue,
+        rr: 1000,
         weeklyGoalsMet: 5,
         weeklyAdherence: 5.0 / 7.0,
         longestStreak: 21,
@@ -4338,6 +5333,42 @@ enum GuildError: LocalizedError {
         case .codeCollision:    return "Couldn't generate a unique guild code. Please try again."
         case .notAuthorized:    return "You don't have permission to do that."
         case .network(let m):   return "Couldn't reach the server. Try again. (\(m))"
+        }
+    }
+}
+
+// MARK: - Duel Error (Duels D1a)
+
+/// Errors surfaced by the duel flow, mirroring FriendError/GuildError's user-facing style.
+enum DuelError: LocalizedError {
+    case duplicateChallenge
+    case expired
+    case notAuthorized
+    case invalidLeague
+    case alreadyResolved
+    case rematchExpired
+    case network(String)
+    // D2: matchmaking
+    case candidateUnavailable   // a candidate ticket failed in-transaction verification (race)
+    case alreadyMatched         // someone matched me first; the incoming match wins
+    case notQueued              // no live ticket for me
+    // D2.6: concurrent duel caps
+    case leagueAtCapacity(league: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .duplicateChallenge:   return "You already have a pending challenge with them in this league."
+        case .expired:              return "This challenge is no longer available."
+        case .notAuthorized:        return "You can't do that."
+        case .invalidLeague:        return "Choose a 1, 3, or 5-day league."
+        case .alreadyResolved:      return "This duel is already over."
+        case .rematchExpired:       return "The rematch window has closed."
+        case .network(let m):       return "Couldn't reach the server. Try again. (\(m))"
+        case .candidateUnavailable: return "That match was just taken."
+        case .alreadyMatched:       return "You've already been matched."
+        case .notQueued:            return "You're not in the queue."
+        case .leagueAtCapacity(let league):
+            return "You're at the limit for \(league)-day duels — finish one first."
         }
     }
 }

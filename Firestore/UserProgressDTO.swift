@@ -34,9 +34,35 @@ struct UserProgressDTO: Codable {
     /// Serialized from UserProgress.claimedMilestones (comma-string) as a sorted Int array.
     var claimedMilestonesArray: [Int]
 
+    // MARK: - Duel record (D1b) — optional for legacy-doc decode; read via resolved accessors.
+    var duelWins: Int?
+    var duelLosses: Int?
+    var duelDraws: Int?
+    var currentWinStreak: Int?
+    var bestWinStreak: Int?
+
+    // MARK: - Per-league duel record (D3) — optional for legacy-doc decode; resolved accessors default 0.
+    var duelWins1: Int?
+    var duelWins3: Int?
+    var duelWins5: Int?
+    var winStreak1: Int?
+    var winStreak3: Int?
+    var winStreak5: Int?
+
     /// Legacy-safe RR accessor — the single place the nil→starting fallback lives.
     /// Missing/absent `rr` (older Firestore docs) resolves to `Rank.startingRR`, never 0.
     var resolvedRR: Int { rr ?? Rank.startingRR }
+    var resolvedDuelWins: Int { duelWins ?? 0 }
+    var resolvedDuelLosses: Int { duelLosses ?? 0 }
+    var resolvedDuelDraws: Int { duelDraws ?? 0 }
+    var resolvedCurrentWinStreak: Int { currentWinStreak ?? 0 }
+    var resolvedBestWinStreak: Int { bestWinStreak ?? 0 }
+    var resolvedDuelWins1: Int { duelWins1 ?? 0 }
+    var resolvedDuelWins3: Int { duelWins3 ?? 0 }
+    var resolvedDuelWins5: Int { duelWins5 ?? 0 }
+    var resolvedWinStreak1: Int { winStreak1 ?? 0 }
+    var resolvedWinStreak3: Int { winStreak3 ?? 0 }
+    var resolvedWinStreak5: Int { winStreak5 ?? 0 }
 
     // NOTE: `rank` is intentionally excluded — it is a computed function of `rr`
     // (`Rank.getRank(from: rr)`) and must never be written or read from Firestore.
@@ -47,6 +73,17 @@ struct UserProgressDTO: Codable {
         self.id = progress.id.uuidString
         self.totalXP = progress.totalXP
         self.rr = progress.rr
+        self.duelWins = progress.duelWins
+        self.duelLosses = progress.duelLosses
+        self.duelDraws = progress.duelDraws
+        self.currentWinStreak = progress.currentWinStreak
+        self.bestWinStreak = progress.bestWinStreak
+        self.duelWins1 = progress.duelWins1
+        self.duelWins3 = progress.duelWins3
+        self.duelWins5 = progress.duelWins5
+        self.winStreak1 = progress.winStreak1
+        self.winStreak3 = progress.winStreak3
+        self.winStreak5 = progress.winStreak5
         self.currentStreak = progress.currentStreak
         self.longestStreak = progress.longestStreak
         self.lastActiveDate = progress.lastActiveDate
@@ -71,6 +108,17 @@ struct UserProgressDTO: Codable {
         )
         progress.userId = userId
         progress.claimedMilestones = claimedMilestonesArray.sorted().map { String($0) }.joined(separator: ",")
+        progress.duelWins = resolvedDuelWins
+        progress.duelLosses = resolvedDuelLosses
+        progress.duelDraws = resolvedDuelDraws
+        progress.currentWinStreak = resolvedCurrentWinStreak
+        progress.bestWinStreak = resolvedBestWinStreak
+        progress.duelWins1 = resolvedDuelWins1
+        progress.duelWins3 = resolvedDuelWins3
+        progress.duelWins5 = resolvedDuelWins5
+        progress.winStreak1 = resolvedWinStreak1
+        progress.winStreak3 = resolvedWinStreak3
+        progress.winStreak5 = resolvedWinStreak5
         return progress
     }
 
@@ -84,6 +132,17 @@ struct UserProgressDTO: Codable {
         guard UUID(uuidString: id) == progress.id else { return true }
         return totalXP != progress.totalXP
             || resolvedRR != progress.rr
+            || resolvedDuelWins != progress.duelWins
+            || resolvedDuelLosses != progress.duelLosses
+            || resolvedDuelDraws != progress.duelDraws
+            || resolvedCurrentWinStreak != progress.currentWinStreak
+            || resolvedBestWinStreak != progress.bestWinStreak
+            || resolvedDuelWins1 != progress.duelWins1
+            || resolvedDuelWins3 != progress.duelWins3
+            || resolvedDuelWins5 != progress.duelWins5
+            || resolvedWinStreak1 != progress.winStreak1
+            || resolvedWinStreak3 != progress.winStreak3
+            || resolvedWinStreak5 != progress.winStreak5
             || currentStreak != progress.currentStreak
             || longestStreak != progress.longestStreak
             || lastActiveDate != progress.lastActiveDate

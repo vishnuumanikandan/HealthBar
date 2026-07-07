@@ -1384,6 +1384,354 @@ final class FirestoreServiceImpl: FirestoreService {
         }
     }
 
+    // MARK: - FirestoreService: Duels (D1a)
+
+    /// Top-level `duels` collection — a duel is owned by neither participant
+    /// (precedent: guilds).
+    private var duelsCollection: CollectionReference {
+        db.collection("duels")
+    }
+
+    private func duelDocument(id: String) -> DocumentReference {
+        db.collection("duels").document(id)
+    }
+
+    func createDuel(_ duel: DuelDTO) async throws -> String {
+        // Write EXACTLY the create rule's field set (keys().hasOnly). `createdAt` is
+        // the server sentinel; `respondBy` is the client-computed cutoff. `id`,
+        // `acceptedAt`, `endAt`, and the reserved fields are intentionally absent.
+        let ref = duelsCollection.document()
+        var data: [String: Any] = [
+            "participantUids": duel.participantUids,
+            "challengerUid": duel.challengerUid,
+            "opponentUid": duel.opponentUid,
+            "challengerUsername": duel.challengerUsername,
+            "challengerDisplayName": duel.challengerDisplayName,
+            "opponentUsername": duel.opponentUsername,
+            "opponentDisplayName": duel.opponentDisplayName,
+            "league": duel.league,
+            "status": duel.status,
+            "createdAt": FieldValue.serverTimestamp(),
+            "respondBy": Timestamp(date: duel.respondBy),
+            "challengerScore": duel.challengerScore,
+            "opponentScore": duel.opponentScore
+        ]
+        // D1b rematch: present ONLY when this challenge is a rematch of a prior duel
+        // (the create rule permits it via the extended `hasOnly` list + is-string guard).
+        if let rematchOfDuelId = duel.rematchOfDuelId {
+            data["rematchOfDuelId"] = rematchOfDuelId
+        }
+        try await ref.setData(data)
+        return ref.documentID
+    }
+
+    func fetchMyDuels(uid: String) async throws -> [DuelDTO] {
+        let snapshot = try await duelsCollection
+            .whereField("participantUids", arrayContains: uid)
+            .order(by: "createdAt", descending: true)
+            .limit(to: 50)
+            .getDocuments()
+        // Decode-tolerant: skip any doc that fails to decode. Stamp the doc id.
+        return snapshot.documents.compactMap { doc in
+            guard var dto = try? doc.data(as: DuelDTO.self) else { return nil }
+            dto.id = doc.documentID
+            return dto
+        }
+    }
+
+    func acceptDuel(duelId: String, endAt: Date) async throws {
+        try await duelDocument(id: duelId).updateData([
+            "status": DuelStatus.active.rawValue,
+            "acceptedAt": FieldValue.serverTimestamp(),
+            "endAt": Timestamp(date: endAt)
+        ])
+    }
+
+    func declineDuel(duelId: String) async throws {
+        try await duelDocument(id: duelId).updateData(["status": DuelStatus.declined.rawValue])
+    }
+
+    func expireDuel(duelId: String) async throws {
+        try await duelDocument(id: duelId).updateData(["status": DuelStatus.expired.rawValue])
+    }
+
+    func cancelDuel(duelId: String) async throws {
+        try await duelDocument(id: duelId).delete()
+    }
+
+    // MARK: - FirestoreService: Duels (D1b)
+
+    func updateDuelScore(duelId: String, isChallenger: Bool, score: Double, dayScores: [Double]) async throws {
+        // Touch ONLY my side's three score fields (matches the isOwnScoreWrite() rule).
+        try await duelDocument(id: duelId).updateData([
+            (isChallenger ? "challengerScore" : "opponentScore"): score,
+            (isChallenger ? "challengerDayScores" : "opponentDayScores"): dayScores,
+            (isChallenger ? "challengerScoreUpdatedAt" : "opponentScoreUpdatedAt"): FieldValue.serverTimestamp()
+        ])
+    }
+
+    func resolveDuel(duelId: String, winnerUid: String?, challengerDelta: Int, opponentDelta: Int) async throws {
+        var data: [String: Any] = [
+            "status": DuelStatus.resolved.rawValue,
+            "resolvedAt": FieldValue.serverTimestamp(),
+            "challengerRRDelta": challengerDelta,
+            "opponentRRDelta": opponentDelta
+        ]
+        if let winnerUid { data["winnerUid"] = winnerUid }  // omitted on a draw
+        try await duelDocument(id: duelId).updateData(data)
+    }
+
+    func forfeitDuel(duelId: String, forfeiterUid: String, challengerDelta: Int, opponentDelta: Int) async throws {
+        try await duelDocument(id: duelId).updateData([
+            "status": DuelStatus.forfeited.rawValue,
+            "forfeitedBy": forfeiterUid,
+            "resolvedAt": FieldValue.serverTimestamp(),
+            "challengerRRDelta": challengerDelta,
+            "opponentRRDelta": opponentDelta
+        ])
+    }
+
+    func markDuelRRApplied(duelId: String, isChallenger: Bool) async throws {
+        try await duelDocument(id: duelId).updateData([
+            (isChallenger ? "challengerRRApplied" : "opponentRRApplied"): true
+        ])
+    }
+
+    // MARK: - FirestoreService: QTE Days (D1d)
+
+    private func qteDaysCollection(for userId: String) -> CollectionReference {
+        db.collection("users").document(userId).collection("qteDays")
+    }
+
+    func uploadQTEDay(_ day: QTEDayDTO, userId: String) async throws {
+        // Doc id = dateKey (one per day). merge:true so a field write never clobbers others.
+        try qteDaysCollection(for: userId).document(day.dateKey).setData(from: day, merge: true)
+    }
+
+    func fetchQTEDays(userId: String) async throws -> [QTEDayDTO] {
+        let snapshot = try await qteDaysCollection(for: userId).getDocuments()
+        return snapshot.documents.compactMap { try? $0.data(as: QTEDayDTO.self) }
+    }
+
+    // MARK: - FirestoreService: Matchmaking (D2)
+
+    /// Top-level `duelQueue` collection — doc-id-as-lock (one ticket per user; the
+    /// `guildMemberships` precedent).
+    private var duelQueueCollection: CollectionReference {
+        db.collection("duelQueue")
+    }
+
+    private func duelQueueDocument(for uid: String) -> DocumentReference {
+        db.collection("duelQueue").document(uid)
+    }
+
+    func enqueueDuelTicket(_ ticket: DuelQueueTicketDTO) async throws {
+        // Write EXACTLY the create rule's field set (keys().hasOnly). `createdAt` is the
+        // server sentinel; `expiresAt` is the client-computed cutoff; `claimedBy` MUST start
+        // as "". The claim fields (claimedBy != "" / claimedAt / matchedDuelId) and `id` are
+        // intentionally absent. Enqueue is delete-then-create at the DataManager layer — a
+        // setData over an existing doc evaluates as an UPDATE, which the ticket rules permit
+        // only for the expiresAt keep-alive and the claim.
+        let data: [String: Any] = [
+            "uid": ticket.uid,
+            "username": ticket.username,
+            "displayName": ticket.displayName,
+            "rr": ticket.rr,
+            "league": ticket.league,
+            "createdAt": FieldValue.serverTimestamp(),
+            "expiresAt": Timestamp(date: ticket.expiresAt),
+            "claimedBy": ""
+        ]
+        try await duelQueueDocument(for: ticket.uid).setData(data)
+    }
+
+    func fetchMyDuelTicket(uid: String) async throws -> DuelQueueTicketDTO? {
+        let snapshot = try await duelQueueDocument(for: uid).getDocument()
+        guard snapshot.exists, var dto = try? snapshot.data(as: DuelQueueTicketDTO.self) else { return nil }
+        dto.id = snapshot.documentID
+        return dto
+    }
+
+    func fetchQueueCandidates(league: Int, rrLo: Int, rrHi: Int, limit: Int) async throws -> [DuelQueueTicketDTO] {
+        // Equality on league + claimedBy, range/order on rr → needs the composite index
+        // (league ASC, claimedBy ASC, rr ASC) in firestore.indexes.json.
+        let snapshot = try await duelQueueCollection
+            .whereField("league", isEqualTo: league)
+            .whereField("claimedBy", isEqualTo: "")
+            .whereField("rr", isGreaterThanOrEqualTo: rrLo)
+            .whereField("rr", isLessThanOrEqualTo: rrHi)
+            .order(by: "rr")
+            .limit(to: limit)
+            .getDocuments()
+        return snapshot.documents.compactMap { doc in
+            guard var dto = try? doc.data(as: DuelQueueTicketDTO.self) else { return nil }
+            dto.id = doc.documentID
+            return dto
+        }
+    }
+
+    func deleteDuelTicket(uid: String) async throws {
+        try await deleteDocument(ref: duelQueueDocument(for: uid))
+    }
+
+    func claimTicketAndCreateDuel(candidate: DuelQueueTicketDTO, myTicketUid: String,
+                                  duel: DuelDTO) async throws -> String {
+        let myTicketRef = duelQueueDocument(for: myTicketUid)
+        let candidateRef = duelQueueDocument(for: candidate.uid)
+        // Pre-generate the duel doc (random id) so the ticket update can point at it and we
+        // can return a stable id across transaction retries.
+        let duelRef = duelsCollection.document()
+
+        // The matchmade duel body — the same manual-dict style as createDuel, writing EXACTLY
+        // the matchmade create rule's key set. Born active: createdAt/acceptedAt are server
+        // sentinels; respondBy/endAt are client-computed Dates; scores 0; matchmade == true.
+        let endAt = duel.endAt ?? Date().addingTimeInterval(Double(duel.league) * DuelConstants.secondsPerDay)
+        let duelData: [String: Any] = [
+            "participantUids": duel.participantUids,
+            "challengerUid": duel.challengerUid,
+            "opponentUid": duel.opponentUid,
+            "challengerUsername": duel.challengerUsername,
+            "challengerDisplayName": duel.challengerDisplayName,
+            "opponentUsername": duel.opponentUsername,
+            "opponentDisplayName": duel.opponentDisplayName,
+            "league": duel.league,
+            "status": DuelStatus.active.rawValue,
+            "createdAt": FieldValue.serverTimestamp(),
+            "respondBy": Timestamp(date: duel.respondBy),
+            "acceptedAt": FieldValue.serverTimestamp(),
+            "endAt": Timestamp(date: endAt),
+            "challengerScore": 0.0,
+            "opponentScore": 0.0,
+            "challengerDayScores": [Double](),
+            "opponentDayScores": [Double](),
+            "matchmade": true
+        ]
+
+        do {
+            try await db.runTransaction { transaction, errorPointer in
+                // Step 0 — read MY OWN ticket. Missing or already claimed ⇒ someone matched me
+                // while I searched; the incoming match wins. Abort with alreadyMatched. This
+                // single read collapses the mutual-claim race to exactly one duel.
+                let mySnapshot: DocumentSnapshot
+                do {
+                    mySnapshot = try transaction.getDocument(myTicketRef)
+                } catch let fetchError as NSError {
+                    errorPointer?.pointee = fetchError
+                    return nil
+                }
+                let myClaimedBy = mySnapshot.data()?["claimedBy"] as? String
+                if !mySnapshot.exists || !(myClaimedBy ?? "").isEmpty {
+                    errorPointer?.pointee = NSError(domain: "DuelQueueError", code: 1,
+                                                    userInfo: [NSLocalizedDescriptionKey: "already_matched"])
+                    return nil
+                }
+
+                // Verify the candidate's ticket inside the transaction: exists, unclaimed,
+                // not expired, same league. Any failure ⇒ candidateUnavailable (caller tries
+                // the next candidate).
+                let candidateSnapshot: DocumentSnapshot
+                do {
+                    candidateSnapshot = try transaction.getDocument(candidateRef)
+                } catch let fetchError as NSError {
+                    errorPointer?.pointee = fetchError
+                    return nil
+                }
+                let cData = candidateSnapshot.data()
+                let cClaimedBy = cData?["claimedBy"] as? String
+                let cLeague = cData?["league"] as? Int
+                let cExpiresAt = (cData?["expiresAt"] as? Timestamp)?.dateValue()
+                let unavailable = !candidateSnapshot.exists
+                    || !(cClaimedBy ?? "not-empty").isEmpty
+                    || cLeague != duel.league
+                    || cExpiresAt == nil
+                    || (cExpiresAt.map { $0 <= Date() } ?? true)
+                if unavailable {
+                    errorPointer?.pointee = NSError(domain: "DuelQueueError", code: 2,
+                                                    userInfo: [NSLocalizedDescriptionKey: "candidate_unavailable"])
+                    return nil
+                }
+
+                // Claim THEIR ticket, create the duel, delete MY ticket — all atomic. The duel
+                // create rule proves the claim via getAfter(candidate ticket).
+                transaction.updateData([
+                    "claimedBy": duel.challengerUid,
+                    "claimedAt": FieldValue.serverTimestamp(),
+                    "matchedDuelId": duelRef.documentID
+                ], forDocument: candidateRef)
+                transaction.setData(duelData, forDocument: duelRef)
+                transaction.deleteDocument(myTicketRef)
+                return nil
+            }
+        } catch let error as NSError {
+            if error.domain == "DuelQueueError" {
+                if error.code == 1 { throw DuelError.alreadyMatched }
+                if error.code == 2 { throw DuelError.candidateUnavailable }
+            }
+            throw DuelError.network(error.localizedDescription)
+        }
+        return duelRef.documentID
+    }
+
+    // MARK: - FirestoreService: Global Leaderboard (D3)
+
+    /// Top-level `leaderboard` collection — owner-published, world-readable ladder projection.
+    private var leaderboardCollection: CollectionReference {
+        db.collection("leaderboard")
+    }
+
+    private func leaderboardDocument(for uid: String) -> DocumentReference {
+        db.collection("leaderboard").document(uid)
+    }
+
+    func upsertLeaderboardEntry(_ entry: GlobalLeaderboardDTO, userId: String) async throws {
+        // Manual dict of EXACTLY the create/update rule's field set (keys().hasOnly). `id` is
+        // never written; `updatedAt` is the server sentinel. setData WITHOUT merge — a full
+        // overwrite keeps stale keys impossible.
+        let data: [String: Any] = [
+            "username": entry.username,
+            "displayName": entry.displayName,
+            "rr": entry.rr,
+            "wins1": entry.wins1,
+            "wins3": entry.wins3,
+            "wins5": entry.wins5,
+            "streak1": entry.streak1,
+            "streak3": entry.streak3,
+            "streak5": entry.streak5,
+            "updatedAt": FieldValue.serverTimestamp()
+        ]
+        try await leaderboardDocument(for: userId).setData(data)
+    }
+
+    func fetchLeaderboard(orderField: String, limit: Int) async throws -> [GlobalLeaderboardDTO] {
+        // Single-field orderBy + limit — automatic single-field index, no composite (D8).
+        let snapshot = try await leaderboardCollection
+            .order(by: orderField, descending: true)
+            .limit(to: limit)
+            .getDocuments()
+        return snapshot.documents.compactMap { doc in
+            guard var dto = try? doc.data(as: GlobalLeaderboardDTO.self) else { return nil }
+            dto.id = doc.documentID
+            return dto
+        }
+    }
+
+    func fetchMyLeaderboardEntry(userId: String) async throws -> GlobalLeaderboardDTO? {
+        let snapshot = try await leaderboardDocument(for: userId).getDocument()
+        guard snapshot.exists, var dto = try? snapshot.data(as: GlobalLeaderboardDTO.self) else { return nil }
+        dto.id = snapshot.documentID
+        return dto
+    }
+
+    func fetchLeaderboardPosition(myRR: Int) async throws -> Int {
+        // Standard competition ranking: count of higher-RR rows + 1. count() aggregation on a
+        // single inequality filter — automatic index, no composite.
+        let snapshot = try await leaderboardCollection
+            .whereField("rr", isGreaterThan: myRR)
+            .count
+            .getAggregation(source: .server)
+        return snapshot.count.intValue + 1
+    }
+
     // MARK: - FirestoreService: Account Deletion
 
     /// Deletes all Firestore data under users/{userId}/ in batches of ≤500.
@@ -1417,6 +1765,15 @@ final class FirestoreServiceImpl: FirestoreService {
             // Release the username → email login mapping too (owner-guarded).
             try? await deleteLoginHandle(handleKey: username, uid: userId)
         }
+
+        // D2: delete my matchmaking queue ticket (top-level, like the username handle — NOT
+        // covered by the subcollection sweep). Best-effort; a claimed-but-uncleaned ticket is
+        // fine to delete (the duel already exists).
+        try? await deleteDuelTicket(uid: userId)
+
+        // D3: delete my global leaderboard row (top-level, best-effort). A failed delete leaves
+        // a ghost row — acceptable, consistent with the username-release posture.
+        try? await deleteDocument(ref: leaderboardDocument(for: userId))
 
         // Cross-user cleanup (Friend System Phase 2): remove every edge and request
         // mirror that points at this user from OTHER users' spaces, so no dangling
@@ -1463,6 +1820,37 @@ final class FirestoreServiceImpl: FirestoreService {
             crossIndex = end
         }
 
+        // Duels (D1a): self-contained top-level docs — NOT under users/{uid}, so the
+        // per-subcollection sweep below never reaches them. Delete my pending OUTGOING
+        // challenges and decline pending INCOMING ones. ACTIVE duels are left untouched;
+        // the opponent resolves them normally against a frozen score.
+        // Non-fatal: duel cleanup failures are swallowed and the deletion continues —
+        // duels are self-contained snapshots, so nothing orphans. Pending: delete my
+        // outgoing / decline my incoming. Active (D1b): forfeit (deterministic deltas). If a
+        // forfeit write fails, the duel stays active and the OTHER participant still resolves
+        // it normally against a frozen score — no cleanup job exists or is needed.
+        if let duelSnapshot = try? await duelsCollection
+            .whereField("participantUids", arrayContains: userId).getDocuments() {
+            for doc in duelSnapshot.documents {
+                guard let dto = try? doc.data(as: DuelDTO.self) else { continue }
+                switch dto.statusEnum {
+                case .pending:
+                    if dto.challengerUid == userId {
+                        try? await doc.reference.delete()               // cancel my outgoing
+                    } else {
+                        try? await declineDuel(duelId: doc.documentID)  // decline my incoming
+                    }
+                case .active:
+                    let deltas = DuelDTO.forfeitDeltas(duelId: doc.documentID, league: dto.league,
+                                                       forfeiterIsChallenger: dto.challengerUid == userId)
+                    try? await forfeitDuel(duelId: doc.documentID, forfeiterUid: userId,
+                                           challengerDelta: deltas.challenger, opponentDelta: deltas.opponent)
+                default:
+                    break  // resolved / forfeited / declined / expired: nothing to do
+                }
+            }
+        }
+
         // Cascade (Phase 8): each feedEvents/{eventId} may have a `cheers`
         // subcollection that the generic per-subcollection delete below does NOT
         // reach (it removes only the event docs). Delete every event's cheers
@@ -1485,7 +1873,7 @@ final class FirestoreServiceImpl: FirestoreService {
             "customFoods", "savedMeals", "savedRecipes", "personalBaselines",
             "foodFingerprints", "userProgress", "profile", "account", "badges",
             "friends", "friendRequests", "sentRequests", "public", "feedEvents",
-            "sharedItems"
+            "sharedItems", "qteDays"
         ]
 
         let userDoc = db.collection("users").document(userId)

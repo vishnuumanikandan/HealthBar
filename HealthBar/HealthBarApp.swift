@@ -42,7 +42,8 @@ struct HealthBarApp: App {
                 UserProfile.self,
                 BadgeProgress.self,
                 Friend.self,
-                FriendRequest.self
+                FriendRequest.self,
+                QTEDay.self
             ])
 
             let modelConfiguration = ModelConfiguration(

@@ -10,6 +10,7 @@ import Foundation
 /// The metric the guild leaderboard ranks by. All three live in the fetched
 /// `public/stats` projection, so switching metric re-sorts in memory — never refetches.
 enum GuildMetric: String, CaseIterable, Identifiable {
+    case rank = "Rank"        // D3 — the default; guild leaderboard is an implicit rank ladder.
     case adherence = "Adherence"
     case xp = "XP"
     case level = "Level"
@@ -39,9 +40,8 @@ final class GuildLeaderboardViewModel {
     /// unsorted; `sortedEntries` applies the selected-metric comparator.
     var entries: [LeaderboardEntry] = []
 
-    /// Selected ranking metric. Default = weekly adherence (matches the friend
-    /// leaderboard's primary metric).
-    var metric: GuildMetric = .adherence
+    /// Selected ranking metric. Default = Rank (D3 — the guild board is an implicit rank ladder).
+    var metric: GuildMetric = .rank
 
     var isLoading: Bool = false
     var loadError: String? = nil
@@ -65,6 +65,16 @@ final class GuildLeaderboardViewModel {
             if lhs.hasData != rhs.hasData { return lhs.hasData }
 
             switch metric {
+            case .rank:
+                // rr descending; nil-rr rows after rr-present ones; ties → totalXP desc, then username.
+                switch (lhs.rr, rhs.rr) {
+                case let (l?, r?) where l != r: return l > r
+                case (nil, _?): return false
+                case (_?, nil): return true
+                default: break
+                }
+                if lhs.totalXP != rhs.totalXP { return lhs.totalXP > rhs.totalXP }
+                return lhs.username.localizedCaseInsensitiveCompare(rhs.username) == .orderedAscending
             case .adherence:
                 if lhs.weeklyAdherence != rhs.weeklyAdherence { return lhs.weeklyAdherence > rhs.weeklyAdherence }
                 if lhs.totalXP != rhs.totalXP { return lhs.totalXP > rhs.totalXP }

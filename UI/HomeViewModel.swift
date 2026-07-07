@@ -182,6 +182,28 @@ final class HomeViewModel {
         self.coordinator = coordinator
     }
 
+    // MARK: - Duels (D1c)
+
+    /// Active duels for the Home strip, ending soonest first (like Battle). Home NEVER marks
+    /// seen — the "since you looked" deltas persist until the user views Battle or an Arena.
+    private(set) var activeDuels: [DuelDTO] = []
+
+    /// Loads duels through the full lifecycle (score push, resolution, RR claim) and keeps
+    /// the active ones for the strip. Guests never call this (gated in the view).
+    @MainActor
+    func loadDuels(myUid: String) async {
+        let all = await coordinator.loadMyDuels()
+        let actives = all.filter { $0.statusEnum == .active }
+        activeDuels = actives.sorted { (a: DuelDTO, b: DuelDTO) in
+            (a.endAt ?? Date.distantFuture) < (b.endAt ?? Date.distantFuture)
+        }
+    }
+
+    /// Opponent's movement since last markSeen for an active duel, else nil.
+    func deltaSinceSeen(for duel: DuelDTO, myUid: String) -> Double? {
+        DuelSeenStore().deltaSinceSeen(for: duel, myUid: myUid)
+    }
+
     // MARK: - Public Methods
 
     /// Loads today's summary data

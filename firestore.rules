@@ -164,7 +164,7 @@ service cloud.firestore {
         && request.auth.uid == ownerUid
         && request.resource.data.keys().hasOnly(
              ['username', 'displayName', 'level', 'totalXP', 'currentStreak',
-              'rank', 'weeklyGoalsMet', 'weeklyAdherence', 'updatedAt',
+              'rank', 'rr', 'weeklyGoalsMet', 'weeklyAdherence', 'updatedAt',
               'longestStreak', 'joinedAt', 'badgeCount', 'earnedBadgeIds'])
         && request.resource.data.username is string
         && request.resource.data.displayName is string
@@ -188,7 +188,9 @@ service cloud.firestore {
         && request.resource.data.badgeCount is int
         && request.resource.data.badgeCount >= 0
         && request.resource.data.earnedBadgeIds is list
-        && request.resource.data.earnedBadgeIds.size() <= 50;
+        && request.resource.data.earnedBadgeIds.size() <= 50
+        && (!('rr' in request.resource.data)
+            || (request.resource.data.rr is int && request.resource.data.rr >= 0));
 
       // Owner-only delete: no field validation is possible on delete, and
       // account deletion must be able to remove this doc.
@@ -468,6 +470,297 @@ service cloud.firestore {
                             && get(/databases/$(database)/documents/guilds/$(resource.data.guildCode)).data.ownerUid != uid)
                          || request.auth.uid == get(/databases/$(database)/documents/guilds/$(resource.data.guildCode)).data.ownerUid
                        );
+    }
+
+    // Duel matchmaking queue (D2) — doc-id-as-lock (one ticket per user; precedent:
+    // guildMemberships). Tickets are readable by any authenticated user (open
+    // matchmaking; ephemeral snapshot — see design brief D7). The claim is the ONLY
+    // cross-user write: claimedBy "" → claimer uid, atomically alongside the duel
+    // create (verified there via getAfter).
+    match /duelQueue/{uid} {
+      allow read: if request.auth != null;
+
+      // Owner CREATES their own unclaimed ticket, exact shape. There is deliberately no
+      // overwrite path: enqueue is delete-then-create (setData over an existing doc
+      // evaluates as an update, which this rule set intentionally does not permit beyond
+      // the keep-alive and the claim). rr bounded sanely;
+      // league mirrors DuelConstants.leagues; claimedBy must start as "".
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.keys().hasOnly(
+             ['uid','username','displayName','rr','league','createdAt','expiresAt','claimedBy'])
+        && request.resource.data.username is string && request.resource.data.username.size() < 300
+        && request.resource.data.displayName is string && request.resource.data.displayName.size() < 300
+        && request.resource.data.rr is int
+        && request.resource.data.rr >= 0 && request.resource.data.rr <= 100000
+        && request.resource.data.league in [1, 3, 5]
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.claimedBy == '';
+
+      // Two legal updates:
+      //  a) owner re-stamps expiresAt on their own UNCLAIMED ticket (poll keep-alive)
+      //  b) the CLAIM: another user sets claimedBy ""→their uid + claimedAt +
+      //     matchedDuelId on a live, unclaimed ticket
+      allow update: if request.auth != null
+        && (
+             (request.auth.uid == uid
+                && resource.data.claimedBy == ''
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['expiresAt'])
+                && request.resource.data.expiresAt is timestamp)
+             ||
+             (request.auth.uid != uid
+                && resource.data.claimedBy == ''
+                && request.time < resource.data.expiresAt
+                && request.resource.data.claimedBy == request.auth.uid
+                && request.resource.data.matchedDuelId is string
+                && request.resource.data.diff(resource.data).affectedKeys()
+                     .hasOnly(['claimedBy','claimedAt','matchedDuelId']))
+           );
+
+      // Owner deletes anytime (cancel/cleanup); anyone deletes an EXPIRED ticket (lazy sweep).
+      allow delete: if request.auth != null
+        && (request.auth.uid == uid || request.time > resource.data.expiresAt);
+    }
+
+    // Global leaderboard (D3) — owner-published, WORLD-readable projection (any
+    // authenticated user; deliberate — this is the global ladder). Doc id == owner uid.
+    // Contains ONLY ladder fields + identity snapshots; private data never lands here.
+    match /leaderboard/{uid} {
+      allow get, list: if request.auth != null;
+
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(
+             ['username','displayName','rr','wins1','wins3','wins5',
+              'streak1','streak3','streak5','updatedAt'])
+        && request.resource.data.username is string && request.resource.data.username.size() < 300
+        && request.resource.data.displayName is string && request.resource.data.displayName.size() < 300
+        && request.resource.data.rr is int && request.resource.data.rr >= 0
+        && request.resource.data.wins1 is int && request.resource.data.wins1 >= 0
+        && request.resource.data.wins3 is int && request.resource.data.wins3 >= 0
+        && request.resource.data.wins5 is int && request.resource.data.wins5 >= 0
+        && request.resource.data.streak1 is int && request.resource.data.streak1 >= 0
+        && request.resource.data.streak3 is int && request.resource.data.streak3 >= 0
+        && request.resource.data.streak5 is int && request.resource.data.streak5 >= 0;
+      // updatedAt intentionally not type-checked (serverTimestamp sentinel precedent).
+
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Duels (D1a) — top-level, owned by neither participant (precedent: guilds).
+    // A duel is queried by membership (participantUids arrayContains). D1a covers
+    // the challenge lifecycle only; scoring/resolution transitions arrive in D1b.
+    match /duels/{duelId} {
+      // Participants only.
+      allow read: if request.auth != null
+                  && request.auth.uid in resource.data.participantUids;
+
+      // Create is factored into named helpers (D2) so the challenge path and the matchmade
+      // path coexist. isChallengeCreate() is the D1a body verbatim (zero behavioral change:
+      // participantUids MUST equal [challengerUid, opponentUid] exactly — index 0 = challenger
+      // invariant). isMatchmadeCreate() is the born-active ranked-queue path.
+      function isChallengeCreate() {
+        return request.resource.data.challengerUid == request.auth.uid
+          && request.resource.data.opponentUid is string
+          && request.resource.data.opponentUid != request.auth.uid
+          && request.resource.data.participantUids ==
+               [request.resource.data.challengerUid, request.resource.data.opponentUid]
+          && request.resource.data.status == 'pending'
+          && request.resource.data.league in [1, 3, 5]
+          && request.resource.data.challengerScore == 0
+          && request.resource.data.opponentScore == 0
+          && request.resource.data.respondBy is timestamp
+          && request.resource.data.challengerUsername is string && request.resource.data.challengerUsername.size() < 300
+          && request.resource.data.challengerDisplayName is string && request.resource.data.challengerDisplayName.size() < 300
+          && request.resource.data.opponentUsername is string && request.resource.data.opponentUsername.size() < 300
+          && request.resource.data.opponentDisplayName is string && request.resource.data.opponentDisplayName.size() < 300
+          && (!('rematchOfDuelId' in request.resource.data)
+                || request.resource.data.rematchOfDuelId is string)
+          && request.resource.data.keys().hasOnly(['participantUids','challengerUid','opponentUid',
+               'challengerUsername','challengerDisplayName','opponentUsername','opponentDisplayName',
+               'league','status','createdAt','respondBy','challengerScore','opponentScore',
+               'rematchOfDuelId']);
+      }
+
+      // D2: matchmade create — born active, authored by the claimer, provable via the
+      // claim written in the SAME transaction (getAfter sees post-transaction state).
+      function isMatchmadeCreate() {
+        return request.resource.data.challengerUid == request.auth.uid
+          && request.resource.data.opponentUid is string
+          && request.resource.data.opponentUid != request.auth.uid
+          && request.resource.data.participantUids ==
+               [request.resource.data.challengerUid, request.resource.data.opponentUid]
+          && request.resource.data.status == 'active'
+          && request.resource.data.matchmade == true
+          && request.resource.data.league in [1, 3, 5]
+          && request.resource.data.challengerScore == 0
+          && request.resource.data.opponentScore == 0
+          // acceptedAt/createdAt are intentionally NOT type-checked: they are written as
+          // serverTimestamp sentinels (same precedent as usernames.claimedAt,
+          // public/stats.updatedAt, feedEvents.createdAt). endAt/respondBy are
+          // client-computed Dates and ARE checked.
+          && request.resource.data.endAt is timestamp
+          && request.resource.data.respondBy is timestamp
+          && request.resource.data.challengerUsername is string && request.resource.data.challengerUsername.size() < 300
+          && request.resource.data.challengerDisplayName is string && request.resource.data.challengerDisplayName.size() < 300
+          && request.resource.data.opponentUsername is string && request.resource.data.opponentUsername.size() < 300
+          && request.resource.data.opponentDisplayName is string && request.resource.data.opponentDisplayName.size() < 300
+          && request.resource.data.keys().hasOnly(['participantUids','challengerUid','opponentUid',
+               'challengerUsername','challengerDisplayName','opponentUsername','opponentDisplayName',
+               'league','status','createdAt','respondBy','acceptedAt','endAt',
+               'challengerScore','opponentScore','challengerDayScores','opponentDayScores','matchmade'])
+          // The proof: this very transaction claims the opponent's ticket for me and
+          // points it at THIS duel document.
+          && getAfter(/databases/$(database)/documents/duelQueue/$(request.resource.data.opponentUid)).data.claimedBy
+               == request.auth.uid
+          && getAfter(/databases/$(database)/documents/duelQueue/$(request.resource.data.opponentUid)).data.matchedDuelId
+               == duelId;
+      }
+
+      allow create: if request.auth != null
+                    && (isChallengeCreate() || isMatchmadeCreate());
+
+      // The update rule is factored into named helpers (D1b). RR-delta bounds are
+      // league-scaled (D2.5) — see the winDeltaOk/lossDeltaOk/drawDeltaOk/
+      // forfeitLossDeltaOk/forfeitWinnerDeltaOk helpers below, which mirror the
+      // DuelConstants D2.5 table EXACTLY (edit both places in the same change). The score
+      // ceiling 110 mirrors DuelConstants.maxDayScore — keep both in sync with the client.
+
+      // D1a: pending → active/declined/expired (only status/acceptedAt/endAt change).
+      function isPendingTransition() {
+        return resource.data.status == 'pending'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','acceptedAt','endAt'])
+          && (
+               (request.auth.uid == resource.data.opponentUid
+                  && request.resource.data.status == 'active'
+                  && request.time < resource.data.respondBy)
+               || (request.auth.uid == resource.data.opponentUid
+                  && request.resource.data.status == 'declined')
+               || (request.auth.uid in resource.data.participantUids
+                  && request.resource.data.status == 'expired'
+                  && request.time > resource.data.respondBy)
+             );
+      }
+
+      // D1b: own-side score write on an active duel, before endAt. Only my three score fields.
+      function isOwnScoreWrite() {
+        return resource.data.status == 'active'
+          && request.time < resource.data.endAt
+          && (
+               (request.auth.uid == resource.data.challengerUid
+                  && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['challengerScore','challengerDayScores','challengerScoreUpdatedAt'])
+                  && request.resource.data.challengerScore is number
+                  && request.resource.data.challengerScore >= 0
+                  && request.resource.data.challengerScore <= resource.data.league * 110
+                  && request.resource.data.challengerDayScores is list
+                  && request.resource.data.challengerDayScores.size() <= resource.data.league)
+               ||
+               (request.auth.uid == resource.data.opponentUid
+                  && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['opponentScore','opponentDayScores','opponentScoreUpdatedAt'])
+                  && request.resource.data.opponentScore is number
+                  && request.resource.data.opponentScore >= 0
+                  && request.resource.data.opponentScore <= resource.data.league * 110
+                  && request.resource.data.opponentDayScores is list
+                  && request.resource.data.opponentDayScores.size() <= resource.data.league)
+             );
+      }
+
+      // D2.5: league-scaled RR delta bounds — mirrors DuelConstants exactly.
+      function winDeltaOk(d, lg) {
+        return (lg == 1 && d >= 25 && d <= 30)
+            || (lg == 3 && d >= 38 && d <= 45)
+            || (lg == 5 && d >= 50 && d <= 60);
+      }
+      function lossDeltaOk(d, lg) {
+        return (lg == 1 && d >= -25 && d <= -20)
+            || (lg == 3 && d >= -30 && d <= -25)
+            || (lg == 5 && d >= -40 && d <= -30);
+      }
+      function forfeitLossDeltaOk(d, lg) {
+        // FIXED forfeiter penalty == the league's harshest earned loss.
+        return (lg == 1 && d == -25) || (lg == 3 && d == -30) || (lg == 5 && d == -40);
+      }
+      function drawDeltaOk(d, lg) {
+        return (lg == 1 && d == 10) || (lg == 3 && d == 15) || (lg == 5 && d == 20);
+      }
+      function forfeitWinnerDeltaOk(d, lg) {
+        return (lg == 1 && d >= 5 && d <= 10)
+            || (lg == 3 && d >= 8 && d <= 15)
+            || (lg == 5 && d >= 10 && d <= 20);
+      }
+
+      // D1b: resolve an ended duel; winner MUST match the frozen scores; deltas rule-bounded.
+      function isResolve() {
+        return request.auth.uid in resource.data.participantUids
+          && resource.data.status == 'active'
+          && request.resource.data.status == 'resolved'
+          && request.time > resource.data.endAt
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status','winnerUid','resolvedAt','challengerRRDelta','opponentRRDelta'])
+          && (
+               (resource.data.challengerScore > resource.data.opponentScore
+                  && request.resource.data.winnerUid == resource.data.challengerUid
+                  && winDeltaOk(request.resource.data.challengerRRDelta, resource.data.league)
+                  && lossDeltaOk(request.resource.data.opponentRRDelta, resource.data.league))
+               ||
+               (resource.data.opponentScore > resource.data.challengerScore
+                  && request.resource.data.winnerUid == resource.data.opponentUid
+                  && winDeltaOk(request.resource.data.opponentRRDelta, resource.data.league)
+                  && lossDeltaOk(request.resource.data.challengerRRDelta, resource.data.league))
+               ||
+               (resource.data.challengerScore == resource.data.opponentScore
+                  && !('winnerUid' in request.resource.data)
+                  && drawDeltaOk(request.resource.data.challengerRRDelta, resource.data.league)
+                  && drawDeltaOk(request.resource.data.opponentRRDelta, resource.data.league))
+             );
+      }
+
+      // D1b: forfeit an active duel; forfeiter loses, the other side takes an unearned win.
+      function isForfeit() {
+        return request.auth.uid in resource.data.participantUids
+          && resource.data.status == 'active'
+          && request.resource.data.status == 'forfeited'
+          && request.resource.data.forfeitedBy == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status','forfeitedBy','resolvedAt','challengerRRDelta','opponentRRDelta'])
+          && (
+               (request.auth.uid == resource.data.challengerUid
+                  && forfeitLossDeltaOk(request.resource.data.challengerRRDelta, resource.data.league)
+                  && forfeitWinnerDeltaOk(request.resource.data.opponentRRDelta, resource.data.league))
+               ||
+               (request.auth.uid == resource.data.opponentUid
+                  && forfeitLossDeltaOk(request.resource.data.opponentRRDelta, resource.data.league)
+                  && forfeitWinnerDeltaOk(request.resource.data.challengerRRDelta, resource.data.league))
+             );
+      }
+
+      // D1b: own-side "RR applied once" flag, false/absent → true. Nothing else changes.
+      function isRRApplyFlag() {
+        return request.auth.uid in resource.data.participantUids
+          && resource.data.status in ['resolved','forfeited']
+          && (
+               (request.auth.uid == resource.data.challengerUid
+                  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['challengerRRApplied'])
+                  && request.resource.data.challengerRRApplied == true
+                  && resource.data.get('challengerRRApplied', false) == false)
+               ||
+               (request.auth.uid == resource.data.opponentUid
+                  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['opponentRRApplied'])
+                  && request.resource.data.opponentRRApplied == true
+                  && resource.data.get('opponentRRApplied', false) == false)
+             );
+      }
+
+      allow update: if request.auth != null
+                    && (isPendingTransition() || isOwnScoreWrite() || isResolve() || isForfeit() || isRRApplyFlag());
+
+      // Cancel: challenger deletes own pending challenge.
+      allow delete: if request.auth != null
+                    && request.auth.uid == resource.data.challengerUid
+                    && resource.data.status == 'pending';
     }
   }
 }

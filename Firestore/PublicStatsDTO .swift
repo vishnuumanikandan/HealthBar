@@ -37,7 +37,16 @@ struct PublicStatsDTO: Codable {
     var level: Int
     var totalXP: Int
     var currentStreak: Int
+    /// RR-derived rank name (e.g. "copper"). LEGACY back-compat only — `rr` is
+    /// authoritative. Kept so stale readers/writers still function during the
+    /// RR-0b rollout.
+    /// TODO(RR-2): remove the legacy rank string after the migration period (once
+    /// all active clients publish rr).
     var rank: String
+    /// Ranked Rating — the AUTHORITATIVE rank source. Optional so projections
+    /// published before RR-0b still decode; readers treat nil as "publisher hasn't
+    /// updated yet" and fall back to the legacy `rank` string.
+    var rr: Int?
     var weeklyGoalsMet: Int
     var weeklyAdherence: Double
     var longestStreak: Int?

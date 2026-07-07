@@ -57,6 +57,24 @@ final class UserProgress {
     /// Uses inline default for SwiftData lightweight migration support
     var claimedMilestones: String = ""
 
+    // MARK: - Duel record (D1b)
+    // Server-authoritative and NON-monotonic (win streak resets; W/L/D accumulate).
+    // Inline defaults = SwiftData lightweight migration. Published to leaderboard/{uid} in D3.
+    var duelWins: Int = 0
+    var duelLosses: Int = 0
+    var duelDraws: Int = 0
+    var currentWinStreak: Int = 0
+    var bestWinStreak: Int = 0
+
+    // MARK: - Per-league duel record (D3) — starts at 0 (no retroactive backfill).
+    // Same server-authoritative, non-monotonic posture as the global duel record.
+    var duelWins1: Int = 0
+    var duelWins3: Int = 0
+    var duelWins5: Int = 0
+    var winStreak1: Int = 0
+    var winStreak3: Int = 0
+    var winStreak5: Int = 0
+
     /// Computed property: Current level based on totalXP
     /// Each level requires 100 XP (Level 1 = 0-99 XP, Level 2 = 100-199 XP, etc.)
     var currentLevel: Int {
