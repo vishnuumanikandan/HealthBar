@@ -108,7 +108,7 @@ final class AIFoodRecognitionService {
     // MARK: - Constants
 
     private static let apiURL = URL(string: "https://api.anthropic.com/v1/messages")!
-    private static let model = "claude-sonnet-4-20250514"
+    private static let model = "claude-sonnet-4-6"
     private static let maxTokens = 1024
     private static let maxInputLength = 500
     private static let maxItems = 20

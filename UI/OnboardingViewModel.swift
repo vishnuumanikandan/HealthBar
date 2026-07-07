@@ -353,7 +353,7 @@ final class OnboardingViewModel {
         """
 
         let requestBody = ClaudeAPIRequest(
-            model: "claude-sonnet-4-20250514",
+            model: "claude-sonnet-4-6",
             max_tokens: 256,
             system: systemPrompt,
             messages: [ClaudeAPIRequest.Message(role: "user", content: profileString)]
