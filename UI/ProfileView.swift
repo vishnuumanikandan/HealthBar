@@ -669,8 +669,7 @@ struct BadgeDetailSheet: View {
         totalXP: 1250,
         currentStreak: 7,
         longestStreak: 12,
-        lastActiveDate: Date(),
-        rank: Rank.silver.rawValue
+        lastActiveDate: Date()
     )
 
     let sampleGoal = DailyGoal(

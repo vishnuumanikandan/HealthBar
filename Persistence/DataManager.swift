@@ -141,7 +141,7 @@ final class DataManager {
                 currentStreak: 0,
                 longestStreak: 0,
                 lastActiveDate: Date(),
-                rank: Rank.iron.rawValue
+                rr: Rank.startingRR
             )
             // Stamp the current user's identifier — userId read live, not cached
             progress.userId = userId
@@ -694,7 +694,8 @@ final class DataManager {
     /// - `totalXP`, `currentStreak`, `longestStreak` → `max()` wins (never decrease)
     /// - `lastActiveDate` → `max()` wins
     /// - `claimedMilestones` → set union (milestones are never un-claimed)
-    /// - `rank` → always recomputed from merged `totalXP`; never read from the DTO
+    /// - `rr` → Firestore value wins (server-authoritative, NON-monotonic — never `max()`);
+    ///   `rank` is a computed function of `rr`, never stored or read from the DTO
     ///
     /// Pending confirmation uses a "at least as good" check (superset/max) rather than strict
     /// equality because a confirming snapshot from another device may show a higher value.
@@ -715,12 +716,17 @@ final class DataManager {
             let mergedLastActiveDate = max(dto.lastActiveDate, local.lastActiveDate)
             let mergedClaimedSet = Set(dto.claimedMilestonesArray).union(local.claimedMilestoneSet)
             let mergedClaimedString = mergedClaimedSet.sorted().map { String($0) }.joined(separator: ",")
-            let mergedRank = Rank.getRank(from: mergedTotalXP).rawValue
+            // `rr` is server-authoritative and NON-monotonic (losses lower it) — Firestore wins,
+            // never `max()`. Legacy docs without `rr` resolve to Rank.startingRR via resolvedRR.
+            let mergedRR = dto.resolvedRR
 
             let isPending = FirestoreServiceImpl.shared.pendingProgressIds.contains(dto.id)
             if isPending {
                 // Confirmation: Firestore must be "at least as good" as local for all additive fields.
                 // A strictly higher value from a simultaneous device write is still a valid confirmation.
+                // `rr` is intentionally excluded — it is non-monotonic, not additive.
+                // TODO (D1): when duel resolution writes rr, add non-monotonic reconciliation for rr
+                // here (a stale sync-down must not clobber a just-resolved local rr).
                 let firestoreIsConfirmed = dto.totalXP >= local.totalXP
                     && dto.currentStreak >= local.currentStreak
                     && dto.longestStreak >= local.longestStreak
@@ -735,7 +741,7 @@ final class DataManager {
                 || mergedLongestStreak != local.longestStreak
                 || mergedLastActiveDate != local.lastActiveDate
                 || mergedClaimedSet != local.claimedMilestoneSet
-                || mergedRank != local.rank
+                || mergedRR != local.rr
 
             if changed {
                 local.totalXP = mergedTotalXP
@@ -743,13 +749,13 @@ final class DataManager {
                 local.longestStreak = mergedLongestStreak
                 local.lastActiveDate = mergedLastActiveDate
                 local.claimedMilestones = mergedClaimedString
-                local.rank = mergedRank
+                local.rr = mergedRR
                 try modelContext.save()
             }
         } else {
             // Reinstall / cold start: no local UserProgress yet — insert from Firestore.
+            // `toUserProgress` seeds `rr` (legacy nil → Rank.startingRR); rank is computed from rr.
             let progress = dto.toUserProgress(userId: userId)
-            // Always recompute rank from the merged totalXP (toUserProgress already does this).
             modelContext.insert(progress)
             try modelContext.save()
         }
@@ -3727,7 +3733,7 @@ final class DataManager {
             )
             entriesByUid["preview-demo-2"] = LeaderboardEntry(
                 uid: "preview-demo-2", username: "ironivy", displayName: "Iron Ivy",
-                level: 4, totalXP: 760, currentStreak: 2, rank: Rank.bronze.rawValue,
+                level: 4, totalXP: 760, currentStreak: 2, rank: "bronze",  // RR-0a: bronze case removed; preview-only literal
                 weeklyGoalsMet: 3, weeklyAdherence: 3.0 / 7.0,
                 isCurrentUser: false, hasData: true
             )

@@ -61,38 +61,24 @@ final class GamificationManager {
         let newLevel = calculateLevel(from: progress.totalXP)
         let didLevelUp = newLevel > oldLevel
 
-        // Update rank based on new XP
-        let newRank = Rank.getRank(from: progress.totalXP)
-        progress.rank = newRank.rawValue
+        // XP drives level only. Rank is derived from `rr` (Rank.getRank(from: rr)) and is
+        // never touched here — adding XP must never change rank (RR-0a invariant).
 
         return (didLevelUp: didLevelUp, newLevel: newLevel)
     }
 
     // MARK: - Rank Calculations
 
-    /// Gets the current rank based on total XP
-    /// - Parameter totalXP: User's total XP
+    /// Gets the current rank from the user's Ranked Rating.
+    /// - Parameter rr: User's RR (rank derives from RR only, never from XP).
     /// - Returns: Current Rank
-    func getCurrentRank(from totalXP: Int) -> Rank {
-        return Rank.getRank(from: totalXP)
+    func getCurrentRank(from rr: Int) -> Rank {
+        return Rank.getRank(from: rr)
     }
 
-    /// Calculates XP needed for next rank
-    /// - Parameter totalXP: User's current total XP
-    /// - Returns: XP needed for next rank (or 0 if at max rank)
-    func xpForNextRank(currentXP: Int) -> Int {
-        let currentRank = getCurrentRank(from: currentXP)
-
-        // Find next rank
-        if let currentIndex = Rank.allCases.firstIndex(of: currentRank),
-           currentIndex < Rank.allCases.count - 1 {
-            let nextRank = Rank.allCases[currentIndex + 1]
-            return nextRank.xpThreshold - currentXP
-        }
-
-        // Already at max rank
-        return 0
-    }
+    // NOTE: `xpForNextRank` was removed in RR-0a. Rank no longer derives from XP, so
+    // "XP to next rank" is meaningless. If a display needs "RR to next tier" it will be
+    // an RR-based helper added with RR-0b — do not reintroduce an XP→rank derivation.
 
     // MARK: - Streak Management
 

@@ -54,8 +54,8 @@ final class ProfileViewModel {
     var currentRank: Rank {
         guard let progress = userProgress else { return .iron }
 
-        // Use Rank enum's getRank method for consistency
-        return Rank.getRank(from: progress.totalXP)
+        // Rank derives from RR only (never XP) — RR-0a invariant.
+        return Rank.getRank(from: progress.rr)
     }
 
     /// Formatted total XP (e.g., "1,250 XP")

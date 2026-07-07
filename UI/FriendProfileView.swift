@@ -509,8 +509,8 @@ struct FriendProfileView: View {
 
     private func rankColor(_ rank: String) -> Color {
         switch rank {
-        case Rank.bronze.rawValue: return Color(hex: "#CD7F32")
-        case Rank.silver.rawValue: return Color(hex: "#9CA3AF")
+        case "bronze": return Color(hex: "#CD7F32")   // RR-0a: legacy rank string; case removed from Rank
+        case "silver": return Color(hex: "#9CA3AF")   // RR-0a: legacy rank string; case removed from Rank
         case Rank.gold.rawValue: return DesignSystem.Colors.goldMid
         case Rank.diamond.rawValue: return Color(hex: "#38BDF8")
         default: return tc.textTertiary // iron / unknown

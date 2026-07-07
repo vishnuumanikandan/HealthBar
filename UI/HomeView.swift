@@ -1985,8 +1985,7 @@ struct HomeView: View {
         totalXP: 350,
         currentStreak: 7,
         longestStreak: 12,
-        lastActiveDate: Date(),
-        rank: Rank.bronze.rawValue
+        lastActiveDate: Date()
     )
 
     context.insert(sampleEntry)

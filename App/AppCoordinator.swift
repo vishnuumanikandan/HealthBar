@@ -164,7 +164,7 @@ final class AppCoordinator {
 
         let currentLevel = gamificationManager.calculateLevel(from: progress.totalXP)
         let xpForNext = gamificationManager.xpForNextLevel(currentXP: progress.totalXP)
-        let currentRank = gamificationManager.getCurrentRank(from: progress.totalXP)
+        let currentRank = gamificationManager.getCurrentRank(from: progress.rr)
 
         return TodaySummary(
             entries: entries,
