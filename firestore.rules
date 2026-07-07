@@ -7,9 +7,36 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/users/$(owner)/friendRequests/$(sender));
     }
 
-    // Owner-only read/write for everything under users/{userId}
-    match /users/{userId}/{document=**} {
+    // Root user document. Owner-only read/write/delete on users/{userId} ITSELF
+    // (the account-info root doc + the account-deletion path need it; the recursive
+    // wildcard matched it before). This match is NON-recursive: it covers only the
+    // root document, never its subcollections.
+    match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Owner-only private subcollections — EXPLICIT allowlist (replaces the old
+    // recursive `{document=**}` catch-all that was Critical finding C1).
+    //
+    // IMPORTANT: Firestore combines every matching `allow` with OR semantics — there
+    // is no most-specific-wins and no deny. NEVER reintroduce a recursive owner
+    // wildcard ({document=**}) under /users: it would silently bypass the friend/
+    // public/feed/sharedItems rules below (exactly the C1 hole). This match
+    // intentionally covers EXACTLY ONE collection level; nested paths (e.g.
+    // feedEvents/*/cheers) are governed solely by their dedicated blocks, and the
+    // allowlist must NEVER contain a collection that has its own rules block
+    // (friendRequests, sentRequests, friends, public, feedEvents, sharedItems).
+    // The list is reconciled against the code (FirestoreServiceImpl collection
+    // helpers + deleteAllUserData's knownSubcollections) — keep all three in sync.
+    match /users/{userId}/{collection}/{docId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId
+        && collection in [
+             'foodEntries', 'dailyGoals', 'dailyQuests', 'moodEntries',
+             'customFoods', 'savedMeals', 'savedRecipes', 'personalBaselines',
+             'foodFingerprints', 'userProgress', 'profile', 'account', 'badges',
+             'qteDays'
+           ];
     }
 
     // Username uniqueness index (Friend System Phase 1)
@@ -155,7 +182,14 @@ service cloud.firestore {
            );
 
       // Only the owner publishes their own stats, with the exact field set
-      // and value ranges. updatedAt is intentionally not type-checked: the
+      // and value ranges.
+      // NOTE (F1 / finding C1): this ENTIRE owner-side validation — keys().hasOnly,
+      // the type/range checks, and the rr ceiling below — is only ENFORCEABLE now that
+      // the recursive {document=**} owner catch-all is gone. That match used to
+      // OR-grant the owner an unconditional write to public/stats, silently nullifying
+      // every check in this block (a modified client could publish arbitrary rr/level
+      // or extra fields). Do not be surprised these checks "suddenly" bite.
+      // updatedAt is intentionally not type-checked: the
       // serverTimestamp sentinel can trip a type rule at evaluation time
       // (same reasoning as usernames.claimedAt). joinedAt is likewise not
       // type-checked — it is copied from account/info.createdAt, which may
@@ -189,8 +223,10 @@ service cloud.firestore {
         && request.resource.data.badgeCount >= 0
         && request.resource.data.earnedBadgeIds is list
         && request.resource.data.earnedBadgeIds.size() <= 50
+        // D5: rr ceiling mirrors the duelQueue ticket bound (rr <= 100000).
         && (!('rr' in request.resource.data)
-            || (request.resource.data.rr is int && request.resource.data.rr >= 0));
+            || (request.resource.data.rr is int && request.resource.data.rr >= 0
+                && request.resource.data.rr <= 100000));
 
       // Owner-only delete: no field validation is possible on delete, and
       // account deletion must be able to remove this doc.
@@ -453,7 +489,14 @@ service cloud.firestore {
                     && request.resource.data.keys().hasOnly(['uid','guildCode','role','joinedAt'])
                     && request.resource.data.guildCode is string
                     && (
-                         request.auth.uid == uid
+                         // M4: a SELF-written lock is valid ONLY alongside a real member
+                         // doc written in the SAME atomic write (WriteBatch or transaction —
+                         // Firestore treats both atomically and getAfter sees both). This
+                         // defeats a forged lock with an arbitrary guildCode, which otherwise
+                         // passed the public/stats guild-mate read gate. The client's
+                         // founder-create and open-join flows already batch member-doc + lock.
+                         (request.auth.uid == uid
+                            && getAfter(/databases/$(database)/documents/guilds/$(request.resource.data.guildCode)/members/$(uid)).data.uid == uid)
                          ||
                          (request.auth.uid == get(/databases/$(database)/documents/guilds/$(request.resource.data.guildCode)).data.ownerUid
                             && uid != request.auth.uid
@@ -536,7 +579,7 @@ service cloud.firestore {
               'streak1','streak3','streak5','updatedAt'])
         && request.resource.data.username is string && request.resource.data.username.size() < 300
         && request.resource.data.displayName is string && request.resource.data.displayName.size() < 300
-        && request.resource.data.rr is int && request.resource.data.rr >= 0
+        && request.resource.data.rr is int && request.resource.data.rr >= 0 && request.resource.data.rr <= 100000
         && request.resource.data.wins1 is int && request.resource.data.wins1 >= 0
         && request.resource.data.wins3 is int && request.resource.data.wins3 >= 0
         && request.resource.data.wins5 is int && request.resource.data.wins5 >= 0
@@ -601,6 +644,12 @@ service cloud.firestore {
           // public/stats.updatedAt, feedEvents.createdAt). endAt/respondBy are
           // client-computed Dates and ARE checked.
           && request.resource.data.endAt is timestamp
+          // C2: same league-window bound as the accept path (isPendingTransition),
+          // closing the matchmade born-ended 0-0 draw-farm vector. league is pinned
+          // in [1,3,5] above, so duration.value gets no rogue magnitude.
+          && request.resource.data.endAt > request.time
+          && request.resource.data.endAt <= request.time
+               + duration.value(request.resource.data.league, 'd') + duration.value(1, 'h')
           && request.resource.data.respondBy is timestamp
           && request.resource.data.challengerUsername is string && request.resource.data.challengerUsername.size() < 300
           && request.resource.data.challengerDisplayName is string && request.resource.data.challengerDisplayName.size() < 300
@@ -615,7 +664,12 @@ service cloud.firestore {
           && getAfter(/databases/$(database)/documents/duelQueue/$(request.resource.data.opponentUid)).data.claimedBy
                == request.auth.uid
           && getAfter(/databases/$(database)/documents/duelQueue/$(request.resource.data.opponentUid)).data.matchedDuelId
-               == duelId;
+               == duelId
+          // M2: the created duel's league MUST equal the CLAIMED ticket's league, so a
+          // claimer cannot match a victim into a higher league (longer window / bigger
+          // RR swings) they never opted into.
+          && request.resource.data.league
+               == getAfter(/databases/$(database)/documents/duelQueue/$(request.resource.data.opponentUid)).data.league;
       }
 
       allow create: if request.auth != null
@@ -634,7 +688,15 @@ service cloud.firestore {
           && (
                (request.auth.uid == resource.data.opponentUid
                   && request.resource.data.status == 'active'
-                  && request.time < resource.data.respondBy)
+                  && request.time < resource.data.respondBy
+                  // C2: bound endAt to the league window (+1h clock skew) so an accept
+                  // cannot mint a born-ended 0-0 duel that farms the positive draw delta.
+                  // league is read off the pre-accept doc, which passed isChallengeCreate
+                  // (league in [1,3,5]) — so duration.value gets no rogue magnitude.
+                  && request.resource.data.endAt is timestamp
+                  && request.resource.data.endAt > request.time
+                  && request.resource.data.endAt <= request.time
+                       + duration.value(resource.data.league, 'd') + duration.value(1, 'h'))
                || (request.auth.uid == resource.data.opponentUid
                   && request.resource.data.status == 'declined')
                || (request.auth.uid in resource.data.participantUids
