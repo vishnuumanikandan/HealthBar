@@ -250,6 +250,17 @@ protocol FirestoreService {
     /// (users/{meUid}/friendRequests/{fromUid}). Used to block reverse-duplicate sends.
     func incomingRequestExists(meUid: String, fromUid: String) async throws -> Bool
 
+    /// Fresh server existence check of my OUTGOING request to `toUid`
+    /// (users/{meUid}/sentRequests/{toUid}). FR-1 send idempotency: a re-send is an UPDATE,
+    /// which the request rules deny (`allow update: if false`), so an existing request is
+    /// treated as a silent success rather than re-written.
+    func outgoingRequestExists(meUid: String, toUid: String) async throws -> Bool
+
+    /// Fresh server existence check of the friend edge users/{meUid}/friends/{friendUid}.
+    /// FR-1 accept idempotency: a re-accept would UPDATE the edge (rule-denied), so an
+    /// existing edge means the accept already happened — clean up requests, don't re-write.
+    func friendExists(meUid: String, friendUid: String) async throws -> Bool
+
     /// One-time fetch of the entire public usernames index, ordered alphabetically
     /// by handle (= document ID). Powers the Add Friends user directory.
     func fetchAllUsernames() async throws -> [DirectoryUser]
@@ -472,6 +483,10 @@ protocol FirestoreService {
 
     /// All QTE day docs for the user (bounded — at most one per active day; no index needed).
     func fetchQTEDays(userId: String) async throws -> [QTEDayDTO]
+
+    /// One QTE day doc (deterministic doc id = dateKey); nil when absent or undecodable.
+    /// Feeds the read-merge-then-write upload path (review finding M3).
+    func fetchQTEDay(userId: String, dateKey: String) async throws -> QTEDayDTO?
 
     // MARK: - Matchmaking (D2)
 
