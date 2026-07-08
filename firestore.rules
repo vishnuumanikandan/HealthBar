@@ -392,10 +392,15 @@ service cloud.firestore {
                       && request.resource.data.username is string && request.resource.data.username.size() < 300
                       && request.resource.data.displayName is string && request.resource.data.displayName.size() < 300
                       && (
-                           // a) founder adds self as owner (they own the guild)
+                           // a) founder adds self as owner (they own the guild).
+                           //    getAfter (NOT get): createGuild batches guild+member+lock in ONE
+                           //    commit, so the guild doc doesn't exist pre-batch — get() would read
+                           //    null and deny the whole batch. getAfter sees the same-batch guild;
+                           //    for an EXISTING guild it falls back to current state, so ownerUid
+                           //    must still equal the caller (can't claim someone else's guild).
                            (request.auth.uid == memberUid
                               && request.resource.data.role == 'owner'
-                              && get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid == request.auth.uid)
+                              && getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid == request.auth.uid)
                            ||
                            // b) self-join an OPEN guild as member (and not already in any guild)
                            (request.auth.uid == memberUid
