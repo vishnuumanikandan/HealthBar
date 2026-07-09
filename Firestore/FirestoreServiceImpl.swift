@@ -744,6 +744,16 @@ final class FirestoreServiceImpl: FirestoreService {
         return snapshot.exists
     }
 
+    func outgoingRequestExists(meUid: String, toUid: String) async throws -> Bool {
+        let snapshot = try await sentRequestsCollection(for: meUid).document(toUid).getDocument()
+        return snapshot.exists
+    }
+
+    func friendExists(meUid: String, friendUid: String) async throws -> Bool {
+        let snapshot = try await friendsCollection(for: meUid).document(friendUid).getDocument()
+        return snapshot.exists
+    }
+
     func fetchAllUsernames() async throws -> [DirectoryUser] {
         // Document ID == handleKey, so ordering by ID is alphabetical by username.
         let snapshot = try await db.collection("usernames")
@@ -1504,13 +1514,22 @@ final class FirestoreServiceImpl: FirestoreService {
     }
 
     func uploadQTEDay(_ day: QTEDayDTO, userId: String) async throws {
-        // Doc id = dateKey (one per day). merge:true so a field write never clobbers others.
+        // Doc id = dateKey (one per day). NOTE: merge:true does NOT protect the point fields —
+        // QTEDayDTO always encodes every field, so each upload overwrites them. Field-wise
+        // max-wins is the CALLER's job: it reads + merges the remote day BEFORE this upload
+        // (DataManager.uploadQTEDayAndRescore — review finding M3).
         try qteDaysCollection(for: userId).document(day.dateKey).setData(from: day, merge: true)
     }
 
     func fetchQTEDays(userId: String) async throws -> [QTEDayDTO] {
         let snapshot = try await qteDaysCollection(for: userId).getDocuments()
         return snapshot.documents.compactMap { try? $0.data(as: QTEDayDTO.self) }
+    }
+
+    func fetchQTEDay(userId: String, dateKey: String) async throws -> QTEDayDTO? {
+        let snapshot = try await qteDaysCollection(for: userId).document(dateKey).getDocument()
+        guard snapshot.exists else { return nil }
+        return try? snapshot.data(as: QTEDayDTO.self)
     }
 
     // MARK: - FirestoreService: Matchmaking (D2)
@@ -1943,6 +1962,21 @@ final class FirestoreServiceImpl: FirestoreService {
         friendsListener = nil
         incomingRequestsListener = nil
         sentRequestsListener = nil
+
+        // Clear the pending-upload sets too (the doc comment above promises this) so in-flight
+        // IDs from the previous session can't bleed into the next login and wrongly protect a
+        // stale local value. The M6 passive-sign-out teardown funnels through here as well.
+        pendingUploadIds.removeAll()
+        pendingDailyGoalIds.removeAll()
+        pendingBaselineIds.removeAll()
+        pendingFingerprintIds.removeAll()
+        pendingMoodEntryIds.removeAll()
+        pendingProgressIds.removeAll()
+        pendingQuestIds.removeAll()
+        pendingCustomFoodIds.removeAll()
+        pendingSavedMealIds.removeAll()
+        pendingSavedRecipeIds.removeAll()
+        pendingBadgeIds.removeAll()
 
         currentSyncUserId = nil
     }

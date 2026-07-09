@@ -702,10 +702,12 @@ final class DataManager {
 
     /// Applies an incoming Firestore UserProgress snapshot to local SwiftData using merge rules.
     ///
-    /// Receive-only — never uploads. Merge rules for additive gamification fields:
-    /// - `totalXP`, `currentStreak`, `longestStreak` → `max()` wins (never decrease)
+    /// Receive-only — never uploads. Merge rules for gamification fields:
+    /// - `totalXP`, `longestStreak` → `max()` wins (never decrease)
     /// - `lastActiveDate` → `max()` wins
     /// - `claimedMilestones` → set union (milestones are never un-claimed)
+    /// - `currentStreak` → Firestore value wins (NON-monotonic — a missed-day reset must
+    ///   propagate across devices; `max()` would resurrect a broken streak — review finding H1)
     /// - `rr` → Firestore value wins (server-authoritative, NON-monotonic — never `max()`);
     ///   `rank` is a computed function of `rr`, never stored or read from the DTO
     ///
@@ -723,7 +725,6 @@ final class DataManager {
         if let local = localArray.first {
             // Additive fields (monotonic): max()/union wins — never decrease.
             let mergedTotalXP = max(dto.totalXP, local.totalXP)
-            let mergedCurrentStreak = max(dto.currentStreak, local.currentStreak)
             let mergedLongestStreak = max(dto.longestStreak, local.longestStreak)
             let mergedLastActiveDate = max(dto.lastActiveDate, local.lastActiveDate)
             let mergedClaimedSet = Set(dto.claimedMilestonesArray).union(local.claimedMilestoneSet)
@@ -740,6 +741,11 @@ final class DataManager {
                 (isPending && remote != localValue) ? localValue : remote
             }
             let mergedRR = reconcile(dto.resolvedRR, local.rr)
+            // H1: currentStreak is NON-monotonic — GamificationManager.updateStreak resets it
+            // to 1 on a missed day, so max() would resurrect a reset streak across devices
+            // (inflating the published leaderboard streak + re-granting milestone badges).
+            // Reconcile it Firestore-authoritatively, exactly like rr.
+            let mergedCurrentStreak = reconcile(dto.currentStreak, local.currentStreak)
             let mergedWins = reconcile(dto.resolvedDuelWins, local.duelWins)
             let mergedLosses = reconcile(dto.resolvedDuelLosses, local.duelLosses)
             let mergedDraws = reconcile(dto.resolvedDuelDraws, local.duelDraws)
@@ -757,8 +763,10 @@ final class DataManager {
                 // Additive confirmation: Firestore must be "at least as good" as local. A stale
                 // snapshot (lower additive values) is skipped entirely — which also protects the
                 // non-monotonic fields (their equality guard is handled by reconcile() above).
+                // H1: no `currentStreak >= local` term — currentStreak is now reconciled
+                // like rr (its pending/echo guard lives in reconcile() above), so a legit
+                // lower remote streak (a missed-day reset) must NOT block confirmation.
                 let firestoreIsConfirmed = dto.totalXP >= local.totalXP
-                    && dto.currentStreak >= local.currentStreak
                     && dto.longestStreak >= local.longestStreak
                     && Set(dto.claimedMilestonesArray).isSuperset(of: local.claimedMilestoneSet)
                 guard firestoreIsConfirmed else { return } // Write still in-flight — skip
@@ -2867,7 +2875,9 @@ final class DataManager {
         case .incomingPending:
             throw FriendError.incomingExists
         case .outgoingPending:
-            return // Already sent — doc id == recipient uid makes re-send idempotent anyway.
+            // Local fast-path only (cheap early exit); can be stale/empty on a fresh account,
+            // so the authoritative outgoingRequestExists check below is the real gate (FR-1).
+            return
         case .none:
             break
         }
@@ -2880,6 +2890,22 @@ final class DataManager {
         }
         if reverseExists { throw FriendError.incomingExists }
 
+        // FR-1: authoritative send idempotency. friendshipState reads LOCAL cache (stale/empty
+        // on a fresh account) and re-send is NOT idempotent — setData over an existing request
+        // doc is an UPDATE, and friendRequests/sentRequests rule `allow update: if false` (F1),
+        // so a second tap would PERMISSION_DENIED. If the request is already out on the server,
+        // that is exactly what the user wanted → reflect it locally and return success.
+        let alreadySent: Bool
+        do {
+            alreadySent = try await firestoreService.outgoingRequestExists(meUid: me, toUid: toUid)
+        } catch {
+            throw FriendError.network(error.localizedDescription)
+        }
+        if alreadySent {
+            insertLocalOutgoingRequest(toUid: toUid, toUsername: handleKey, userId: me)
+            return
+        }
+
         let identity = try await fetchMyFriendIdentity(userId: me)
         try await firestoreService.sendFriendRequest(
             toUid: toUid,
@@ -2888,6 +2914,24 @@ final class DataManager {
             fromUsername: identity.username,
             fromDisplayName: identity.displayName
         )
+        // FR-1: reflect outgoing-pending immediately so the button flips before the sentRequests
+        // listener syncs (addFriend calls load() right after, re-deriving friendshipState).
+        insertLocalOutgoingRequest(toUid: toUid, toUsername: handleKey, userId: me)
+    }
+
+    /// FR-1: inserts (idempotently) the local outgoing FriendRequest row so friendshipState
+    /// reports .outgoingPending immediately — the sentRequests listener would otherwise lag.
+    /// Mirrors reconcileRequests' insert; the listener later reconciles the authoritative row.
+    private func insertLocalOutgoingRequest(toUid: String, toUsername: String, userId: String) {
+        let descriptor = FetchDescriptor<FriendRequest>(
+            predicate: #Predicate { $0.userId == userId && $0.otherUid == toUid && $0.direction == "outgoing" }
+        )
+        if let count = try? modelContext.fetchCount(descriptor), count > 0 { return }
+        modelContext.insert(FriendRequest(
+            userId: userId, otherUid: toUid, direction: "outgoing",
+            username: toUsername, displayName: toUsername, createdAt: Date()
+        ))
+        try? modelContext.save()
     }
 
     /// Accepts a cached incoming request. The from* snapshot comes from the LOCAL
@@ -2900,6 +2944,22 @@ final class DataManager {
         }
         guard let request = fetchIncomingRequest(fromUid: fromUid) else {
             throw FriendError.network("That request is no longer available.")
+        }
+
+        // FR-1: idempotent accept. The cached row can be stale, and a second accept would
+        // setData over the EXISTING friend edges — `friends` rules `allow update: if false`
+        // (F1) → PERMISSION_DENIED. If the edge already exists on the server, the accept
+        // already happened: clear any lingering request docs (deletes are no-op if absent)
+        // and return success without re-writing the edges.
+        let alreadyFriends: Bool
+        do {
+            alreadyFriends = try await firestoreService.friendExists(meUid: me, friendUid: fromUid)
+        } catch {
+            throw FriendError.network(error.localizedDescription)
+        }
+        if alreadyFriends {
+            try? await firestoreService.declineFriendRequest(fromUid: fromUid, meUid: me)
+            return
         }
 
         let identity = try await fetchMyFriendIdentity(userId: me)
@@ -3887,13 +3947,32 @@ final class DataManager {
         return awarded
     }
 
-    /// Fire-and-forget: upload the QTE row (repaired by the initial-sync block on failure) and
-    /// push updated duel scores. updateMyDuelScores never calls back into the publish funnel.
+    /// Fire-and-forget: READ-MERGE-THEN-WRITE the QTE row, then rescore duels. One Task keeps
+    /// the order (merge → upload → rescore); updateMyDuelScores never calls back into the
+    /// publish funnel.
     private func uploadQTEDayAndRescore(_ day: QTEDay) {
-        guard let userId = currentUserId, !userId.isEmpty else { return }
-        let dto = QTEDayDTO(from: day)
-        Task { try? await firestoreService.uploadQTEDay(dto, userId: userId) }
-        Task { await updateMyDuelScores() }
+        // L4/D6: guard on !isGuest — currentUserId is a non-empty "guest" for guest sessions,
+        // so the old `currentUserId != ""` check let guest QTE I/O through. Callers already
+        // guard !isGuest; this is defense-in-depth consistency.
+        guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return }
+        let dateKey = day.dateKey
+        // M3: uploading the raw local DTO let a stale second device clobber a higher earned
+        // total (merge:true can't protect fields the DTO always encodes; max-wins lived only on
+        // the read path). Fold any higher remote points into local first, upload the MERGED row,
+        // THEN rescore so a merged-higher qteBonus is what lands on the duel docs. A failed
+        // pre-fetch degrades to uploading local for this one write — self-heals on the next
+        // award or the initial-sync backfill in startFirestoreSync.
+        Task {
+            if let remote = try? await firestoreService.fetchQTEDay(userId: userId, dateKey: dateKey) {
+                applyQTEDayMerge(remote, userId: userId)   // max-wins/OR into local (+ saves)
+            }
+            let descriptor = FetchDescriptor<QTEDay>(
+                predicate: #Predicate { $0.userId == userId && $0.dateKey == dateKey }
+            )
+            let mergedRow = (try? modelContext.fetch(descriptor))?.first ?? day
+            try? await firestoreService.uploadQTEDay(QTEDayDTO(from: mergedRow), userId: userId)
+            await updateMyDuelScores()
+        }
     }
 
     /// All QTE rows for the user (initial-sync helper).

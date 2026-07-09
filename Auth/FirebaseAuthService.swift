@@ -132,6 +132,20 @@ final class FirebaseAuthService: AuthService {
                 }
 
                 // Normal Firebase auth flow.
+                // M6: a PASSIVE sign-out (token revocation / password change on another device)
+                // fires this listener with user == nil but never routes through logout(), so the
+                // Firestore sync (listeners + pending-id sets + currentSyncUserId) would keep
+                // running on a dead session — on same-account re-login shouldRegisterListener sees
+                // stale registrations ("already listening") and the session runs with no
+                // cross-device sync until relaunch. Tear it down on a real signed-in → signed-out
+                // transition. currentUserEmail still holds the PRIOR uid here (nil on the
+                // cold-launch callback; the guest branch above already returned), so this never
+                // fires at launch or for guests; logout() nils currentUserEmail before signOut()
+                // → no double teardown.
+                let previousUid = self.currentUserEmail
+                if user == nil, previousUid != nil {
+                    FirestoreServiceImpl.shared.stopAllListeners()
+                }
                 self.isLoggedIn = user != nil
                 self.currentUserEmail = user?.uid
             }
@@ -166,8 +180,21 @@ final class FirebaseAuthService: AuthService {
     }
 
     func cancelMigration() {
-        // Migration failed — keep guest mode, just clear the pending UID.
+        // Migration failed. signUp() already created AND signed in the real Firebase account
+        // (createUser signs in), so clearing pendingMigrationUserId alone stranded a signed-in
+        // orphan account under a guest UI — review finding M7. Restore a fully consistent guest
+        // state (the same flags continueAsGuest / the launch guest-restore path use) so a cold
+        // launch lands in the same place, THEN sign the orphan account out best-effort (its token
+        // must not survive in the keychain as a live session). Guest state is set before signOut()
+        // so the auth-state listener's guest branch handles the sign-out callback (no M6 teardown,
+        // no flicker). ContentView still surfaces the migration error to the signup sheet.
+        isGuest = true
+        isLoggedIn = true
+        currentUserEmail = "guest"
+        UserDefaults.standard.set(true, forKey: guestModeKey)
         pendingMigrationUserId = nil
+        try? Auth.auth().signOut()
+        // TODO(auth): retry-migration path for a created-but-unmigrated account
     }
 
     func login(email: String, password: String) async throws {
