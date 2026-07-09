@@ -133,6 +133,13 @@ final class ProfileViewModel {
         errorMessage = nil
 
         do {
+            // S1: bootstrap default data BEFORE reading — mirrors what Home does via
+            // getTodaysSummary(). Idempotent: no-op for returning users / when unauthenticated,
+            // creates UserProgress + today's DailyGoal for new accounts, guest-safe internally.
+            // Without it, a fresh account whose Profile loads before Home's bootstrap hits
+            // userProgressNotFound, and the one-shot isNewUser suppression may already be consumed
+            // (SMOKE-1 #3). A setupApp() throw is handled by the same catch below.
+            try await coordinator.setupApp()
             userProgress = try await coordinator.getUserProgress()
             currentGoal = try await coordinator.getCurrentGoal()
             existingProfile = try await coordinator.getUserProfile()
