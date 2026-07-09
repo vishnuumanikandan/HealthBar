@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import FirebaseCore
+import UIKit
 
 class AppDelegate: NSObject, UIApplicationDelegate {
   func application(_ application: UIApplication,
@@ -27,6 +28,16 @@ struct HealthBarApp: App {
     let modelContainer: ModelContainer
 
     init() {
+        #if DEBUG
+        // Custom fonts fall back to the system font SILENTLY when misregistered; fail
+        // loudly in DEBUG. Verify by PostScript name — exactly what AppFont's .custom(...)
+        // resolves. (Bundled in HealthBar/Resources/Fonts + listed in --Info.plist UIAppFonts.)
+        for fontName in ["BebasNeue-Regular", "HankenGrotesk-SemiBold"] {
+            assert(UIFont(name: fontName, size: 12) != nil,
+                   "Erewhon font '\(fontName)' failed to register — check HealthBar/Resources/Fonts and UIAppFonts in --Info.plist")
+        }
+        #endif
+
         do {
             // Schema configuration to enable automatic lightweight migration
             let schema = Schema([

@@ -26,6 +26,7 @@ final class SettingsManager {
         static let trackAdvancedNutrition = "trackAdvancedNutrition"
         static let dailyMoodCheckEnabled = "dailyMoodCheckEnabled"
         static let themePreference = "themePreference"
+        static let didMigrateToErewhon = "didMigrateToErewhon"
     }
 
     // MARK: - Settings Properties
@@ -47,8 +48,10 @@ final class SettingsManager {
         }
     }
 
-    /// Theme preference: "auto" (default), "morning", "afternoon", or "night"
-    /// "auto" cycles based on time of day. Named values lock to that theme.
+    /// Theme preference. Pixel schemes: "auto" (time cycle), "morning", "afternoon",
+    /// "night". Flat (Erewhon) schemes: "erewhonLight", "erewhonDark". Fresh installs
+    /// default to "erewhonLight". The retired "cleanLight"/"cleanDark" keys are migrated
+    /// away once in init (see migrateToErewhonIfNeeded).
     var themePreference: String {
         didSet {
             UserDefaults.standard.set(themePreference, forKey: Keys.themePreference)
@@ -63,22 +66,27 @@ final class SettingsManager {
         return TimeOfDayTheme(rawValue: themePreference) ?? TimeOfDayTheme.current()
     }
 
-    /// True when either clean scheme is active
+    /// True when either Erewhon (flat-family) scheme is active.
+    /// D3: the flat family is now Erewhon; the `isCleanUI` name is retained from the
+    /// retired Clean era (no rename), and the old clean keys no longer occur.
     var isCleanUI: Bool {
-        themePreference == "cleanLight" || themePreference == "cleanDark"
+        themePreference == "erewhonLight" || themePreference == "erewhonDark"
     }
 
-    /// True specifically for clean dark mode (used for preferredColorScheme)
+    /// True specifically for Erewhon Dark (drives preferredColorScheme + the Erewhon
+    /// line/lineSoft tokens). D3: name retained from the retired Clean era (no rename).
     var isCleanDark: Bool {
-        themePreference == "cleanDark"
+        themePreference == "erewhonDark"
     }
 
     /// Returns the resolved ThemeColors for the current settings.
-    /// Clean modes return their own palettes. RPG modes return time-of-day palettes.
+    /// Erewhon schemes return their palettes; pixel schemes return time-of-day palettes.
+    /// Stale "cleanLight"/"cleanDark" keys (should be unreachable post-migration)
+    /// defensively map to the matching Erewhon scheme — never to pixel (D2).
     var activeColors: ThemeColors {
         switch themePreference {
-        case "cleanLight": return ThemeColors.cleanLight
-        case "cleanDark": return ThemeColors.cleanDark
+        case "erewhonLight", "cleanLight": return ThemeColors.erewhonLight
+        case "erewhonDark", "cleanDark": return ThemeColors.erewhonDark
         default: return activeTheme.colors
         }
     }
@@ -97,12 +105,15 @@ final class SettingsManager {
             self.dailyMoodCheckEnabled = UserDefaults.standard.bool(forKey: Keys.dailyMoodCheckEnabled)
         }
 
-        // Theme preference defaults to "auto"
+        // Theme preference (fresh installs default to Erewhon Light — D2).
         if let pref = UserDefaults.standard.string(forKey: Keys.themePreference) {
             self.themePreference = pref
         } else {
-            self.themePreference = "auto"
+            self.themePreference = "erewhonLight"
         }
+
+        // One-time migration to the Erewhon reskin (D2). Runs once, after the pref loads.
+        migrateToErewhonIfNeeded()
     }
 
     // MARK: - Methods
@@ -111,6 +122,32 @@ final class SettingsManager {
     func resetToDefaults() {
         trackAdvancedNutrition = false
         dailyMoodCheckEnabled = true
-        themePreference = "auto"
+        themePreference = "erewhonLight"
+    }
+
+    // MARK: - Erewhon Migration (D2)
+
+    /// One-time migration to the Erewhon reskin. Idempotent via `didMigrateToErewhon`.
+    /// Maps the retired clean keys to their Erewhon counterpart and any pixel key (incl.
+    /// "auto") to Erewhon Light — the one-time new-look default. Runs once; afterward the
+    /// user may re-select any pixel theme and it sticks (the migration never re-runs).
+    private func migrateToErewhonIfNeeded() {
+        guard !UserDefaults.standard.bool(forKey: Keys.didMigrateToErewhon) else { return }
+        let migrated = Self.migratedThemeKey(from: themePreference)
+        themePreference = migrated
+        // Persist explicitly — property observers may not fire for an init-time assignment.
+        UserDefaults.standard.set(migrated, forKey: Keys.themePreference)
+        UserDefaults.standard.set(true, forKey: Keys.didMigrateToErewhon)
+    }
+
+    /// Pure Erewhon migration mapping (verified by the standalone ThemeMigrationCheck).
+    /// Exposed as a `static func` so the mapping is testable in isolation.
+    static func migratedThemeKey(from key: String) -> String {
+        switch key {
+        case "cleanLight": return "erewhonLight"
+        case "cleanDark": return "erewhonDark"
+        case "erewhonLight", "erewhonDark": return key
+        default: return "erewhonLight" // any pixel key (incl. "auto") or unknown
+        }
     }
 }
