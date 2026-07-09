@@ -199,6 +199,9 @@ struct BattleView: View {
             .padding(DesignSystem.Spacing.lg)
         }
         .refreshable { await viewModel.load() }
+        // R2 §5: reserve the tab bar's height so the bottom duel sections clear the
+        // translucent bar (the TabView's safeAreaInset doesn't reach this ScrollView).
+        .contentMargins(.bottom, DesignSystem.Erewhon.tabBarContentHeight + 12, for: .scrollContent)
     }
 
     // MARK: - Macro Guess QTE (D1d)

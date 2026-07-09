@@ -234,6 +234,9 @@ struct FoodLogView: View {
             .padding(DesignSystem.Spacing.lg)
             .padding(.bottom, 40)
         }
+        // R2 §5: reserve the tab bar's height so the bottom meal sections clear the
+        // translucent bar (the TabView's safeAreaInset doesn't reach this ScrollView).
+        .contentMargins(.bottom, DesignSystem.Erewhon.tabBarContentHeight + 12, for: .scrollContent)
     }
 
     // MARK: - Date Navigator
@@ -801,6 +804,9 @@ struct FoodLogView: View {
                 }
                 .padding(.horizontal, 2)
             }
+            // Don't inherit the outer ScrollView's bottom contentMargins on this
+            // horizontal recents row (it would add an empty gap below the cards).
+            .contentMargins(.bottom, 0, for: .scrollContent)
         }
     }
 

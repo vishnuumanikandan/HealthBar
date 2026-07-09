@@ -241,6 +241,12 @@ struct ProfileView: View {
             }
             .padding(DesignSystem.Spacing.lg)
         }
+        // R2 §5 conditional: the tab bar is mounted as a `.safeAreaInset` on the TabView,
+        // but that inset does not propagate through this tab's NavigationStack to the
+        // ScrollView. Reserve the bar's height as scroll-content margin so the bottom
+        // Settings rows (About / Sign Out) clear the bar and stay tappable in both
+        // families (fixes the Finding-#1 tap-target bug).
+        .contentMargins(.bottom, DesignSystem.Erewhon.tabBarContentHeight + 12, for: .scrollContent)
     }
 
     // MARK: - Guest Banner

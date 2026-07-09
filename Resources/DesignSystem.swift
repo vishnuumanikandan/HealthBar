@@ -387,6 +387,22 @@ enum DesignSystem {
         /// Card shadow token (mirrors Shadows.card: black 8%, radius 12, y 4).
         static let cardShadow: (color: Color, radius: CGFloat, y: CGFloat) =
             (Color.black.opacity(0.08), 12, 4)
+
+        // MARK: R2 additions
+
+        /// Text/icon color on accent fills (mockup --on-accent).
+        static let onAccent = Color(light: Color(hex: "#FFFFFF"), dark: Color(hex: "#060A1A"))
+
+        /// Button corner radius (mockup .btn 14px; cards stay 18).
+        static let buttonRadius: CGFloat = 14
+
+        /// Tab bar content height above the bottom safe area (the mockup's 84px bar
+        /// includes the home-indicator region, which safeAreaInset supplies automatically).
+        static let tabBarContentHeight: CGFloat = 64
+
+        /// Subtle raised-element shadow (mockup --shadow-1 approximation).
+        static let subtleShadow: (color: Color, radius: CGFloat, y: CGFloat) =
+            (Color.black.opacity(0.06), 7, 3)
     }
 }
 
@@ -418,32 +434,20 @@ struct AppButton: View {
                 action()
             }
         }) {
-            HStack(spacing: DesignSystem.Spacing.sm) {
-                if isLoading {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: style == .primary ? .white : DesignSystem.Colors.primary))
+            Group {
+                if SettingsManager.shared.isCleanUI {
+                    flatBody      // Erewhon (flat family) — active-theme tokens, mockup buttons
                 } else {
-                    if let icon = icon {
-                        Image(systemName: icon)
-                            .font(AppFont.bold(17))
-                    }
-
-                    Text(title)
-                        .font(AppFont.bold(17))
+                    pixelBody     // pixel — byte-identical to the pre-R2 rendering
                 }
             }
-            .foregroundColor(foregroundColor)
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(backgroundView)
-            .overlay(
-                AdaptiveCardShapeStyle()
-                    .stroke(style == .secondary ? DesignSystem.Colors.primary : (SettingsManager.shared.isCleanUI ? DesignSystem.Colors.primary : Color(hex: "#047857")), lineWidth: SettingsManager.shared.isCleanUI ? 0 : 2)
-            )
-            .clipShape(AdaptiveCardShapeStyle())
             .scaleEffect(isPressed ? 0.97 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
             .opacity(isDisabled ? 0.5 : 1.0)
+            // Press animation: flat swaps to the Erewhon ease; pixel keeps the spring.
+            .animation(SettingsManager.shared.isCleanUI
+                       ? DesignSystem.Erewhon.ease(0.2)
+                       : .spring(response: 0.3, dampingFraction: 0.6),
+                       value: isPressed)
         }
         .buttonStyle(PlainButtonStyle())
         .sensoryFeedback(.impact(weight: .medium, intensity: 0.7), trigger: isPressed)
@@ -455,24 +459,76 @@ struct AppButton: View {
         .disabled(isDisabled || isLoading)
     }
 
-    private var foregroundColor: Color {
-        switch style {
-        case .primary:
-            return .white
-        case .secondary:
-            return DesignSystem.Colors.primary
+    /// Shared icon + title stack (font size / tints vary by family).
+    @ViewBuilder
+    private func buttonLabel(fontSize: CGFloat, tint: Color, spinnerTint: Color) -> some View {
+        HStack(spacing: DesignSystem.Spacing.sm) {
+            if isLoading {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: spinnerTint))
+            } else {
+                if let icon = icon {
+                    Image(systemName: icon)
+                        .font(AppFont.bold(fontSize))
+                }
+
+                Text(title)
+                    .font(AppFont.bold(fontSize))
+            }
         }
+        .foregroundColor(tint)
+        .frame(maxWidth: .infinity)
+        .frame(height: 52)
+    }
+
+    // MARK: Erewhon (flat) — active-theme tokens only; ZERO DesignSystem.Colors references.
+    private var flatBody: some View {
+        let tc = SettingsManager.shared.activeColors
+        let isPrimary = (style == .primary)
+        // Mockup .btn is 14/700; HankenGrotesk-SemiBold at 15 is the chosen equivalent
+        // (the single typographic deviation for AppButton — noted).
+        return buttonLabel(
+            fontSize: 15,
+            tint: isPrimary ? DesignSystem.Erewhon.onAccent : tc.textPrimary,
+            spinnerTint: isPrimary ? DesignSystem.Erewhon.onAccent : tc.textPrimary
+        )
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.Erewhon.buttonRadius)
+                .fill(isPrimary ? tc.primary : tc.cardBackground)   // .primary solid; .secondary ghost
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignSystem.Erewhon.buttonRadius)
+                .stroke(isPrimary ? Color.clear : DesignSystem.Erewhon.line, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Erewhon.buttonRadius))
+        .shadow(
+            color: isPrimary ? tc.primary.opacity(0.34) : DesignSystem.Erewhon.subtleShadow.color,
+            radius: isPrimary ? 9 : DesignSystem.Erewhon.subtleShadow.radius,
+            x: 0,
+            y: isPrimary ? 6 : DesignSystem.Erewhon.subtleShadow.y
+        )
+    }
+
+    // MARK: Pixel — preserved exactly (band3Green fill, #047857 2px border, pixel shape).
+    private var pixelBody: some View {
+        buttonLabel(
+            fontSize: 17,
+            tint: style == .primary ? .white : DesignSystem.Colors.primary,
+            spinnerTint: style == .primary ? .white : DesignSystem.Colors.primary
+        )
+        .background(pixelBackground)
+        .overlay(
+            AdaptiveCardShapeStyle()
+                .stroke(style == .secondary ? DesignSystem.Colors.primary : Color(hex: "#047857"), lineWidth: 2)
+        )
+        .clipShape(AdaptiveCardShapeStyle())
     }
 
     @ViewBuilder
-    private var backgroundView: some View {
+    private var pixelBackground: some View {
         switch style {
         case .primary:
-            if SettingsManager.shared.isCleanUI {
-                LinearGradient(colors: [DesignSystem.Colors.primary], startPoint: .top, endPoint: .bottom)
-            } else {
-                DesignSystem.Colors.band3Green
-            }
+            DesignSystem.Colors.band3Green
         case .secondary:
             Color.clear
         }
