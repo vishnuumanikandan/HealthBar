@@ -150,7 +150,7 @@ struct LeaderboardSection: View {
                 .font(AppFont.bold(18))
                 .foregroundColor(tc.textPrimary)
 
-            Text("The leaderboard ranks you and your friends by weekly goal adherence. Create a free account from the Friends tab to join.")
+            Text("The leaderboard ranks you and your friends by weekly goal adherence. Create a free account to join.")
                 .font(AppFont.regular(13))
                 .foregroundColor(tc.textSecondary)
                 .multilineTextAlignment(.center)
