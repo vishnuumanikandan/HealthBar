@@ -49,27 +49,27 @@ struct AccessibilitySettingsView: View {
                     Text("Retro pixel art with wooden boards, Silkscreen font, and themed color palettes.")
                 }
 
-                // Clean Themes
+                // Erewhon Themes
                 Section {
                     themeRow(
-                        title: "Clean Light",
+                        title: "Erewhon Light",
                         subtitle: "Minimalist, modern, easy to read",
                         icon: "sun.max",
-                        value: "cleanLight"
+                        value: "erewhonLight"
                     )
 
                     Divider()
 
                     themeRow(
-                        title: "Clean Dark",
+                        title: "Erewhon Dark",
                         subtitle: "Sleek dark mode, reduced eye strain",
                         icon: "moon",
-                        value: "cleanDark"
+                        value: "erewhonDark"
                     )
                 } header: {
-                    Text("Clean Minimal")
+                    Text("Erewhon")
                 } footer: {
-                    Text("Modern rounded UI with system fonts. Same features, calmer look.")
+                    Text("Modern flat UI with Bebas Neue & Hanken Grotesk type. Same features, bolder look.")
                 }
 
                 // Nutrition Display Section

@@ -342,6 +342,52 @@ enum DesignSystem {
         let x: CGFloat
         let y: CGFloat
     }
+
+    // MARK: - Erewhon Tokens (R1)
+
+    /// Additive token namespace for the Erewhon reskin (R1–R6). Nothing existing moves
+    /// here; later R-prompts consume these. Values from the §1 token table, cross-checked
+    /// against design/erewhon/arena.html.
+    enum Erewhon {
+        /// Card corner radius for the Erewhon flat treatment.
+        static let cardRadius: CGFloat = 18
+
+        // Rank metals (adaptive Color(light:dark:); tracks the forced scheme appearance).
+        static let rankGold = Color(light: Color(hex: "#CE9A33"), dark: Color(hex: "#E0B047"))
+        static let rankSilver = Color(light: Color(hex: "#A6AEB9"), dark: Color(hex: "#A6AEB9"))
+        static let rankIron = Color(light: Color(hex: "#7E8896"), dark: Color(hex: "#7E8896"))
+        static let rankBronze = Color(light: Color(hex: "#B06A3C"), dark: Color(hex: "#C8814A"))
+
+        // Reserved hues (consumed by later R-prompts).
+        static let pink = Color(light: Color(hex: "#AF4D80"), dark: Color(hex: "#DE77AB"))
+        static let social = Color(light: Color(hex: "#00739D"), dark: Color(hex: "#00A4CD"))
+
+        /// Hairline border for the active Erewhon scheme (ink @ 11% light / #E8EBF2 @ 13%
+        /// dark). Keyed off `SettingsManager.shared.isCleanDark`, which per D3 now means
+        /// "Erewhon Dark".
+        static var line: Color {
+            SettingsManager.shared.isCleanDark
+                ? Color(hex: "#E8EBF2").opacity(0.13)
+                : Color(hex: "#111318").opacity(0.11)
+        }
+
+        /// Soft separator for the active Erewhon scheme (ink @ 5% light / #E8EBF2 @ 6%
+        /// dark). Keyed off `isCleanDark` (Erewhon Dark) per D3.
+        static var lineSoft: Color {
+            SettingsManager.shared.isCleanDark
+                ? Color(hex: "#E8EBF2").opacity(0.06)
+                : Color(hex: "#111318").opacity(0.05)
+        }
+
+        /// Signature Erewhon easing curve — cubic-bezier(0.16, 1, 0.3, 1), duration-parameterized.
+        static func ease(_ duration: Double = 0.5) -> Animation {
+            Animation.timingCurve(0.16, 1, 0.3, 1, duration: duration)
+        }
+
+        /// Card shadow token (mirrors Shadows.card: black 8%, radius 12, y 4).
+        static let cardShadow: (color: Color, radius: CGFloat, y: CGFloat) =
+            (Color.black.opacity(0.08), 12, 4)
+    }
 }
 
 // MARK: - Reusable SwiftUI Components
@@ -994,28 +1040,41 @@ extension View {
 
 // MARK: - AppFont Convenience
 
-/// Adaptive font that returns pixel font (Silkscreen) in RPG mode
-/// or system font (SF Pro Rounded) in Clean mode.
+/// Adaptive font. The flat family (now Erewhon, formerly Clean — the `isCleanUI` name is
+/// retained from the retired Clean era) uses Hanken Grotesk for body/emphasis and Bebas
+/// Neue for display; the pixel family uses Silkscreen (byte-identical to before).
 enum AppFont {
+    /// Emphasis / body-bold. Erewhon: Hanken Grotesk SemiBold (600 — the mockup's
+    /// dominant emphasis weight). Pixel: Silkscreen bold.
     static func bold(_ size: CGFloat) -> Font {
         if SettingsManager.shared.isCleanUI {
-            return .system(size: size, weight: .bold, design: .rounded)
+            return .custom("HankenGrotesk-SemiBold", size: size)
         }
         return DesignSystem.Typography.pixel(size, weight: .bold)
     }
 
+    /// Body / regular. Erewhon: Hanken Grotesk Regular. Pixel: Silkscreen regular.
     static func regular(_ size: CGFloat) -> Font {
         if SettingsManager.shared.isCleanUI {
-            return .system(size: size, weight: .regular, design: .rounded)
+            return .custom("HankenGrotesk-Regular", size: size)
         }
         return DesignSystem.Typography.pixel(size)
     }
 
-    /// Serif font used exclusively for the "HealthBar" app title in clean mode.
-    /// In RPG mode, returns pixel bold as usual.
+    /// Display type — numerals, titles, and hero/stat text ONLY (never body/paragraph).
+    /// Erewhon: Bebas Neue. Pixel: Silkscreen bold.
+    static func display(_ size: CGFloat) -> Font {
+        if SettingsManager.shared.isCleanUI {
+            return .custom("BebasNeue-Regular", size: size)
+        }
+        return DesignSystem.Typography.pixel(size, weight: .bold)
+    }
+
+    /// Legacy app-title treatment. The serif era retired with Clean; the flat branch now
+    /// routes to `display` (Bebas Neue). Pixel: Silkscreen bold (unchanged).
     static func serifTitle(_ size: CGFloat) -> Font {
         if SettingsManager.shared.isCleanUI {
-            return .system(size: size, weight: .regular, design: .serif)
+            return display(size)
         }
         return DesignSystem.Typography.pixel(size, weight: .bold)
     }
@@ -1024,43 +1083,62 @@ enum AppFont {
 // MARK: - Adaptive Shape View Modifiers
 
 extension View {
-    /// Adaptive card: PixelCardShape in RPG, RoundedRectangle(16) in Clean.
+    /// Adaptive card: PixelCardShape in pixel themes, Erewhon flat card otherwise.
+    /// (Erewhon branch ignores the passed `cornerRadius` in favor of `Erewhon.cardRadius`
+    /// per D6; the param is retained for source compatibility with existing call sites.)
     func adaptiveCard(
         borderColor: Color = DesignSystem.Colors.primary,
         fillColor: Color = DesignSystem.Colors.cardBackground,
         fillGradient: LinearGradient? = nil,
         cornerRadius: CGFloat = 16
     ) -> some View {
-        Group {
+        // Selection heuristic (D6): the app-wide selection signal is a caller passing
+        // exactly the active scheme's accent (tc.primary). When matched, stroke the accent
+        // at 1.5px so pickers still read as selected; otherwise use the Erewhon hairline.
+        // (Meaningful only in the Erewhon branch; the pixel branch runs under pixel themes,
+        // where accent never equals the default green borderColor.)
+        let isSelected = borderColor == SettingsManager.shared.activeColors.primary
+        return Group {
             if SettingsManager.shared.isCleanUI {
                 self
                     .background(
-                        RoundedRectangle(cornerRadius: cornerRadius)
+                        RoundedRectangle(cornerRadius: DesignSystem.Erewhon.cardRadius)
                             .fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: cornerRadius)
-                            .stroke(borderColor.opacity(SettingsManager.shared.isCleanDark ? 0.08 : 0.06), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: DesignSystem.Erewhon.cardRadius)
+                            .stroke(isSelected ? SettingsManager.shared.activeColors.primary : DesignSystem.Erewhon.line,
+                                    lineWidth: isSelected ? 1.5 : 1)
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+                    .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Erewhon.cardRadius))
+                    .shadow(color: DesignSystem.Erewhon.cardShadow.color,
+                            radius: DesignSystem.Erewhon.cardShadow.radius,
+                            x: 0, y: DesignSystem.Erewhon.cardShadow.y)
             } else {
                 self.pixelCard(borderColor: borderColor, fillColor: fillColor, fillGradient: fillGradient)
             }
         }
     }
 
-    /// Adaptive pill: PixelPillShape in RPG, Capsule in Clean.
+    /// Adaptive pill: PixelPillShape in pixel themes, Erewhon flat capsule otherwise
+    /// (fill + hairline; selection heuristic mirrors adaptiveCard).
     func adaptivePill(
         borderColor: Color = DesignSystem.Colors.primary,
         fillColor: Color = DesignSystem.Colors.cardBackground,
         fillGradient: LinearGradient? = nil
     ) -> some View {
-        Group {
+        let isSelected = borderColor == SettingsManager.shared.activeColors.primary
+        return Group {
             if SettingsManager.shared.isCleanUI {
                 self
                     .background(
                         Capsule()
                             .fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(isSelected ? SettingsManager.shared.activeColors.primary : DesignSystem.Erewhon.line,
+                                    lineWidth: isSelected ? 1.5 : 1)
                     )
                     .clipShape(Capsule())
             } else {
@@ -1083,14 +1161,21 @@ struct AdaptiveCard<Content: View>: View {
     private var isClean: Bool { SettingsManager.shared.isCleanUI }
 
     var body: some View {
+        // Erewhon flat treatment mirrors the .adaptiveCard(...) modifier (radius, hairline,
+        // shadow, selection heuristic) so container-form cards match modifier-form cards.
+        let isSelected = borderColor == SettingsManager.shared.activeColors.primary
         if isClean {
             ZStack {
-                RoundedRectangle(cornerRadius: cornerRadius)
+                RoundedRectangle(cornerRadius: DesignSystem.Erewhon.cardRadius)
                     .fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
                     .overlay(
-                        RoundedRectangle(cornerRadius: cornerRadius)
-                            .stroke(borderColor.opacity(SettingsManager.shared.isCleanDark ? 0.08 : 0.06), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: DesignSystem.Erewhon.cardRadius)
+                            .stroke(isSelected ? SettingsManager.shared.activeColors.primary : DesignSystem.Erewhon.line,
+                                    lineWidth: isSelected ? 1.5 : 1)
                     )
+                    .shadow(color: DesignSystem.Erewhon.cardShadow.color,
+                            radius: DesignSystem.Erewhon.cardShadow.radius,
+                            x: 0, y: DesignSystem.Erewhon.cardShadow.y)
                 content()
             }
         } else {
@@ -1109,9 +1194,17 @@ struct AdaptivePill<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
+        // Erewhon flat capsule mirrors the .adaptivePill(...) modifier (fill + hairline).
+        let isSelected = borderColor == SettingsManager.shared.activeColors.primary
         if SettingsManager.shared.isCleanUI {
             ZStack {
-                Capsule().fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
+                Capsule()
+                    .fill(fillGradient.map { AnyShapeStyle($0) } ?? AnyShapeStyle(fillColor))
+                    .overlay(
+                        Capsule()
+                            .stroke(isSelected ? SettingsManager.shared.activeColors.primary : DesignSystem.Erewhon.line,
+                                    lineWidth: isSelected ? 1.5 : 1)
+                    )
                 content()
             }
         } else {

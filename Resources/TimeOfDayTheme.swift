@@ -292,141 +292,154 @@ extension TimeOfDayTheme {
     )
 }
 
-// MARK: - Clean Light Palette
+// MARK: - Erewhon Light Palette
 
 extension ThemeColors {
-    static let cleanLight = ThemeColors(
-        primaryBackground: Color(hex: "#F0F9F6"),
-        cardBackground: Color(hex: "#FFFFFF"),
-        primary: Color(hex: "#0D9488"),
-        primaryDark: Color(hex: "#0F766E"),
-        primaryDarker: Color(hex: "#115E59"),
-        textPrimary: Color(hex: "#1A1A1A"),
-        textSecondary: Color(hex: "#888888"),
-        textTertiary: Color(hex: "#B8C5C0"),
-        ringFilled: Color(hex: "#0D9488"),
-        ringEmpty: Color(hex: "#E8E5E0"),
-        xpTrackBackground: Color(hex: "#E8E5E0"),
-        xpTrackBorder: Color(hex: "#E8E5E0"),
-        xpFillLight: Color(hex: "#2DD4BF"),
-        xpFillDark: Color(hex: "#0D9488"),
-        macroBarProtein: Color(hex: "#0D9488"),
-        macroBarCarbs: Color(hex: "#D4A843"),
-        macroBarFat: Color(hex: "#C07A5C"),
-        macroBarTrack: Color(hex: "#E8E5E0"),
-        buttonLight: Color(hex: "#14B8A6"),
-        buttonMid: Color(hex: "#0D9488"),
-        buttonDark: Color(hex: "#0F766E"),
-        buttonBorder: Color(hex: "#0F766E"),
+    /// Erewhon Light — R1 reskin (replaces Clean Light). Full explicit initializer per
+    /// D4 (no clean-static copy, no shorthand). Values are the §1 token table's LIGHT
+    /// column, cross-checked against design/erewhon/arena.html. Recessed/track surfaces
+    /// use the mockup's `--sunk` (#E8EAED) rather than §1's mislabeled "board" (the desk
+    /// backdrop). Counterpart-less fields (chart bars, stat cells, icon tuples, tab
+    /// colors) are re-tinted to Erewhon neutrals/accent. Rank metals + pink/social live
+    /// in DesignSystem.Erewhon, not here.
+    static let erewhonLight = ThemeColors(
+        primaryBackground: Color(hex: "#F3F4F6"),              // bg
+        cardBackground: Color(hex: "#FFFFFF"),                 // surface (bezel)
+        primary: Color(hex: "#083ACE"),                        // accent
+        primaryDark: Color(hex: "#0022B1"),                    // accent-deep
+        primaryDarker: Color(hex: "#0022B1"),                  // accent-deep (deepest step)
+        textPrimary: Color(hex: "#111318"),                    // ink
+        textSecondary: Color(hex: "#57606F"),                  // muted
+        textTertiary: Color(hex: "#8A93A6"),                   // faint
+        ringFilled: Color(hex: "#083ACE"),                     // accent
+        ringEmpty: Color(hex: "#E8EAED"),                      // sunk (track)
+        xpTrackBackground: Color(hex: "#E8EAED"),              // sunk (track)
+        xpTrackBorder: Color.clear,                            // mockup tracks are borderless
+        xpFillLight: Color(hex: "#083ACE"),                    // accent (§1: xp fill = accent)
+        xpFillDark: Color(hex: "#0022B1"),                     // accent-deep (gradient dark stop)
+        macroBarProtein: Color(hex: "#083ACE"),                // m-protein = accent
+        macroBarCarbs: Color(hex: "#CD4B00"),                  // m-carbs
+        macroBarFat: Color(hex: "#0F6A31"),                    // m-fat
+        macroBarTrack: Color(hex: "#E8EAED"),                  // sunk (track)
+        buttonLight: Color(hex: "#083ACE"),                    // accent
+        buttonMid: Color(hex: "#083ACE"),                      // accent
+        buttonDark: Color(hex: "#0022B1"),                     // accent-deep
+        buttonBorder: Color(hex: "#0022B1"),                   // accent-deep
         questBoardStyle: .wood,
-        purityBand1: Color(hex: "#0D9488"),
-        purityBand2: Color(hex: "#5EEAD4"),
-        purityBand3: Color(hex: "#F97316"),
-        purityBand4: Color(hex: "#EF4444"),
-        segBackground: Color(hex: "#F3F4F6"),
-        segInactiveFill: Color(hex: "#E5E7EB"),
-        segInactiveText: Color(hex: "#6B7280"),
-        segActiveFill: Color.white,
-        segActiveText: Color(hex: "#1A1A1A"),
-        barLight: Color(hex: "#99F6E4"),
-        barDark: Color(hex: "#14B8A6"),
-        barBorder: Color(hex: "#0D9488"),
-        barTodayLight: Color(hex: "#5EEAD4"),
-        barTodayDark: Color(hex: "#0D9488"),
-        barTodayBorder: Color(hex: "#0F766E"),
-        chartAxisColor: Color(hex: "#D1D5DB"),
-        goalLineColor: Color(hex: "#EF4444"),
-        statsContainerBorder: Color(hex: "#E5E7EB"),
-        statsContainerFill: Color(hex: "#F9FAFB"),
-        statsTitle: Color(hex: "#1A1A1A"),
-        statCellBorder: Color(hex: "#E5E7EB"),
-        statCellFill: Color(hex: "#FFFFFF"),
-        statLabel: Color(hex: "#888888"),
-        statValue: Color(hex: "#1A1A1A"),
-        statSubtitle: Color(hex: "#B8C5C0"),
-        statOnBorder: Color(hex: "#0D9488"),
-        statOnLight: Color(hex: "#5EEAD4"),
-        statOnMid: Color(hex: "#14B8A6"),
-        statOnDark: Color(hex: "#0D9488"),
-        tabBarLight: Color(hex: "#FFFFFF"),
-        tabBarMid: Color(hex: "#FFFFFF"),
-        tabBarDark: Color(hex: "#E5E7EB"),
-        tabActive: Color(hex: "#0D9488"),
-        tabInactive: Color(hex: "#B8C5C0"),
-        invBorderColor: Color(hex: "#E5E7EB"),
-        invTimeBg: Color(hex: "#F9FAFB").opacity(0.9),
-        iconGreen: (Color(hex: "#5EEAD4"), Color(hex: "#14B8A6"), Color(hex: "#0D9488"), Color(hex: "#0F766E")),
-        iconAmber: (Color(hex: "#FCD34D"), Color(hex: "#D4A843"), Color(hex: "#A07D2E"), Color(hex: "#7A5F1F")),
-        iconOrange: (Color(hex: "#FDBA9E"), Color(hex: "#C07A5C"), Color(hex: "#9E5E42"), Color(hex: "#7A4530"))
+        purityBand1: Color(hex: "#0F6A31"),                    // good = m-fat green
+        purityBand2: Color(hex: "#CE9A33"),                    // rk-gold
+        purityBand3: Color(hex: "#CD4B00"),                    // m-carbs orange
+        purityBand4: Color(hex: "#BE000D"),                    // bad = danger
+        segBackground: Color(hex: "#E8EAED"),                  // sunk (recessed seg)
+        segInactiveFill: Color.clear,                          // mockup inactive seg is transparent
+        segInactiveText: Color(hex: "#57606F"),                // muted
+        segActiveFill: Color(hex: "#FAFBFD"),                  // surface-2 (raised seg)
+        segActiveText: Color(hex: "#111318"),                  // ink
+        barLight: Color(hex: "#083ACE").opacity(0.35),         // muted accent (non-today)
+        barDark: Color(hex: "#083ACE").opacity(0.55),          // muted accent (non-today)
+        barBorder: Color.clear,                                // mockup bars are borderless
+        barTodayLight: Color(hex: "#083ACE"),                  // accent (today)
+        barTodayDark: Color(hex: "#0022B1"),                   // accent-deep (today)
+        barTodayBorder: Color.clear,
+        chartAxisColor: Color(hex: "#111318").opacity(0.11),   // line
+        goalLineColor: Color(hex: "#8A93A6"),                  // faint (neutral goal line)
+        statsContainerBorder: Color(hex: "#111318").opacity(0.11), // line
+        statsContainerFill: Color(hex: "#111318").opacity(0.05),   // line-soft (grid gap)
+        statsTitle: Color(hex: "#111318"),                     // ink
+        statCellBorder: Color(hex: "#111318").opacity(0.11),   // line
+        statCellFill: Color(hex: "#FFFFFF"),                   // surface
+        statLabel: Color(hex: "#8A93A6"),                      // faint
+        statValue: Color(hex: "#111318"),                      // ink
+        statSubtitle: Color(hex: "#8A93A6"),                   // faint
+        statOnBorder: Color(hex: "#0022B1"),                   // accent-deep
+        statOnLight: Color(hex: "#083ACE"),                    // accent
+        statOnMid: Color(hex: "#083ACE"),                      // accent
+        statOnDark: Color(hex: "#0022B1"),                     // accent-deep
+        tabBarLight: Color(hex: "#F3F4F6"),                    // bg
+        tabBarMid: Color(hex: "#F3F4F6"),                      // bg
+        tabBarDark: Color(hex: "#F3F4F6"),                     // bg
+        tabActive: Color(hex: "#083ACE"),                      // accent (D4)
+        tabInactive: Color(hex: "#57606F"),                    // muted (D4)
+        invBorderColor: Color(hex: "#111318").opacity(0.11),   // line
+        invTimeBg: Color(hex: "#FAFBFD").opacity(0.9),         // surface-2
+        iconGreen: (Color(hex: "#4CA86B"), Color(hex: "#0F6A31"), Color(hex: "#0A4A22"), Color(hex: "#0A4A22")),
+        iconAmber: (Color(hex: "#E0B44E"), Color(hex: "#CE9A33"), Color(hex: "#9A7220"), Color(hex: "#9A7220")),
+        iconOrange: (Color(hex: "#E86A2E"), Color(hex: "#CD4B00"), Color(hex: "#9A3800"), Color(hex: "#9A3800"))
     )
 }
 
-// MARK: - Clean Dark Palette
+// MARK: - Erewhon Dark Palette
 
 extension ThemeColors {
-    static let cleanDark = ThemeColors(
-        primaryBackground: Color(hex: "#0F1614"),
-        cardBackground: Color(hex: "#1A2420"),
-        primary: Color(hex: "#0D9488"),
-        primaryDark: Color(hex: "#0F766E"),
-        primaryDarker: Color(hex: "#115E59"),
-        textPrimary: Color(hex: "#E8EFEB"),
-        textSecondary: Color(hex: "#5A7A6E"),
-        textTertiary: Color(hex: "#3F554A"),
-        ringFilled: Color(hex: "#5EEAD4"),
-        ringEmpty: Color.white.opacity(0.1),
-        xpTrackBackground: Color.white.opacity(0.12),
-        xpTrackBorder: Color.clear,
-        xpFillLight: Color.white.opacity(0.85),
-        xpFillDark: Color.white.opacity(0.85),
-        macroBarProtein: Color(hex: "#14B8A6"),
-        macroBarCarbs: Color(hex: "#D4A843"),
-        macroBarFat: Color(hex: "#C07A5C"),
-        macroBarTrack: Color.white.opacity(0.06),
-        buttonLight: Color(hex: "#14B8A6"),
-        buttonMid: Color(hex: "#0D9488"),
-        buttonDark: Color(hex: "#0A6B63"),
-        buttonBorder: Color(hex: "#0A6B63"),
+    /// Erewhon Dark — R1 reskin (replaces Clean Dark). Full explicit initializer per D4.
+    /// Values are the §1 token table's DARK column, cross-checked against
+    /// design/erewhon/arena.html. NOTE: cardBackground uses the mockup's `--surface`
+    /// #161A22 — HTML wins over the §1 table's #1C1F24, which is the phone-bezel
+    /// hardware color, not the card surface. Recessed/track surfaces use `--sunk`
+    /// (#222838); counterpart-less fields re-tinted to Erewhon neutrals/accent.
+    static let erewhonDark = ThemeColors(
+        primaryBackground: Color(hex: "#0D0F13"),              // bg
+        cardBackground: Color(hex: "#161A22"),                 // surface (HTML wins vs table #1C1F24)
+        primary: Color(hex: "#4882FF"),                        // accent
+        primaryDark: Color(hex: "#2B62EF"),                    // accent-deep
+        primaryDarker: Color(hex: "#2B62EF"),                  // accent-deep (deepest step)
+        textPrimary: Color(hex: "#E8EBF2"),                    // ink
+        textSecondary: Color(hex: "#8B94A8"),                  // muted
+        textTertiary: Color(hex: "#55607A"),                   // faint
+        ringFilled: Color(hex: "#4882FF"),                     // accent
+        ringEmpty: Color(hex: "#222838"),                      // sunk (track)
+        xpTrackBackground: Color(hex: "#222838"),              // sunk (track)
+        xpTrackBorder: Color.clear,                            // borderless track
+        xpFillLight: Color(hex: "#4882FF"),                    // accent (§1: xp fill = accent)
+        xpFillDark: Color(hex: "#2B62EF"),                     // accent-deep (gradient dark stop)
+        macroBarProtein: Color(hex: "#4882FF"),                // m-protein = accent
+        macroBarCarbs: Color(hex: "#F37513"),                  // m-carbs
+        macroBarFat: Color(hex: "#429C5A"),                    // m-fat
+        macroBarTrack: Color(hex: "#222838"),                  // sunk (track)
+        buttonLight: Color(hex: "#4882FF"),                    // accent
+        buttonMid: Color(hex: "#4882FF"),                      // accent
+        buttonDark: Color(hex: "#2B62EF"),                     // accent-deep
+        buttonBorder: Color(hex: "#2B62EF"),                   // accent-deep
         questBoardStyle: .wood,
-        purityBand1: Color(hex: "#0D9488"),
-        purityBand2: Color(hex: "#5EEAD4"),
-        purityBand3: Color(hex: "#F97316"),
-        purityBand4: Color(hex: "#EF4444"),
-        segBackground: Color(hex: "#1A2E28"),
-        segInactiveFill: Color(hex: "#0F1E1A"),
-        segInactiveText: Color(hex: "#5A7A6E"),
-        segActiveFill: Color(hex: "#E8EFEB"),
-        segActiveText: Color(hex: "#0F1614"),
-        barLight: Color(hex: "#5EEAD4"),
-        barDark: Color(hex: "#0D9488"),
-        barBorder: Color(hex: "#2DD4BF"),
-        barTodayLight: Color(hex: "#99F6E4"),
-        barTodayDark: Color(hex: "#14B8A6"),
-        barTodayBorder: Color(hex: "#2DD4BF"),
-        chartAxisColor: Color(hex: "#2A3D36"),
-        goalLineColor: Color(hex: "#EF4444"),
-        statsContainerBorder: Color(hex: "#2A3D36"),
-        statsContainerFill: Color(hex: "#162220"),
-        statsTitle: Color(hex: "#E8EFEB"),
-        statCellBorder: Color(hex: "#2A3D36"),
-        statCellFill: Color(hex: "#1A2420"),
-        statLabel: Color(hex: "#5A7A6E"),
-        statValue: Color(hex: "#E8EFEB"),
-        statSubtitle: Color(hex: "#3F554A"),
-        statOnBorder: Color(hex: "#0D9488"),
-        statOnLight: Color(hex: "#5EEAD4"),
-        statOnMid: Color(hex: "#14B8A6"),
-        statOnDark: Color(hex: "#0D9488"),
-        tabBarLight: Color(hex: "#162220"),
-        tabBarMid: Color(hex: "#162220"),
-        tabBarDark: Color(hex: "#0F1614"),
-        tabActive: Color(hex: "#2DD4BF"),
-        tabInactive: Color(hex: "#4A6359"),
-        invBorderColor: Color(hex: "#2A3D36"),
-        invTimeBg: Color(hex: "#1A2420").opacity(0.9),
-        iconGreen: (Color(hex: "#99F6E4"), Color(hex: "#2DD4BF"), Color(hex: "#14B8A6"), Color(hex: "#0D9488")),
-        iconAmber: (Color(hex: "#FDE68A"), Color(hex: "#FBBF24"), Color(hex: "#D4A843"), Color(hex: "#A07D2E")),
-        iconOrange: (Color(hex: "#FDBA9E"), Color(hex: "#E8956E"), Color(hex: "#C07A5C"), Color(hex: "#9E5E42"))
+        purityBand1: Color(hex: "#429C5A"),                    // good = m-fat green
+        purityBand2: Color(hex: "#E0B047"),                    // rk-gold
+        purityBand3: Color(hex: "#F37513"),                    // m-carbs orange
+        purityBand4: Color(hex: "#F14E46"),                    // bad = danger
+        segBackground: Color(hex: "#222838"),                  // sunk (recessed seg)
+        segInactiveFill: Color.clear,                          // transparent inactive seg
+        segInactiveText: Color(hex: "#8B94A8"),                // muted
+        segActiveFill: Color(hex: "#1D2230"),                  // surface-2 (raised seg)
+        segActiveText: Color(hex: "#E8EBF2"),                  // ink
+        barLight: Color(hex: "#4882FF").opacity(0.35),         // muted accent (non-today)
+        barDark: Color(hex: "#4882FF").opacity(0.55),          // muted accent (non-today)
+        barBorder: Color.clear,
+        barTodayLight: Color(hex: "#4882FF"),                  // accent (today)
+        barTodayDark: Color(hex: "#2B62EF"),                   // accent-deep (today)
+        barTodayBorder: Color.clear,
+        chartAxisColor: Color(hex: "#E8EBF2").opacity(0.13),   // line
+        goalLineColor: Color(hex: "#55607A"),                  // faint (neutral goal line)
+        statsContainerBorder: Color(hex: "#E8EBF2").opacity(0.13), // line
+        statsContainerFill: Color(hex: "#E8EBF2").opacity(0.06),   // line-soft (grid gap)
+        statsTitle: Color(hex: "#E8EBF2"),                     // ink
+        statCellBorder: Color(hex: "#E8EBF2").opacity(0.13),   // line
+        statCellFill: Color(hex: "#161A22"),                   // surface
+        statLabel: Color(hex: "#55607A"),                      // faint
+        statValue: Color(hex: "#E8EBF2"),                      // ink
+        statSubtitle: Color(hex: "#55607A"),                   // faint
+        statOnBorder: Color(hex: "#2B62EF"),                   // accent-deep
+        statOnLight: Color(hex: "#4882FF"),                    // accent
+        statOnMid: Color(hex: "#4882FF"),                      // accent
+        statOnDark: Color(hex: "#2B62EF"),                     // accent-deep
+        tabBarLight: Color(hex: "#0D0F13"),                    // bg
+        tabBarMid: Color(hex: "#0D0F13"),                      // bg
+        tabBarDark: Color(hex: "#0D0F13"),                     // bg
+        tabActive: Color(hex: "#4882FF"),                      // accent (D4)
+        tabInactive: Color(hex: "#8B94A8"),                    // muted (D4)
+        invBorderColor: Color(hex: "#E8EBF2").opacity(0.13),   // line
+        invTimeBg: Color(hex: "#1D2230").opacity(0.9),         // surface-2
+        iconGreen: (Color(hex: "#5FB87E"), Color(hex: "#429C5A"), Color(hex: "#2E7A43"), Color(hex: "#2E7A43")),
+        iconAmber: (Color(hex: "#ECC463"), Color(hex: "#E0B047"), Color(hex: "#B8862F"), Color(hex: "#B8862F")),
+        iconOrange: (Color(hex: "#F58A4A"), Color(hex: "#F37513"), Color(hex: "#C25A0E"), Color(hex: "#C25A0E"))
     )
 }
 

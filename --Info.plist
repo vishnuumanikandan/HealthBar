@@ -17,6 +17,11 @@
 	<array>
 		<string>Silkscreen-Regular.ttf</string>
 		<string>Silkscreen-Bold.ttf</string>
+		<string>BebasNeue-Regular.ttf</string>
+		<string>HankenGrotesk-Regular.ttf</string>
+		<string>HankenGrotesk-Medium.ttf</string>
+		<string>HankenGrotesk-SemiBold.ttf</string>
+		<string>HankenGrotesk-Bold.ttf</string>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>
