@@ -114,62 +114,69 @@ struct ContentView: View {
 
     @ViewBuilder
     private var mainTabView: some View {
-        VStack(spacing: 0) {
-            TabView(selection: $selectedTab) {
-                // Home Tab
-                HomeView(
-                    coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
-                    selectedTab: $selectedTab,
-                    authService: FirebaseAuthService.shared
-                )
+        TabView(selection: $selectedTab) {
+            // Home Tab
+            HomeView(
+                coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
+                selectedTab: $selectedTab,
+                authService: FirebaseAuthService.shared
+            )
+            .background(tc.primaryBackground.ignoresSafeArea())
+            .toolbar(.hidden, for: .tabBar)
+            .tag(0)
+
+            // Food Log Tab
+            FoodLogView(coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared))
                 .background(tc.primaryBackground.ignoresSafeArea())
                 .toolbar(.hidden, for: .tabBar)
-                .tag(0)
+                .tag(1)
 
-                // Food Log Tab
-                FoodLogView(coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared))
-                    .background(tc.primaryBackground.ignoresSafeArea())
-                    .toolbar(.hidden, for: .tabBar)
-                    .tag(1)
+            // Battle Tab (D1a) — center slot
+            BattleView(
+                coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
+                authService: FirebaseAuthService.shared,
+                onCreateAccount: { showSignUpFromGuest = true }
+            )
+            .background(tc.primaryBackground.ignoresSafeArea())
+            .toolbar(.hidden, for: .tabBar)
+            .tag(2)
 
-                // Battle Tab (D1a) — center slot
-                BattleView(
-                    coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
-                    authService: FirebaseAuthService.shared,
-                    onCreateAccount: { showSignUpFromGuest = true }
-                )
-                .background(tc.primaryBackground.ignoresSafeArea())
-                .toolbar(.hidden, for: .tabBar)
-                .tag(2)
+            // Friends Tab
+            FriendsView(
+                coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
+                authService: FirebaseAuthService.shared,
+                onCreateAccount: { showSignUpFromGuest = true }
+            )
+            .background(tc.primaryBackground.ignoresSafeArea())
+            .toolbar(.hidden, for: .tabBar)
+            .tag(3)
 
-                // Friends Tab
-                FriendsView(
-                    coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
-                    authService: FirebaseAuthService.shared,
-                    onCreateAccount: { showSignUpFromGuest = true }
-                )
-                .background(tc.primaryBackground.ignoresSafeArea())
-                .toolbar(.hidden, for: .tabBar)
-                .tag(3)
-
-                // Profile Tab
-                ProfileView(
-                    coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
-                    authService: FirebaseAuthService.shared,
-                    onLogout: { authViewModel.logout() },
-                    onCreateAccount: { showSignUpFromGuest = true }
-                )
-                .background(tc.primaryBackground.ignoresSafeArea())
-                .toolbar(.hidden, for: .tabBar)
-                .tag(4)
-            }
-
+            // Profile Tab
+            ProfileView(
+                coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
+                authService: FirebaseAuthService.shared,
+                onLogout: { authViewModel.logout() },
+                onCreateAccount: { showSignUpFromGuest = true }
+            )
+            .background(tc.primaryBackground.ignoresSafeArea())
+            .toolbar(.hidden, for: .tabBar)
+            .tag(4)
+        }
+        // R2 D1: mount the custom bar as a bottom safe-area inset (was a VStack sibling).
+        // This gives every tab's scroll content automatic bottom clearance (fixes the
+        // Settings tap-target bug) and lets flat-theme content scroll under the
+        // translucent bar. The bar branch is unchanged; only its container moved.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if settings.isCleanUI {
                 CleanTabBar(selectedTab: $selectedTab)
             } else {
                 WoodenTabBar(selectedTab: $selectedTab)
             }
         }
+        // R2 §1 keyboard: a `.safeAreaInset` bottom bar otherwise rises with the keyboard.
+        // Keep it anchored to the screen bottom (text entry lives in sheets/scroll views that
+        // handle their own field reveal).
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .tint(DesignSystem.Colors.primary)
         .overlay(alignment: .top) {
             if let badge = BadgeToastQueue.shared.currentToast {
@@ -359,70 +366,129 @@ struct WoodenTabBar: View {
     }
 }
 
-// MARK: - Clean Tab Bar
+// MARK: - Clean Tab Bar (Erewhon)
 
-/// Clean floating-island tab bar for the minimalist UI style.
-/// Rounded container with pill-shaped active indicator. No textures or pixel fonts.
+/// Erewhon flat tab bar (name retained from the retired Clean era — R1 D3). Full-width
+/// and translucent so scroll content passes under it, with a raised center Battle
+/// control. Mounted via `.safeAreaInset(edge: .bottom)` (ContentView.mainTabView), which
+/// supplies the home-indicator region automatically. Matches design/erewhon/arena.html.
 struct CleanTabBar: View {
     @Binding var selectedTab: Int
     private var tc: ThemeColors { SettingsManager.shared.activeColors }
-    private var isDark: Bool { SettingsManager.shared.isCleanDark }
 
-    private let tabs: [(icon: String, label: String, tag: Int)] = [
-        ("house.fill", "Home", 0),
-        ("fork.knife", "Food", 1),
-        ("flag.2.crossed.fill", "Battle", 2), // TODO: swap for a custom crossed-swords pixel asset
-        ("person.2.fill", "Friends", 3),
-        ("person.fill", "Profile", 4)
+    @State private var battlePressed = false
+
+    // Two side tabs per side of the center Battle slot. Outline SF Symbols to match the
+    // mockup's 1.6-stroke line icons.
+    private let leftTabs: [(icon: String, label: String, tag: Int)] = [
+        ("house", "Home", 0),
+        ("fork.knife", "Food", 1)
+    ]
+    private let rightTabs: [(icon: String, label: String, tag: Int)] = [
+        ("person.2", "Friends", 3),
+        ("person", "Profile", 4)
     ]
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                ForEach(tabs, id: \.tag) { tab in
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                            selectedTab = tab.tag
-                        }
-                    } label: {
-                        VStack(spacing: 2) {
-                            Image(systemName: tab.icon)
-                                .font(.system(size: 19, weight: .medium))
-                                .scaleEffect(selectedTab == tab.tag ? 1.08 : 1.0)
-                                .overlay(alignment: .topTrailing) { BattleTabBadge(tag: tab.tag, tc: tc) }
-                            Text(tab.label)
-                                .font(.system(size: 10, weight: selectedTab == tab.tag ? .medium : .regular, design: .rounded))
-                        }
-                        .foregroundColor(selectedTab == tab.tag ? tc.tabActive : tc.tabInactive)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(
-                            Group {
-                                if selectedTab == tab.tag {
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(tc.primary.opacity(0.15))
-                                } else {
-                                    Color.clear
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-            .padding(4)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(tc.tabBarMid)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.white.opacity(isDark ? 0.06 : 0), lineWidth: 0.5)
-                    )
-            )
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
+        HStack(spacing: 0) {
+            ForEach(leftTabs, id: \.tag) { sideTab($0) }
+            centerBattle
+            ForEach(rightTabs, id: \.tag) { sideTab($0) }
         }
-        .background(tc.primaryBackground.ignoresSafeArea(edges: .bottom))
+        .frame(height: DesignSystem.Erewhon.tabBarContentHeight)   // 64
+        .padding(.top, 12)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .background(barBackground)
+        .animation(DesignSystem.Erewhon.ease(0.35), value: selectedTab)
+    }
+
+    // MARK: Side tab
+    @ViewBuilder
+    private func sideTab(_ tab: (icon: String, label: String, tag: Int)) -> some View {
+        let isActive = selectedTab == tab.tag
+        Button {
+            selectedTab = tab.tag
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 22, weight: .regular))
+                    .offset(y: isActive ? -1 : 0)          // active icon lift
+                Text(tab.label)
+                    .font(isActive ? AppFont.bold(10) : AppFont.regular(10))
+            }
+            .foregroundColor(isActive ? tc.tabActive : tc.textTertiary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(tab.label)
+    }
+
+    // MARK: Center Battle button + caption
+    private var centerBattle: some View {
+        let isActive = selectedTab == 2
+        return VStack(spacing: 4) {
+            Button {
+                selectedTab = 2
+            } label: {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(isActive ? tc.primary : tc.cardBackground)
+                    .frame(width: 46, height: 46)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(isActive ? tc.primary : DesignSystem.Erewhon.line, lineWidth: 1)
+                    )
+                    .overlay(
+                        Image(systemName: "flag.2.crossed")   // TODO: custom crossed-swords glyph (unchanged from pre-R2)
+                            .font(.system(size: 20, weight: .regular))
+                            .foregroundColor(isActive ? DesignSystem.Erewhon.onAccent : tc.textSecondary)
+                    )
+                    .overlay(alignment: .topTrailing) { BattleTabBadge(tag: 2, tc: tc) }
+                    .shadow(
+                        color: isActive ? tc.primary.opacity(0.34) : DesignSystem.Erewhon.subtleShadow.color,
+                        radius: isActive ? 8 : DesignSystem.Erewhon.subtleShadow.radius,
+                        x: 0,
+                        y: isActive ? 6 : DesignSystem.Erewhon.subtleShadow.y
+                    )
+                    .scaleEffect(battlePressed ? 0.95 : 1.0)
+                    .animation(DesignSystem.Erewhon.ease(0.3), value: battlePressed)
+            }
+            .buttonStyle(.plain)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in battlePressed = true }
+                    .onEnded { _ in battlePressed = false }
+            )
+            .accessibilityLabel("Battle")
+
+            Text("Battle")   // app vocabulary; mockup caption reads "Arena" (copy deviation — noted)
+                .font(isActive ? AppFont.bold(10) : AppFont.regular(10))
+                .foregroundColor(isActive ? tc.tabActive : tc.textTertiary)
+        }
+        .frame(width: 62)
+        .offset(y: -3)       // raise ~3pt above the side-tab content top (mockup battle-btn top:9 vs content 12)
+    }
+
+    // MARK: Bar background — blur + bg fade + top hairline, extending into the bottom safe area.
+    private var barBackground: some View {
+        ZStack {
+            Rectangle().fill(.ultraThinMaterial)
+            LinearGradient(
+                stops: [
+                    .init(color: tc.primaryBackground, location: 0.0),          // solid at the bottom
+                    .init(color: tc.primaryBackground.opacity(0.8), location: 0.3),
+                    .init(color: tc.primaryBackground.opacity(0), location: 1.0) // transparent at the top
+                ],
+                startPoint: .bottom, endPoint: .top
+            )
+        }
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(DesignSystem.Erewhon.lineSoft)
+                .frame(height: 1)
+        }
+        .ignoresSafeArea(edges: .bottom)
     }
 }
 

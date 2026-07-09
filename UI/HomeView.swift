@@ -918,6 +918,10 @@ struct HomeView: View {
             }
         }
         .scrollIndicators(.hidden)
+        // R2 §5: the tab bar is a `.safeAreaInset` on the TabView, which doesn't propagate
+        // through this tab's NavigationStack to the ScrollView — reserve the bar's height so
+        // bottom content clears the translucent bar (matches ProfileView).
+        .contentMargins(.bottom, DesignSystem.Erewhon.tabBarContentHeight + 12, for: .scrollContent)
     }
 
     // MARK: - Active Duels Strip (D1c)

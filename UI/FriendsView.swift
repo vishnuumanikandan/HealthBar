@@ -190,6 +190,9 @@ struct FriendsView: View {
                     await viewModel.refresh()
                 }
             }
+            // R2 §5: reserve the tab bar's height so the bottom of each segment clears the
+            // translucent bar (the TabView's safeAreaInset doesn't reach this ScrollView).
+            .contentMargins(.bottom, DesignSystem.Erewhon.tabBarContentHeight + 12, for: .scrollContent)
         }
     }
 
