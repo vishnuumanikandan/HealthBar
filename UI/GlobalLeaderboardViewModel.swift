@@ -56,6 +56,12 @@ final class GlobalLeaderboardViewModel {
     /// Cache keyed by `orderField` — each board fetched once per view lifetime; cleared on refresh.
     private var cache: [String: [GlobalLeaderboardDTO]] = [:]
 
+    /// M8: monotonic token bumped on every `loadBoard` invocation. Only the latest invocation may
+    /// render — a rapid picker switch invalidates any older in-flight fetch. A counter (not a
+    /// field comparison) is required: a user can switch away and back to the SAME board while an
+    /// intermediate fetch is still pending.
+    private var loadGeneration: Int = 0
+
     init(coordinator: AppCoordinator, myUid: String) {
         self.coordinator = coordinator
         self.myUid = myUid
@@ -88,16 +94,27 @@ final class GlobalLeaderboardViewModel {
     }
 
     private func loadBoard(force: Bool) async {
+        // M8: bump the generation on EVERY invocation (before the cache check) so even a
+        // synchronous cache hit invalidates any older in-flight fetch — otherwise the stale
+        // fetch lands after the cache hit and overwrites it.
+        loadGeneration += 1
+        let generation = loadGeneration
         let field = currentField
         if !force, let cached = cache[field] {
             rows = cached
             return
         }
         isLoading = true
-        defer { isLoading = false; hasLoaded = true }
         let result = await coordinator.fetchGlobalLeaderboard(metric: metric, league: league)
-        rows = result
+        // Cache under the FETCHED field's key unconditionally — the data is valid for that key
+        // even if the user has since switched away.
         cache[field] = result
+        // Only the latest invocation may touch rendered state; a stale completion (including a
+        // failed one) must never overwrite a newer board's rows / spinner / error.
+        guard generation == loadGeneration else { return }
+        rows = result
+        isLoading = false
+        hasLoaded = true
         // An empty result is a genuine empty board (day one) — never an error (D6 / §6).
         loadError = nil
     }

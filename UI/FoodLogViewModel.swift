@@ -270,6 +270,9 @@ final class FoodLogViewModel {
     /// Task for deletion countdown (uses Task.sleep instead of Timer for better lifecycle handling)
     private var deletionTask: Task<Void, Never>?
 
+    /// The undo window (seconds) before a delete is finalized (M9 — named per F3 decision 6).
+    private static let undoWindowSeconds: Double = 5
+
     /// Tracks whether current undo is for a quick log (true) or delete (false)
     /// Quick log undo = delete the newly created entry
     /// Delete undo = restore the entry to UI
@@ -359,6 +362,17 @@ final class FoodLogViewModel {
             // Keep displayedEntries in sync when viewing today
             if isViewingToday {
                 displayedEntries = todaysEntries
+            }
+
+            // M9: a reload re-fetches from the DB, where a pending (not-yet-finalized) delete still
+            // exists — it would resurrect into the lists mid-undo-window. Strip the current pending
+            // delete by id (a reload yields fresh instances, so identity comparison would miss it).
+            // Quick-log pendings genuinely exist in the DB and must stay (guard on !isQuickLogUndo).
+            // This single chokepoint covers every reload trigger, incl. permanentlyDelete of a
+            // superseded entry.
+            if let pending = recentlyDeleted, !isQuickLogUndo {
+                todaysEntries.removeAll { $0.id == pending.id }
+                displayedEntries.removeAll { $0.id == pending.id }
             }
 
             isLoading = false
@@ -513,6 +527,11 @@ final class FoodLogViewModel {
     /// User has 5 seconds to tap "Undo" before permanent deletion.
     /// New delete immediately finalizes any pending undo.
     func deleteWithUndo(_ entry: FoodEntry) {
+        // M9: a rapid double-tap on the SAME entry would fire permanentlyDelete twice (an
+        // immediate finalize + a second scheduled task) → a double coordinator.deleteFoodEntry.
+        // It already owns the pending slot; its expiry task is running. No-op.
+        guard recentlyDeleted?.id != entry.id else { return }
+
         // New delete immediately finalizes any pending undo
         if let pending = recentlyDeleted {
             deletionTask?.cancel()
@@ -547,7 +566,7 @@ final class FoodLogViewModel {
         // Start 5-second countdown using Task.sleep (safer than Timer)
         deletionTask = Task {
             do {
-                try await Task.sleep(for: .seconds(5))
+                try await Task.sleep(for: .seconds(Self.undoWindowSeconds))
 
                 // Check if task was cancelled
                 if !Task.isCancelled {
@@ -627,20 +646,30 @@ final class FoodLogViewModel {
             // Actually remove from database
             try await coordinator.deleteFoodEntry(entry)
 
-            // Reload data to recalculate everything
+            // Reload data to recalculate everything (de-resurrection happens in loadTodaysData)
             await loadTodaysData()
 
-            // Hide undo toast
-            showUndoToast = false
-            recentlyDeleted = nil
-            deletionTask = nil
+            // M9: clear the undo slot ONLY when THIS entry owns it. Finalizing a SUPERSEDED entry
+            // (a newer delete opened its own window) must not wipe the newer entry's toast/state.
+            if recentlyDeleted?.id == entry.id {
+                showUndoToast = false
+                recentlyDeleted = nil
+                deletionTask = nil
+            }
 
         } catch {
             print("Delete error: \(error)")
-            // If permanent delete fails, restore to UI
+            // M9: delete failed — restore to BOTH lists (was: todaysEntries only), duplicate-safe:
+            // an intervening reload may already have restored it (it still exists in the DB).
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                todaysEntries.append(entry)
-                todaysEntries.sort { $0.date > $1.date }
+                if !todaysEntries.contains(where: { $0.id == entry.id }) {
+                    todaysEntries.append(entry)
+                    todaysEntries.sort { $0.date > $1.date }
+                }
+                if !displayedEntries.contains(where: { $0.id == entry.id }) {
+                    displayedEntries.append(entry)
+                    displayedEntries.sort { $0.date > $1.date }
+                }
             }
 
             // Error haptic
@@ -650,6 +679,14 @@ final class FoodLogViewModel {
             #endif
 
             showToastMessage("Delete failed - restored")
+
+            // Its own undo window is over and the entry is back in the lists — clear the slot, but
+            // only if this entry still owns it (a newer delete may have superseded it).
+            if recentlyDeleted?.id == entry.id {
+                showUndoToast = false
+                recentlyDeleted = nil
+                deletionTask = nil
+            }
         }
     }
 
@@ -674,6 +711,10 @@ final class FoodLogViewModel {
                 await permanentlyDelete(pending)
             }
             showUndoToast = false
+            // M9: force-clear the slot even if permanentlyDelete's failure path intentionally left
+            // it set (the view is disappearing; there is no undo affordance to preserve).
+            recentlyDeleted = nil
+            deletionTask = nil
             isQuickLogUndo = false
         }
     }

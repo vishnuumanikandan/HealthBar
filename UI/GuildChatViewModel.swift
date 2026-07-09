@@ -48,6 +48,11 @@ final class GuildChatViewModel {
     /// Friend uids (resolved once on start) — drives the friend-only sender tap.
     private var friendUids: Set<String> = []
 
+    /// L3: set by stop(); guards the post-await listener registration in start() so a stop()
+    /// that races an in-flight start() can't leave an orphan listener (this VM's guild-chat
+    /// listener is deliberately outside the global registry, so stopAllListeners never reaps it).
+    private var isStopped: Bool = false
+
     // MARK: - Init
 
     init(coordinator: AppCoordinator, code: String, isOwner: Bool, myUid: String) {
@@ -61,7 +66,12 @@ final class GuildChatViewModel {
 
     /// Resolve friends once, then start the live listener. Call from the view's `.task`.
     func start() async {
+        isStopped = false
         friendUids = Set(((try? await coordinator.fetchFriends()) ?? []).map { $0.friendUid })
+        // L3: if the view disappeared during the friends fetch, stop() already ran — don't
+        // register an orphan listener. Check both the flag and Task cancellation (.task cancels on
+        // disappear, but cancellation alone doesn't stop these post-await lines from running).
+        guard !isStopped, !Task.isCancelled else { return }
         // The closures hop to the main actor before touching @MainActor state. The
         // service already dispatches on main, so this is a (harmless) double-hop
         // that also satisfies the non-isolated closure type.
@@ -78,6 +88,7 @@ final class GuildChatViewModel {
 
     /// Remove the listener. Call from the view's `.onDisappear` (mandatory).
     func stop() {
+        isStopped = true
         coordinator.stopGuildChat()
     }
 
