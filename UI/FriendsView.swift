@@ -69,24 +69,25 @@ struct FriendsView: View {
     // MARK: - Body
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                tc.primaryBackground
-                    .ignoresSafeArea()
+        // R3a: no internal NavigationStack — FriendsView is pushed onto Home's stack.
+        // Title/toolbar and the lifecycle modifiers below attach to this root so the
+        // pushed presentation shows the same chrome.
+        ZStack {
+            tc.primaryBackground
+                .ignoresSafeArea()
 
-                if authService.isGuest {
-                    guestCard
-                } else {
-                    content
-                }
+            if authService.isGuest {
+                guestCard
+            } else {
+                content
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Friends")
-                        .font(AppFont.bold(20))
-                        .foregroundColor(tc.textPrimary)
-                }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Friends")
+                    .font(AppFont.bold(20))
+                    .foregroundColor(tc.textPrimary)
             }
         }
         .task {

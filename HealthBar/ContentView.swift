@@ -119,7 +119,8 @@ struct ContentView: View {
             HomeView(
                 coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
                 selectedTab: $selectedTab,
-                authService: FirebaseAuthService.shared
+                authService: FirebaseAuthService.shared,
+                onCreateAccount: { showSignUpFromGuest = true }
             )
             .background(tc.primaryBackground.ignoresSafeArea())
             .toolbar(.hidden, for: .tabBar)
@@ -141,8 +142,8 @@ struct ContentView: View {
             .toolbar(.hidden, for: .tabBar)
             .tag(2)
 
-            // Friends Tab
-            FriendsView(
+            // Guilds Tab (R3a) — GuildView mounts as-is (its own NavigationStack + guest card).
+            GuildView(
                 coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
                 authService: FirebaseAuthService.shared,
                 onCreateAccount: { showSignUpFromGuest = true }
@@ -238,7 +239,8 @@ struct ContentView: View {
                 try? await Task.sleep(for: .seconds(1))
                 showPreviewFriendProfile = true
             case "friends-tab", "leaderboard":
-                // FriendsView handles the leaderboard push itself.
+                // R3a: tab 3 is now Guilds (Friends moved to a push off Home).
+                // TODO-preview-friends: repoint to the pushed FriendsView when a hook exists.
                 selectedTab = 3
             default:
                 break
@@ -318,7 +320,7 @@ struct WoodenTabBar: View {
         ("house.fill", "Home", 0),
         ("fork.knife", "Food", 1),
         ("flag.2.crossed.fill", "Battle", 2), // TODO: swap for a custom crossed-swords pixel asset
-        ("person.2.fill", "Friends", 3),
+        ("shield.fill", "Guilds", 3),
         ("person.fill", "Profile", 4)
     ]
 
@@ -385,7 +387,7 @@ struct CleanTabBar: View {
         ("fork.knife", "Food", 1)
     ]
     private let rightTabs: [(icon: String, label: String, tag: Int)] = [
-        ("person.2", "Friends", 3),
+        ("shield", "Guilds", 3),
         ("person", "Profile", 4)
     ]
 

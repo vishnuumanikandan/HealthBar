@@ -544,6 +544,8 @@ struct HomeView: View {
     @State private var leaderboardViewModel: LeaderboardViewModel
 
     @Binding var selectedTab: Int
+    /// R3a: drives the push to FriendsView off Home's NavigationStack.
+    @State private var showFriends: Bool = false
     @State private var showingPurityScoreInfo: Bool = false
     @State private var settings = SettingsManager.shared
     @State private var showMoodCheck: Bool = false
@@ -561,6 +563,10 @@ struct HomeView: View {
     /// Read-only — gates the leaderboard's guest state and its load trigger so
     /// guests never fetch.
     private let authService: any AuthService
+
+    /// Triggers the existing guest → signup path; forwarded into the pushed
+    /// FriendsView (R3a).
+    private let onCreateAccount: () -> Void
 
     /// Whether the clean UI theme is active
     private var isClean: Bool { settings.isCleanUI }
@@ -618,12 +624,14 @@ struct HomeView: View {
     init(
         coordinator: AppCoordinator,
         selectedTab: Binding<Int>,
-        authService: any AuthService = FirebaseAuthService.shared
+        authService: any AuthService = FirebaseAuthService.shared,
+        onCreateAccount: @escaping () -> Void = {}
     ) {
         self._viewModel = State(initialValue: HomeViewModel(coordinator: coordinator))
         self._leaderboardViewModel = State(initialValue: LeaderboardViewModel(coordinator: coordinator))
         self.coordinator = coordinator
         self.authService = authService
+        self.onCreateAccount = onCreateAccount
         self._selectedTab = selectedTab
     }
 
@@ -650,6 +658,14 @@ struct HomeView: View {
             }
             .animation(.easeInOut(duration: 0.8), value: currentTheme)
             .toolbar(.hidden, for: .navigationBar)
+            // R3a: Friends is a pushed destination off Home (was tab 3).
+            .navigationDestination(isPresented: $showFriends) {
+                FriendsView(
+                    coordinator: coordinator,
+                    authService: authService,
+                    onCreateAccount: onCreateAccount
+                )
+            }
             .refreshable {
                 // Dashboard and leaderboard refresh concurrently — the dashboard
                 // refresh must never wait on the leaderboard's per-friend fetch.
@@ -909,7 +925,7 @@ struct HomeView: View {
                         viewModel: leaderboardViewModel,
                         coordinator: coordinator,
                         authService: authService,
-                        onAddFriends: { selectedTab = 3 }
+                        onAddFriends: { showFriends = true }
                     )
                     .padding(.top, 8)
                 }
