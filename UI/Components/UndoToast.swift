@@ -10,7 +10,8 @@ import SwiftUI
 /// Toast component for delete undo functionality
 ///
 /// Features:
-/// - Dark background with white text
+/// - Themed card surface + hairline with primary text (D8 retint — tokenized so it
+///   tracks the active scheme; pixel unchanged as an adaptiveCard consumer)
 /// - Food name on left, "Undo" button on right
 /// - Slides up from bottom
 /// - Positioned above tab bar
@@ -37,7 +38,7 @@ struct UndoToast: View {
             // Message text
             Text(message)
                 .font(AppFont.regular(16))
-                .foregroundColor(.white)
+                .foregroundColor(tc.textPrimary)
                 .lineLimit(1)
 
             Spacer()
@@ -51,7 +52,9 @@ struct UndoToast: View {
         }
         .padding(.horizontal, DesignSystem.Spacing.lg)
         .padding(.vertical, DesignSystem.Spacing.md)
-        .adaptiveCard(borderColor: Color(hex: "#374151"), fillColor: Color(hex: "#1F2937"))
+        // D8: token surface — Erewhon ignores borderColor and uses its hairline; pixel
+        // uses this primary-tint border. Fill/text follow the active scheme.
+        .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
         .padding(.horizontal, DesignSystem.Spacing.lg)
         .offset(y: isShowing ? 0 : 100)
         .opacity(isShowing ? 1 : 0)
