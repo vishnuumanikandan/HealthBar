@@ -3433,6 +3433,19 @@ final class DataManager {
             }
         }
 
+        // D3: everyone else in the public usernames directory (`.directory` source). Reuses the
+        // same world-readable read Add Friends performs — no private data, no rules change. Add
+        // only uids not already present as a friend/guild-mate. The directory carries no display
+        // name, so `displayName` stays "" (label falls back to `@username`).
+        let directory = (try? await fetchAllUsers()) ?? []
+        for u in directory where u.uid != me && !u.uid.isEmpty {
+            if byUid[u.uid] == nil {
+                byUid[u.uid] = DuelOpponentCandidate(
+                    uid: u.uid, username: u.username, displayName: "", source: .directory
+                )
+            }
+        }
+
         return byUid.values.sorted {
             $0.displayLabel.localizedCaseInsensitiveCompare($1.displayLabel) == .orderedAscending
         }

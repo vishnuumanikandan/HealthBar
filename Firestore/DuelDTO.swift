@@ -143,13 +143,16 @@ enum DuelConstants {
     static let leaderboardPageSize = 50
 }
 
-/// A challengeable person — a friend or a guild-mate — for the challenge picker.
+/// A challengeable person — a friend, a guild-mate, or anyone in the public directory —
+/// for the challenge picker.
 ///
 /// `uid` is the sole identity key; `username`/`displayName` are display snapshots.
-/// `source` drives the picker's Friends/Guild sectioning (a person who is both is
-/// deduped to `.friend`).
+/// `source` drives the picker's Friends/Guild/Everyone sectioning (a person present in
+/// more than one is deduped to the more specific source: friend > guild > directory).
+/// `.directory` candidates carry an empty `displayName` (the public username index has no
+/// display name) — `displayLabel` then falls back to `@username`.
 struct DuelOpponentCandidate: Identifiable, Equatable {
-    enum Source: Equatable { case friend, guild }
+    enum Source: Equatable { case friend, guild, directory }
 
     let uid: String
     let username: String

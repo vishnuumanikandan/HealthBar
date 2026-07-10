@@ -132,6 +132,125 @@ final class BattleViewModel {
         return active < DuelConstants.maxConcurrentDuels(league: duel.league)
     }
 
+    // MARK: - D7: duel-history record (additive; pure derivation, testable without a coordinator)
+
+    /// Win/Loss/Draw record + net RR over the finished duels. Classification follows the exact
+    /// `finishedLabel` semantics — a forfeit BY ME counts as a loss; declined/expired are excluded
+    /// from the record — and `netRR` sums `myRRDelta` over resolved+forfeited duels only.
+    struct DuelHistoryStats: Equatable {
+        var wins = 0
+        var losses = 0
+        var draws = 0
+        var netRR = 0
+
+        /// "W–L–D" — a display figure (D7).
+        var recordText: String { "\(wins)–\(losses)–\(draws)" }
+        /// Signed net RR ("+27 RR" / "-18 RR") — same sign convention as `rrDeltaText`.
+        var netRRText: String { netRR >= 0 ? "+\(netRR) RR" : "\(netRR) RR" }
+    }
+
+    /// Pure derivation (no coordinator dependency → unit-testable in isolation). Mirrors
+    /// `finishedLabel`'s win/loss/draw rules exactly (verified by a standalone matrix).
+    static func historyStats(from finished: [DuelDTO], myUid: String) -> DuelHistoryStats {
+        var s = DuelHistoryStats()
+        for duel in finished {
+            switch duel.statusEnum {
+            case .resolved:
+                if duel.winnerUid == nil { s.draws += 1 }
+                else if duel.winnerUid == myUid { s.wins += 1 }
+                else { s.losses += 1 }
+            case .forfeited:
+                if duel.forfeitedBy == myUid { s.losses += 1 } else { s.wins += 1 }
+            default:
+                break // declined / expired / unknown → excluded from the record
+            }
+            if duel.statusEnum == .resolved || duel.statusEnum == .forfeited {
+                s.netRR += duel.myRRDelta(myUid) ?? 0
+            }
+        }
+        return s
+    }
+
+    /// My record over the currently-loaded finished duels (D7).
+    var historyStats: DuelHistoryStats { BattleViewModel.historyStats(from: finished, myUid: myUid) }
+
+    // MARK: - D2: matchup preview (fills the featured slot when there is no active duel)
+
+    /// A featured-slot matchup snapshot: me vs one random friend who has published stats, or a
+    /// clearly-labelled SAMPLE when there are none. Held in VM state so a SwiftUI body
+    /// re-evaluation never rerolls (the roll happens once per `loadMatchupPreview` run).
+    struct MatchupPreview: Equatable {
+        /// True for the no-friends SAMPLE card (fictional opponent, fixed values — never a real user).
+        let isSample: Bool
+        let opponentName: String
+        let myInitial: String
+        let theirInitial: String
+        /// rr per side (drives the metal avatar tint). Mine always exists; theirs is nil when the
+        /// friend hasn't published rr → neutral avatar + "—" on the RR row (nil ≠ zero).
+        let myRR: Int?
+        let theirRR: Int?
+        let myDays: Int
+        let theirDays: Int
+        let myStreak: Int
+        let theirStreak: Int
+        /// The friend to pre-select in ChallengeSheet; nil for the SAMPLE card.
+        let candidate: DuelOpponentCandidate?
+    }
+
+    private(set) var matchupPreview: MatchupPreview?
+
+    /// Obviously-fictional opponents for the no-friends SAMPLE card. Never mistakable for a real user.
+    private static let sampleOpponents = ["Sir Reginald", "Captain Nova", "Baroness Vex", "Coach Titan"]
+
+    /// Loads the matchup preview (D2). Guest-safe via the coordinator's own guest gates (they return
+    /// empty). Re-rolls the random friend once per call — each appear/refresh — and holds the result
+    /// in `matchupPreview`; a SwiftUI body re-evaluation never rerolls.
+    func loadMatchupPreview() async {
+        // me + friends with weeklyGoalsMet.
+        let entries = await coordinator.loadLeaderboard()
+        // Candidate friends: published stats only (`hasData`), never me. Plain UI randomness.
+        let published = entries.filter { !$0.isCurrentUser && $0.hasData }
+        guard let pick = published.randomElement() else {
+            matchupPreview = BattleViewModel.sampleMatchup()
+            return
+        }
+        // Per-side level/streak/rr: the friend from published stats, me from my own progress.
+        let friendStats = await coordinator.fetchFriendStats()
+        let myProgress = try? await coordinator.getUserProgress()
+        let theirStats = friendStats[pick.uid]
+        let name = pick.displayName.isEmpty ? "@\(pick.username)" : pick.displayName
+        matchupPreview = MatchupPreview(
+            isSample: false,
+            opponentName: name,
+            myInitial: "Y",
+            theirInitial: BattleViewModel.initialLetter(name),
+            myRR: myProgress?.rr,
+            theirRR: theirStats?.rr,
+            myDays: entries.first(where: { $0.isCurrentUser })?.weeklyGoalsMet ?? 0,
+            theirDays: pick.weeklyGoalsMet,
+            myStreak: myProgress?.currentStreak ?? 0,
+            theirStreak: theirStats?.currentStreak ?? 0,
+            candidate: DuelOpponentCandidate(uid: pick.uid, username: pick.username,
+                                             displayName: pick.displayName, source: .friend)
+        )
+    }
+
+    /// Fixed-value SAMPLE card (no real friends). Fictional opponent; every figure is a constant.
+    private static func sampleMatchup() -> MatchupPreview {
+        let name = sampleOpponents.randomElement() ?? "Sir Reginald"
+        return MatchupPreview(
+            isSample: true, opponentName: name, myInitial: "Y", theirInitial: initialLetter(name),
+            myRR: 500, theirRR: 620, myDays: 4, theirDays: 5, myStreak: 6, theirStreak: 9,
+            candidate: nil
+        )
+    }
+
+    /// First letter for an initials avatar, stripping a leading "@" from `@handle` labels.
+    private static func initialLetter(_ label: String) -> String {
+        let trimmed = label.hasPrefix("@") ? String(label.dropFirst()) : label
+        return trimmed.first.map { String($0).uppercased() } ?? "?"
+    }
+
     // MARK: - Load
 
     func load() async {
