@@ -110,7 +110,7 @@ struct LeaderboardSection: View {
             VStack(spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Leaderboard")
-                        .font(AppFont.bold(15))
+                        .font(AppFont.display(15))
                         .foregroundColor(tc.textPrimary)
                     Spacer()
                     Text("Days on goal")

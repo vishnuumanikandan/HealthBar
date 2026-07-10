@@ -227,7 +227,7 @@ struct WeeklySummaryView: View {
     private var cleanThisWeekStats: some View {
         VStack(spacing: 12) {
             Text("THIS WEEK")
-                .font(AppFont.bold(11))
+                .font(AppFont.display(11))
                 .foregroundColor(tc.textSecondary)
                 .kerning(0.8)
                 .frame(maxWidth: .infinity, alignment: .leading)

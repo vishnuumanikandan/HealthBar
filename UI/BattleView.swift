@@ -29,7 +29,6 @@ struct BattleView: View {
 
     @State private var showingChallenge = false
     @State private var showingMatchmaking = false
-    @State private var showingLeaderboard = false
     /// D2: friend to pre-select in ChallengeSheet (set by the matchup card's Challenge CTA).
     @State private var challengePreselect: DuelOpponentCandidate?
     /// D7: session-local collapse for the duel-history block (resets on view recreation).
@@ -89,9 +88,6 @@ struct BattleView: View {
                 } else {
                     Color.clear.onAppear { arenaDuelId = nil } // duel gone from the list
                 }
-            }
-            .navigationDestination(isPresented: $showingLeaderboard) {
-                GlobalLeaderboardView(coordinator: coordinator, myUid: authService.currentUserEmail ?? "")
             }
         }
         .task {
@@ -309,13 +305,11 @@ struct BattleView: View {
         }
     }
 
-    /// D4: inline global standings block (seg pickers + top 10 + my row + "View all"). Owns no
-    /// logic — renders the BattleView-owned `GlobalLeaderboardViewModel`; "View all" opens the
-    /// existing full board via the existing navigation destination.
+    /// D4: inline global standings block (seg pickers + top 10 + my row). Owns no logic —
+    /// renders the BattleView-owned `GlobalLeaderboardViewModel`. R4c removed the "View all"
+    /// footer; the full-screen board is retired now that the ladder lives inline.
     private var standingsBlock: some View {
-        BattleStandingsBlock(viewModel: leaderboardVM, myUid: authService.currentUserEmail ?? "") {
-            showingLeaderboard = true
-        }
+        BattleStandingsBlock(viewModel: leaderboardVM, myUid: authService.currentUserEmail ?? "")
     }
 
     // MARK: - Matchup preview card (D2)
@@ -827,15 +821,14 @@ struct BattleView: View {
 // MARK: - D4/D5: inline global standings block
 
 /// The embedded standings block on Battle (D4): sec-head + the existing metric/league seg pickers,
-/// the top 10 rows plus my row appended when I'm outside them, and a "View all" footer that opens
-/// the full board. Renders the BattleView-owned `GlobalLeaderboardViewModel` (unchanged) — no new
-/// logic. Rows follow the mockup standings anatomy (D5): rank chip (podium metals + crown),
-/// tier-tinted avatar, name + you-pill, tier sub-line, display value; global rows show no pips.
+/// and the top 10 rows plus my row appended when I'm outside them. Renders the BattleView-owned
+/// `GlobalLeaderboardViewModel` (unchanged) — no new logic. Rows follow the mockup standings
+/// anatomy (D5): rank chip (podium metals + crown), tier-tinted avatar, name + you-pill, tier
+/// sub-line, display value; global rows show no pips.
 private struct BattleStandingsBlock: View {
 
     let viewModel: GlobalLeaderboardViewModel
     let myUid: String
-    let onViewAll: () -> Void
 
     @State private var settings = SettingsManager.shared
     private var tc: ThemeColors { settings.activeColors }
@@ -868,7 +861,6 @@ private struct BattleStandingsBlock: View {
             secHead
             pickers.padding(.bottom, 14)
             rowsContent
-            viewAllRow
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -1055,24 +1047,6 @@ private struct BattleStandingsBlock: View {
         }
     }
 
-    // MARK: View all
-
-    private var viewAllRow: some View {
-        Button(action: onViewAll) {
-            HStack {
-                Text("View all")
-                    .font(AppFont.bold(13))
-                    .foregroundColor(tc.primary)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(AppFont.regular(12))
-                    .foregroundColor(tc.textTertiary)
-            }
-            .padding(.vertical, 13)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 /// Rank-tier avatar metal from `rr`, using the Erewhon rank-metal tokens (never hardcoded hexes).
