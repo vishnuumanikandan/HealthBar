@@ -159,14 +159,12 @@ struct MatchmakingSheet: View {
         } label: {
             Text("\(days)-Day")
                 .font(AppFont.bold(14))
-                .foregroundColor(isSelected ? .white : tc.textPrimary)
+                .foregroundColor(isSelected ? DesignSystem.Erewhon.onAccent : tc.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, DesignSystem.Spacing.sm)
-                .background(isSelected ? tc.primary : tc.cardBackground)
-                .overlay(
-                    Capsule().stroke(tc.primary.opacity(isSelected ? 0 : 0.3), lineWidth: 1)
-                )
-                .clipShape(Capsule())
+                // R2 selection convention: accent fill selected / surface + hairline unselected.
+                .adaptivePill(borderColor: isSelected ? tc.primary : DesignSystem.Erewhon.line,
+                              fillColor: isSelected ? tc.primary : tc.cardBackground)
         }
         .buttonStyle(.plain)
         .disabled(full)
@@ -191,10 +189,10 @@ struct MatchmakingSheet: View {
 
             if let startedAt {
                 HStack(spacing: 4) {
-                    Text("Searching…")
-                    Text(startedAt, style: .timer)
+                    // "Searching…" is a word (Hanken); the timer is a figure (display, D6).
+                    Text("Searching…").font(AppFont.bold(16))
+                    Text(startedAt, style: .timer).font(AppFont.display(16))
                 }
-                .font(AppFont.bold(16))
                 .foregroundColor(tc.textPrimary)
             }
 
@@ -222,7 +220,7 @@ struct MatchmakingSheet: View {
                 .foregroundColor(tc.primary)
 
             Text("Matched!")
-                .font(AppFont.bold(22))
+                .font(AppFont.display(22))
                 .foregroundColor(tc.textPrimary)
 
             if let duel = matchedDuel {

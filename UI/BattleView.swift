@@ -175,15 +175,15 @@ struct BattleView: View {
     private var content: some View {
         ScrollView {
             VStack(spacing: DesignSystem.Spacing.lg) {
-                HStack(spacing: DesignSystem.Spacing.sm) {
-                    AppButton(title: "Challenge Someone", style: .primary,
-                              action: { showingChallenge = true }, icon: "flag.2.crossed.fill")
-                    AppButton(title: "Find Match", style: .secondary,
-                              action: { showingMatchmaking = true }, icon: "bolt.horizontal.fill")
+                arenaHead
+
+                // Featured duel = the soonest-ending active duel (viewModel.active is
+                // pre-sorted). Omitted when there are none (D2).
+                if let featured = viewModel.active.first {
+                    featuredCard(featured)
                 }
 
-                AppButton(title: "Leaderboard", style: .secondary,
-                          action: { showingLeaderboard = true }, icon: "trophy.fill")
+                actionsRow
 
                 macroGuessCard
 
@@ -192,16 +192,248 @@ struct BattleView: View {
                 } else {
                     section("Incoming Challenges", viewModel.incoming) { incomingRow($0) }
                     section("Outgoing Challenges", viewModel.outgoing) { outgoingRow($0) }
-                    section("Active Duels", viewModel.active) { activeRow($0) }
+                    // Featured duel is excluded from the Active section (D2).
+                    section("Active Duels", Array(viewModel.active.dropFirst())) { activeRow($0) }
                     section("Finished", viewModel.finished) { finishedRow($0) }
                 }
+
+                leaderboardRow
             }
-            .padding(DesignSystem.Spacing.lg)
+            .padding(.horizontal, 22)
+            .padding(.top, DesignSystem.Spacing.sm)
+            .padding(.bottom, DesignSystem.Spacing.lg)
         }
         .refreshable { await viewModel.load() }
         // R2 §5: reserve the tab bar's height so the bottom duel sections clear the
         // translucent bar (the TabView's safeAreaInset doesn't reach this ScrollView).
         .contentMargins(.bottom, DesignSystem.Erewhon.tabBarContentHeight + 12, for: .scrollContent)
+    }
+
+    // MARK: - Arena head (D3)
+
+    /// Mockup `.arena-head`: eyebrow cap + display title. No season/subtitle — those
+    /// mockup stats don't exist in the app (D3).
+    private var arenaHead: some View {
+        VStack(spacing: 10) {
+            Text("RANKED DUELS")
+                .font(AppFont.display(11))
+                .tracking(1.1)
+                .foregroundColor(tc.primary)
+            Text("The Arena")
+                .font(AppFont.display(38))
+                .foregroundColor(tc.textPrimary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 6)
+    }
+
+    // MARK: - Featured versus card (D4)
+
+    /// Mockup `.versus`: two fighter columns around a `.vs-mid`, then ONE score compare
+    /// row with paired share bars. Scores/lead/labels come from the DTO + the VM's
+    /// rounded-tenths convention (BattleViewModel is not modified — R4 Files list); the
+    /// avatars use neutral fills, not the mockup's rank metals (opponent rank isn't in
+    /// DuelDTO — noted deviation). Tapping pushes that duel's Arena.
+    private func featuredCard(_ duel: DuelDTO) -> some View {
+        let myUid = authService.currentUserEmail ?? ""
+        let name = viewModel.counterpartLabel(duel)
+        let mine = duel.myScore(myUid)
+        let theirs = duel.theirScore(myUid)
+        let mineInt = Int(mine.rounded())
+        let theirsInt = Int(theirs.rounded())
+        let iLead = viewModel.iAmLeading(duel)
+        let theyLead = Int((theirs * 10).rounded()) > Int((mine * 10).rounded())
+        let subline = leagueSubline(duel.league)
+        return VStack(spacing: 0) {
+            // .duel — fighters + vs-mid
+            HStack(alignment: .center, spacing: 0) {
+                fighterColumn(initial: "Y", isMe: true, name: nil, subline: subline)
+                vsMid
+                fighterColumn(initial: initial(for: name), isMe: false, name: name, subline: subline)
+            }
+            // .compare — one crow + paired share bars
+            VStack(spacing: 14) {
+                HStack(spacing: 12) {
+                    Text("\(mineInt)")
+                        .font(AppFont.display(18))
+                        .foregroundColor(iLead ? tc.primary : DesignSystem.Erewhon.social)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    Text("Duel score")
+                        .font(AppFont.regular(11))
+                        .foregroundColor(tc.textTertiary)
+                        .frame(minWidth: 84)
+                        .multilineTextAlignment(.center)
+                    Text("\(theirsInt)")
+                        .font(AppFont.display(18))
+                        .foregroundColor(theyLead ? tc.primary : tc.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                HStack(spacing: 6) {
+                    compareBar(fraction: shareFraction(mine: mine, theirs: theirs, forMine: true),
+                               color: DesignSystem.Erewhon.social, fromLeading: false)
+                    compareBar(fraction: shareFraction(mine: mine, theirs: theirs, forMine: false),
+                               color: tc.primary, fromLeading: true)
+                }
+            }
+            .padding(.top, 24)
+        }
+        .padding(.vertical, 24)
+        .padding(.horizontal, 16)
+        // borderColor ≠ activeColors.primary → flat hairline (not the accent "selected"
+        // border); pixel family gets a faint-primary pixel border, matching the duel rows.
+        .adaptiveCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.cardBackground)
+        .contentShape(Rectangle())
+        .onTapGesture { arenaDuelId = duel.id }
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("Duel vs \(name), \(subline), you \(mineInt) — \(theirsInt)")
+    }
+
+    /// Mockup `.arena-actions`: primary "Find a match" → MatchmakingSheet, ghost
+    /// "Challenge a friend" → ChallengeSheet (D2).
+    private var actionsRow: some View {
+        VStack(spacing: 11) {
+            AppButton(title: "Find a match", style: .primary,
+                      action: { showingMatchmaking = true }, icon: "bolt.horizontal.fill")
+            AppButton(title: "Challenge a friend", style: .secondary,
+                      action: { showingChallenge = true }, icon: "flag.2.crossed.fill")
+        }
+    }
+
+    /// Block-styled entry into the existing global leaderboard (D2). Replaces the old
+    /// toolbar/in-content leaderboard button; keeps the existing navigation destination.
+    private var leaderboardRow: some View {
+        Button { showingLeaderboard = true } label: {
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                Image(systemName: "trophy.fill").foregroundColor(tc.primary)
+                Text("Global Leaderboard")
+                    .font(AppFont.bold(14))
+                    .foregroundColor(tc.textPrimary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(AppFont.regular(12))
+                    .foregroundColor(tc.textTertiary)
+            }
+            .padding(DesignSystem.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .adaptiveCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.cardBackground)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Fighter pieces (D4)
+
+    /// Mockup `.fighter`: initials avatar, name (mine = the `.you-tag` pill), league sub-line.
+    private func fighterColumn(initial: String, isMe: Bool, name: String?, subline: String) -> some View {
+        VStack(spacing: 10) {
+            favAvatar(initial: initial)
+            if isMe {
+                youTag
+            } else if let name {
+                Text(name)
+                    .font(AppFont.bold(14))
+                    .foregroundColor(tc.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Text(subline)
+                .font(AppFont.regular(10))
+                .foregroundColor(tc.textTertiary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Mockup `.fav`: rounded-square initials avatar. Neutral fill + hairline (no rank
+    /// metal — opponent rank isn't tracked; D4 deviation).
+    private func favAvatar(initial: String) -> some View {
+        Text(initial)
+            .font(AppFont.bold(23))
+            .foregroundColor(tc.textPrimary)
+            .frame(width: 60, height: 60)
+            .background(RoundedRectangle(cornerRadius: 19).fill(tc.segBackground))
+            .overlay(RoundedRectangle(cornerRadius: 19).stroke(DesignSystem.Erewhon.line, lineWidth: 1))
+    }
+
+    /// Mockup `.you-tag`: social-tinted "YOU" pill (a badge — stays Hanken per D1).
+    private var youTag: some View {
+        Text("You")
+            .font(AppFont.bold(9))
+            .tracking(0.4)
+            .textCase(.uppercase)
+            .foregroundColor(DesignSystem.Erewhon.social)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(RoundedRectangle(cornerRadius: 6).fill(DesignSystem.Erewhon.social.opacity(0.14)))
+    }
+
+    /// Mockup `.vs-mid`: hairline verticals around the italic display "vs" (D1: "vs" mark).
+    private var vsMid: some View {
+        VStack(spacing: 8) {
+            Rectangle().fill(DesignSystem.Erewhon.line).frame(width: 1, height: 26)
+            Text("vs")
+                .font(AppFont.display(22))
+                .italic()
+                .foregroundColor(tc.textSecondary)
+            Rectangle().fill(DesignSystem.Erewhon.line).frame(width: 1, height: 26)
+        }
+        .padding(.horizontal, 6)
+    }
+
+    /// Mockup `.cbar`: a share bar whose inner fill grows from the center (leading for the
+    /// opponent, trailing for me).
+    private func compareBar(fraction: Double, color: Color, fromLeading: Bool) -> some View {
+        GeometryReader { geo in
+            ZStack(alignment: fromLeading ? .leading : .trailing) {
+                Capsule().fill(tc.segBackground)
+                Capsule().fill(color).frame(width: max(0, geo.size.width * fraction))
+            }
+        }
+        .frame(height: 6)
+    }
+
+    // MARK: - Featured-card derivations (DTO + VM convention only)
+
+    /// First letter for an initials avatar, stripping a leading "@" from `@handle` labels.
+    private func initial(for label: String) -> String {
+        let trimmed = label.hasPrefix("@") ? String(label.dropFirst()) : label
+        return trimmed.first.map { String($0).uppercased() } ?? "?"
+    }
+
+    /// The fighter sub-line = league label (D4).
+    private func leagueSubline(_ league: Int) -> String { "\(league)-DAY RANKED" }
+
+    /// Mirrors ArenaViewModel.barFraction's clamp/tie convention for the featured card's
+    /// paired bars. Reproduced locally because no ArenaViewModel exists here and
+    /// BattleViewModel is not modified (R4 Files list); scores come from the DTO.
+    private func shareFraction(mine: Double, theirs: Double, forMine: Bool) -> Double {
+        let mi = Int((mine * 10).rounded()), ti = Int((theirs * 10).rounded())
+        if mi == ti { return 0.5 }                        // covers 0–0 and any exact tie
+        let total = mine + theirs
+        guard total > 0 else { return 0.5 }
+        return min(0.92, max(0.08, (forMine ? mine : theirs) / total))
+    }
+
+    /// Mockup `.sec-head`: display title (D1) + optional meta over a soft hairline.
+    private func secHead(_ title: String, _ meta: String?) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(AppFont.display(15))
+                    .foregroundColor(tc.textPrimary)
+                Spacer()
+                if let meta {
+                    Text(meta)
+                        .font(AppFont.regular(11))
+                        .foregroundColor(tc.textTertiary)
+                }
+            }
+            .padding(.bottom, 10)
+            Rectangle()
+                .fill(DesignSystem.Erewhon.lineSoft)
+                .frame(height: 1)
+        }
+        .padding(.bottom, 14)
     }
 
     // MARK: - Macro Guess QTE (D1d)
@@ -243,12 +475,12 @@ struct BattleView: View {
     @ViewBuilder
     private func section(_ title: String, _ duels: [DuelDTO], @ViewBuilder row: @escaping (DuelDTO) -> some View) -> some View {
         if !duels.isEmpty {
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
-                Text(title)
-                    .font(AppFont.bold(15))
-                    .foregroundColor(tc.textPrimary)
-                ForEach(duels) { duel in
-                    row(duel)
+            VStack(spacing: 0) {
+                secHead(title, nil)
+                VStack(spacing: 11) {
+                    ForEach(duels) { duel in
+                        row(duel)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -293,15 +525,24 @@ struct BattleView: View {
     }
 
     private func activeRow(_ duel: DuelDTO) -> some View {
-        duelCard {
+        let myUid = authService.currentUserEmail ?? ""
+        let mine = Int(duel.myScore(myUid).rounded())
+        let theirs = Int(duel.theirScore(myUid).rounded())
+        let iLead = viewModel.iAmLeading(duel)
+        let theyLead = Int((duel.theirScore(myUid) * 10).rounded()) > Int((duel.myScore(myUid) * 10).rounded())
+        return duelCard {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                 header(name: viewModel.counterpartLabel(duel), league: duel.league)
                 if let endAt = duel.endAt {
                     countdown(label: "Ends", date: endAt)
                 }
-                Text(viewModel.scoreLine(duel))
-                    .font(AppFont.bold(15))
-                    .foregroundColor(viewModel.iAmLeading(duel) ? tc.primary : tc.textPrimary)
+                // Duel score as display figures (D1); my score is the left figure (matching the
+                // featured card + Arena). The header already names the opponent.
+                HStack(spacing: 6) {
+                    Text("\(mine)").font(AppFont.display(20)).foregroundColor(iLead ? tc.primary : tc.textPrimary)
+                    Text("—").font(AppFont.display(20)).foregroundColor(tc.textTertiary)
+                    Text("\(theirs)").font(AppFont.display(20)).foregroundColor(theyLead ? tc.primary : tc.textPrimary)
+                }
             }
         }
         .contextMenu {

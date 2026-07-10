@@ -66,35 +66,96 @@ struct ArenaView: View {
 
     // MARK: - Header + scores
 
+    /// D5: adopts the D4 fighter layout — two fighter columns around a `.vs-mid`,
+    /// replacing the plain name/name row.
     private var versusHeader: some View {
-        HStack {
-            Text(viewModel.myLabel).font(AppFont.bold(18)).foregroundColor(tc.textPrimary)
-            Spacer()
-            leagueBadge
-            Spacer()
-            Text(viewModel.theirLabel).font(AppFont.bold(18)).foregroundColor(tc.textPrimary)
+        HStack(alignment: .center, spacing: 0) {
+            fighterColumn(initial: "Y", isMe: true, name: nil, subline: leagueSubline)
+            vsMid
+            fighterColumn(initial: initial(for: viewModel.theirLabel), isMe: false,
+                          name: viewModel.theirLabel, subline: leagueSubline)
         }
     }
 
-    private var leagueBadge: some View {
-        Text(viewModel.leagueLabel())
-            .font(AppFont.bold(10))
-            .foregroundColor(tc.primary)
-            .padding(.horizontal, DesignSystem.Spacing.sm)
+    // MARK: - Fighter pieces (D4/D5)
+
+    /// The fighter sub-line = league label (D4). The standalone league badge is absorbed
+    /// into the fighter sub-lines here, restyled to the hairline language (D5).
+    private var leagueSubline: String { "\(viewModel.league)-DAY RANKED" }
+
+    /// Mockup `.fighter`: initials avatar, name (mine = the `.you-tag` pill), league sub-line.
+    private func fighterColumn(initial: String, isMe: Bool, name: String?, subline: String) -> some View {
+        VStack(spacing: 10) {
+            favAvatar(initial: initial)
+            if isMe {
+                youTag
+            } else if let name {
+                Text(name)
+                    .font(AppFont.bold(14))
+                    .foregroundColor(tc.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Text(subline)
+                .font(AppFont.regular(10))
+                .foregroundColor(tc.textTertiary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Mockup `.fav`: rounded-square initials avatar. Neutral fill + hairline (no rank
+    /// metal — opponent rank isn't tracked; D4 deviation).
+    private func favAvatar(initial: String) -> some View {
+        Text(initial)
+            .font(AppFont.bold(23))
+            .foregroundColor(tc.textPrimary)
+            .frame(width: 60, height: 60)
+            .background(RoundedRectangle(cornerRadius: 19).fill(tc.segBackground))
+            .overlay(RoundedRectangle(cornerRadius: 19).stroke(DesignSystem.Erewhon.line, lineWidth: 1))
+    }
+
+    /// Mockup `.you-tag`: social-tinted "YOU" pill (a badge — stays Hanken per D1).
+    private var youTag: some View {
+        Text("You")
+            .font(AppFont.bold(9))
+            .tracking(0.4)
+            .textCase(.uppercase)
+            .foregroundColor(DesignSystem.Erewhon.social)
+            .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background(tc.primary.opacity(0.15))
-            .clipShape(Capsule())
+            .background(RoundedRectangle(cornerRadius: 6).fill(DesignSystem.Erewhon.social.opacity(0.14)))
+    }
+
+    /// Mockup `.vs-mid`: hairline verticals around the italic display "vs" (D1: "vs" mark).
+    private var vsMid: some View {
+        VStack(spacing: 8) {
+            Rectangle().fill(DesignSystem.Erewhon.line).frame(width: 1, height: 26)
+            Text("vs")
+                .font(AppFont.display(22))
+                .italic()
+                .foregroundColor(tc.textSecondary)
+            Rectangle().fill(DesignSystem.Erewhon.line).frame(width: 1, height: 26)
+        }
+        .padding(.horizontal, 6)
+    }
+
+    /// First letter for an initials avatar, stripping a leading "@" from `@handle` labels.
+    private func initial(for label: String) -> String {
+        let trimmed = label.hasPrefix("@") ? String(label.dropFirst()) : label
+        return trimmed.first.map { String($0).uppercased() } ?? "?"
     }
 
     private var scoreRow: some View {
+        // D5: score-row numerals → display at the existing 40pt scale (color logic unchanged).
         HStack {
             Text(viewModel.myScoreText)
-                .font(AppFont.bold(40))
+                .font(AppFont.display(40))
                 .foregroundColor(viewModel.iAmLeading ? tc.primary : tc.textPrimary)
             Spacer()
-            Text("—").font(AppFont.bold(40)).foregroundColor(tc.textTertiary)
+            Text("—").font(AppFont.display(40)).foregroundColor(tc.textTertiary)
             Spacer()
-            Text(viewModel.theirScoreText).font(AppFont.bold(40)).foregroundColor(tc.textPrimary)
+            Text(viewModel.theirScoreText).font(AppFont.display(40)).foregroundColor(tc.textPrimary)
         }
     }
 
@@ -103,9 +164,10 @@ struct ArenaView: View {
     private var tugOfWarBar: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
+                // D5: track → segBackground + hairline (fraction / endgame / notch logic kept).
                 Capsule()
-                    .fill(tc.cardBackground)
-                    .overlay(Capsule().stroke(tc.primary.opacity(0.25), lineWidth: 1))
+                    .fill(tc.segBackground)
+                    .overlay(Capsule().stroke(DesignSystem.Erewhon.line, lineWidth: 1))
                 Capsule()
                     .fill(viewModel.isEndgame ? DesignSystem.Colors.danger : tc.primary)
                     .frame(width: max(0, geo.size.width * viewModel.barFraction))
