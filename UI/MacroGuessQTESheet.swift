@@ -25,6 +25,9 @@ struct MacroGuessQTESheet: View {
     @State private var correctValue = 0
     @State private var resultText: String?
     @State private var revealed = false
+    /// True once a CORRECT answer is revealed. The correct result is a "result word"
+    /// (display, D6); the incorrect result ("It was Ng") is a sentence and stays Hanken (D1).
+    @State private var answeredCorrectly = false
 
     var body: some View {
         VStack(spacing: DesignSystem.Spacing.lg) {
@@ -40,7 +43,9 @@ struct MacroGuessQTESheet: View {
                 .padding(.top, DesignSystem.Spacing.sm)
 
                 if let resultText {
-                    Text(resultText).font(AppFont.bold(20)).foregroundColor(tc.primary)
+                    Text(resultText)
+                        .font(answeredCorrectly ? AppFont.display(20) : AppFont.bold(20))
+                        .foregroundColor(tc.primary)
                 }
             } else {
                 ProgressView().tint(tc.primary)
@@ -56,7 +61,7 @@ struct MacroGuessQTESheet: View {
     private func optionButton(_ value: Int) -> some View {
         Button { answer(value) } label: {
             Text("\(value)g")
-                .font(AppFont.bold(20))
+                .font(AppFont.display(20))
                 .foregroundColor(revealed && value == correctValue ? .white : tc.textPrimary)
                 .frame(maxWidth: .infinity).frame(height: 64)
                 .background(revealed && value == correctValue ? tc.primary : tc.cardBackground)
@@ -84,6 +89,7 @@ struct MacroGuessQTESheet: View {
         guard !revealed else { return }
         revealed = true
         let correct = value == correctValue
+        answeredCorrectly = correct
         Task {
             _ = await coordinator.awardMacroGuessQTE(points: correct ? DuelConstants.macroGuessPoints : 0, dateKey: dateKey)
             resultText = correct ? "CORRECT +\(DuelConstants.macroGuessPoints)" : "It was \(correctValue)g"

@@ -34,7 +34,8 @@ struct SparkQTESheet: View {
             ring
 
             if let resultText {
-                Text(resultText).font(AppFont.bold(26)).foregroundColor(tc.primary)
+                // Result word ("PERFECT +N" / "GOOD +N" / "MISSED") → display (D6).
+                Text(resultText).font(AppFont.display(26)).foregroundColor(tc.primary)
             } else {
                 holdButton
             }
@@ -61,7 +62,7 @@ struct SparkQTESheet: View {
                     .trim(from: 0, to: charge / 100)
                     .stroke(tc.textPrimary, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                Text("\(Int(charge))").font(AppFont.bold(30)).foregroundColor(tc.textPrimary)
+                Text("\(Int(charge))").font(AppFont.display(30)).foregroundColor(tc.textPrimary)
             }
             .frame(width: 200, height: 200)
             .padding(DesignSystem.Spacing.md)
