@@ -36,6 +36,13 @@ struct FoodLogView: View {
     // Fix #2 UI: track which meal bundles are expanded
     @State private var expandedBundles: Set<String> = []
 
+    // R5a: datenav tools button presents the existing ToolsView via .sheet (D2).
+    @State private var toolsViewModel = ToolsViewModel()
+    @State private var showingTools = false
+
+    // R5a: Add-to-log block's "Scan barcode" row pushes the existing BarcodeOptionsView (D7).
+    @State private var showingBarcodeOptions = false
+
     // MARK: - Initialization
 
     init(coordinator: AppCoordinator) {
@@ -108,6 +115,20 @@ struct FoodLogView: View {
                         }
                     )
                 }
+            }
+            // R5a D2: Tools sheet (datenav tools button). Additional entry point;
+            // ToolsView's existing entry point elsewhere is untouched.
+            .sheet(isPresented: $showingTools) {
+                ToolsView(toolsViewModel: toolsViewModel)
+            }
+            // R5a D7: barcode path for the Add-to-log block — reuses the existing
+            // BarcodeOptionsView. onDismissAll pops back to the food screen (mirrors the
+            // sheet flow's dismiss()).
+            .navigationDestination(isPresented: $showingBarcodeOptions) {
+                BarcodeOptionsView(
+                    viewModel: viewModel,
+                    onDismissAll: { showingBarcodeOptions = false }
+                )
             }
             // Bridge: barcode scan → open add food form after sheet dismiss animation
             .onChange(of: viewModel.shouldOpenAddFoodForm) { _, newValue in
@@ -215,20 +236,44 @@ struct FoodLogView: View {
     private var contentView: some View {
         ScrollView {
             VStack(spacing: DesignSystem.Spacing.lg) {
-                // Date Navigator
+                // Date Navigator (D2)
                 dateNavigator
 
-                // Today's Progress
-                progressSection
+                // Progress → food hero + gated nutrition detgrid for Erewhon (D3/D4);
+                // pixel keeps its paged progress card, byte-identical.
+                if settings.isCleanUI {
+                    foodHeroClean
+                    if settings.trackAdvancedNutrition {
+                        nutritionDetailsClean
+                    }
+                } else {
+                    progressSection
+                }
 
-                // Fix #6: Recent Foods above meal sections
+                // Fix #6: Recent Foods above meal sections (behavior unchanged; D5 restyle)
                 if !viewModel.recentFoods.isEmpty {
                     recentFoodsSection
                 }
 
-                // 5 Meal Category Sections
-                ForEach(MealType.allCases, id: \.self) { mealType in
-                    mealSection(for: mealType)
+                // 5 Meal Category Sections (D6). Erewhon groups them under one sec-head
+                // as a hairline list; pixel keeps the per-section cards.
+                if settings.isCleanUI {
+                    VStack(spacing: 0) {
+                        secHead("Meals", "Tap to expand")
+                        ForEach(MealType.allCases, id: \.self) { mealType in
+                            mealSection(for: mealType)
+                        }
+                    }
+                } else {
+                    ForEach(MealType.allCases, id: \.self) { mealType in
+                        mealSection(for: mealType)
+                    }
+                }
+
+                // Add-to-log methods block (D7) — Erewhon-only additional surface (uses
+                // Erewhon-flat tokens). The per-section + entry points stay for both families.
+                if settings.isCleanUI {
+                    addToLogSection
                 }
             }
             .padding(DesignSystem.Spacing.lg)
@@ -241,55 +286,118 @@ struct FoodLogView: View {
 
     // MARK: - Date Navigator
 
+    /// Mockup `.datenav`: ‹ chip · day word + full date · › chip, centered, with a
+    /// trailing tools button presenting the existing ToolsView (D2). Drives the existing
+    /// date state — same bounds, same future-date handling.
     private var dateNavigator: some View {
-        HStack(spacing: DesignSystem.Spacing.sm) {
+        HStack(spacing: 18) {
             Button {
                 viewModel.navigateToPreviousDay()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(AppFont.bold(18))
-                    .foregroundColor(
-                        viewModel.canNavigateBack
-                            ? tc.primary
-                            : tc.textTertiary
-                    )
+                    .font(AppFont.regular(18))
+                    .foregroundColor(viewModel.canNavigateBack ? tc.textSecondary : tc.textTertiary.opacity(0.5))
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .disabled(!viewModel.canNavigateBack)
             .buttonStyle(PlainButtonStyle())
 
-            Spacer()
-
-            Text(viewModel.selectedDateDisplayLabel)
-                .font(AppFont.bold(DesignSystem.FontSizes.headline))
-                .foregroundColor(tc.textPrimary)
-                .animation(nil, value: viewModel.selectedDateDisplayLabel)
-
-            Spacer()
+            VStack(spacing: 3) {
+                Text(dayWord(for: viewModel.selectedDate))
+                    .font(AppFont.display(23))
+                    .foregroundColor(tc.textPrimary)
+                    .animation(nil, value: viewModel.selectedDate)
+                Text(fullDate(for: viewModel.selectedDate))
+                    .font(AppFont.regular(10.5))
+                    .foregroundColor(tc.textTertiary)
+            }
+            .frame(minWidth: 148)
 
             Button {
                 viewModel.navigateToNextDay()
             } label: {
                 Image(systemName: "chevron.right")
-                    .font(AppFont.bold(18))
-                    .foregroundColor(
-                        viewModel.canNavigateForward
-                            ? tc.primary
-                            : tc.textTertiary
-                    )
+                    .font(AppFont.regular(18))
+                    .foregroundColor(viewModel.canNavigateForward ? tc.textSecondary : tc.textTertiary.opacity(0.5))
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .disabled(!viewModel.canNavigateForward)
             .buttonStyle(PlainButtonStyle())
         }
-        .padding(.horizontal, DesignSystem.Spacing.md)
-        .padding(.vertical, DesignSystem.Spacing.sm)
-        .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
+        .frame(maxWidth: .infinity)
+        .overlay(alignment: .trailing) {
+            Button {
+                showingTools = true
+            } label: {
+                Image(systemName: "wrench.and.screwdriver")
+                    .font(AppFont.regular(17))
+                    .foregroundColor(tc.textSecondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
+            .accessibilityLabel("Tools")
+        }
     }
 
-    // MARK: - Meal Category Section
+    /// Big day word for the datenav (display type, D9). View-local — no VM change (D10).
+    private func dayWord(for date: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return "Today" }
+        if cal.isDateInYesterday(date) { return "Yesterday" }
+        if cal.isDateInTomorrow(date) { return "Tomorrow" }
+        let f = DateFormatter()
+        f.dateFormat = "EEEE"
+        return f.string(from: date)
+    }
+
+    /// Full-date subline for the datenav (Hanken). View-local — no VM change.
+    private func fullDate(for date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "EEE, MMM d"
+        return f.string(from: date)
+    }
+
+    // MARK: - Section Header (mockup `.sec-head`)
+
+    /// Mockup `.sec-head`: display title (D9) + optional right-aligned meta over a soft
+    /// hairline. Matches the R3b/R4 convention (HomeView/BattleView `secHead`).
+    private func secHead(_ title: String, _ meta: String?) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(AppFont.display(15))
+                    .foregroundColor(tc.textPrimary)
+                Spacer()
+                if let meta {
+                    Text(meta)
+                        .font(AppFont.regular(11))
+                        .foregroundColor(tc.textTertiary)
+                }
+            }
+            .padding(.bottom, 10)
+            Rectangle()
+                .fill(DesignSystem.Erewhon.lineSoft)
+                .frame(height: 1)
+        }
+        .padding(.bottom, 14)
+    }
+
+    /// Mockup meal time ranges (D6). Defined view-local — MealType has no time-range
+    /// metadata and must not gain any. Uncategorized has no range in the mockup.
+    private func mealTimeRange(for mealType: MealType) -> String? {
+        switch mealType {
+        case .breakfast: return "5:00 – 11:00 AM"
+        case .lunch: return "11:00 AM – 4:00 PM"
+        case .dinner: return "4:00 – 9:00 PM"
+        case .snack: return "9:00 PM – 5:00 AM"
+        case .uncategorized: return nil
+        }
+    }
+
+    // MARK: - Meal Category Section (D6)
 
     private func mealSection(for mealType: MealType) -> some View {
         let allEntries = viewModel.entries(for: mealType)
@@ -310,141 +418,49 @@ struct FoodLogView: View {
 
         let sectionCalTotal = allEntries.reduce(0) { $0 + $1.calories }
 
-        return VStack(spacing: 0) {
-            // Section header
-            HStack(spacing: DesignSystem.Spacing.sm) {
-                Image(systemName: mealType.icon)
-                    .font(AppFont.bold(16))
-                    .foregroundColor(mealType.color)
-
-                Text(mealType.displayName)
-                    .font(AppFont.bold(18))
-                    .foregroundColor(tc.textPrimary)
-
-                if !allEntries.isEmpty {
-                    Text("\(allEntries.count)")
-                        .font(AppFont.bold(DesignSystem.FontSizes.caption))
-                        .foregroundColor(mealType.color)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(mealType.color.opacity(0.15))
-                        .clipShape(AdaptivePillShapeStyle())
-                }
-
-                Spacer()
-
-                // Fix #8: show total cal when collapsed
-                if isCollapsed && !allEntries.isEmpty {
-                    Text("\(sectionCalTotal) cal")
-                        .font(AppFont.regular(13))
-                        .foregroundColor(tc.textSecondary)
-                }
-
-                // Fix #8: collapse toggle (only when there are entries)
-                if !allEntries.isEmpty {
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            if isCollapsed {
-                                collapsedSections.remove(mealType)
-                            } else {
-                                collapsedSections.insert(mealType)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
-                            .font(AppFont.bold(13))
-                            .foregroundColor(tc.textSecondary)
-                            .frame(width: 28, height: 28)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-
-                // + button
-                Button {
-                    viewModel.openAddFoodChoice(for: mealType)
-                } label: {
-                    Text("+")
-                        .font(AppFont.bold(16))
-                        .foregroundColor(.white)
-                        .frame(width: 30, height: 30)
-                        .adaptivePill(
-                            borderColor: settings.isCleanUI ? .clear : mealType.color.adjustedBrightness(-0.2),
-                            fillColor: .clear,
-                            fillGradient: DesignSystem.Colors.adaptiveGradientFrom(mealType.color)
-                        )
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-            .padding(.horizontal, DesignSystem.Spacing.md)
-            .padding(.top, DesignSystem.Spacing.md)
-            .padding(.bottom, (allEntries.isEmpty || isCollapsed) ? DesignSystem.Spacing.xs : DesignSystem.Spacing.sm)
-
-            // Content (hidden when collapsed)
-            if !isCollapsed {
-                if allEntries.isEmpty {
-                    // Tappable empty state row
-                    Button {
-                        viewModel.openAddFoodChoice(for: mealType)
-                    } label: {
-                        HStack(spacing: DesignSystem.Spacing.sm) {
-                            Image(systemName: "plus")
-                                .font(AppFont.bold(13))
-                                .foregroundColor(mealType.color)
-                            Text("Add \(mealType.displayName)")
-                                .font(AppFont.regular(DesignSystem.FontSizes.callout))
-                                .foregroundColor(tc.textSecondary)
-                            Spacer()
-                        }
-                        .padding(DesignSystem.Spacing.md)
-                        .adaptiveCard(borderColor: mealType.color.opacity(0.3), fillColor: mealType.color.opacity(0.06))
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .padding(.horizontal, DesignSystem.Spacing.md)
-                    .padding(.bottom, DesignSystem.Spacing.md)
-                } else {
-                    VStack(spacing: DesignSystem.Spacing.sm) {
-                        // Solo entries with swipe actions (Fix #5)
-                        ForEach(soloEntries, id: \.id) { entry in
-                            SwipeableEntryCard(
-                                entry: entry,
-                                onFavorite: { Task { await viewModel.toggleFavorite(entry) } },
-                                onEdit: { viewModel.startEditing(entry) },
-                                onDelete: {
-                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                        viewModel.deleteWithUndo(entry)
-                                    }
-                                }
-                            )
-                            .transition(.asymmetric(
-                                insertion: .scale.combined(with: .opacity),
-                                removal: .opacity
-                            ))
-                        }
-
-                        // Bundle rows (Fix #2 UI)
-                        ForEach(sortedBundleIds, id: \.self) { bundleId in
-                            if let components = bundleDict[bundleId] {
-                                bundleRow(bundleId: bundleId, components: components)
-                                    .transition(.asymmetric(
-                                        insertion: .scale.combined(with: .opacity),
-                                        removal: .opacity
-                                    ))
-                            }
-                        }
-                    }
-                    .padding(.horizontal, DesignSystem.Spacing.md)
-                    .padding(.bottom, DesignSystem.Spacing.md)
+        // Header + body (shared body wiring; header/container chrome branch per family).
+        let content = VStack(spacing: 0) {
+            if settings.isCleanUI {
+                mealHeaderClean(mealType: mealType, allEntries: allEntries,
+                                sectionCalTotal: sectionCalTotal, isCollapsed: isCollapsed)
+                if !isCollapsed {
+                    mealBody(mealType: mealType, allEntries: allEntries, soloEntries: soloEntries,
+                             bundleDict: bundleDict, sortedBundleIds: sortedBundleIds)
+                        .padding(.bottom, DesignSystem.Spacing.md)
                 }
             } else {
-                // Collapsed spacer
-                Color.clear.frame(height: DesignSystem.Spacing.sm)
+                mealHeaderPixel(mealType: mealType, allEntries: allEntries,
+                                sectionCalTotal: sectionCalTotal, isCollapsed: isCollapsed)
+                if !isCollapsed {
+                    mealBody(mealType: mealType, allEntries: allEntries, soloEntries: soloEntries,
+                             bundleDict: bundleDict, sortedBundleIds: sortedBundleIds)
+                        .padding(.horizontal, DesignSystem.Spacing.md)
+                        .padding(.bottom, DesignSystem.Spacing.md)
+                } else {
+                    // Collapsed spacer
+                    Color.clear.frame(height: DesignSystem.Spacing.sm)
+                }
             }
         }
-        .adaptiveCard(
-            borderColor: draggingOver == mealType ? mealType.color.opacity(0.5) : tc.primary.opacity(0.15),
-            fillColor: draggingOver == mealType ? mealType.color.opacity(0.08) : tc.cardBackground
-        )
+
+        return Group {
+            if settings.isCleanUI {
+                // Erewhon: flat hairline row (no card); drag highlight via a subtle tint.
+                content
+                    .background(draggingOver == mealType ? tc.primary.opacity(0.06) : Color.clear)
+                    .overlay(alignment: .bottom) {
+                        Rectangle().fill(DesignSystem.Erewhon.lineSoft).frame(height: 1)
+                    }
+            } else {
+                content
+                    .adaptiveCard(
+                        borderColor: draggingOver == mealType ? mealType.color.opacity(0.5) : tc.primary.opacity(0.15),
+                        fillColor: draggingOver == mealType ? mealType.color.opacity(0.08) : tc.cardBackground
+                    )
+            }
+        }
+        // Drop target on the whole section (bar2 + body) — a drop on a COLLAPSED header
+        // still registers, unchanged from before.
         .dropDestination(for: String.self) { items, _ in
             guard let item = items.first else { return false }
 
@@ -471,6 +487,203 @@ struct FoodLogView: View {
         } isTargeted: { targeted in
             withAnimation(.easeInOut(duration: 0.2)) {
                 draggingOver = targeted ? mealType : nil
+            }
+        }
+    }
+
+    /// Erewhon `.bar2`: the info + total + chevron region toggles the accordion; the
+    /// existing + control stays a distinct button. Meal name / count / range / total per
+    /// D6 (total in display, D9).
+    private func mealHeaderClean(mealType: MealType, allEntries: [FoodEntry],
+                                 sectionCalTotal: Int, isCollapsed: Bool) -> some View {
+        HStack(spacing: 13) {
+            Button {
+                toggleCollapse(mealType)
+            } label: {
+                HStack(spacing: 13) {
+                    Image(systemName: mealType.icon)
+                        .font(AppFont.regular(16))
+                        .foregroundColor(tc.textSecondary)
+                        .frame(width: 24, height: 24)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 9) {
+                            Text(mealType.displayName)
+                                .font(AppFont.bold(13.5))
+                                .foregroundColor(tc.textPrimary)
+                            Text("\(allEntries.count) item\(allEntries.count == 1 ? "" : "s")")
+                                .font(AppFont.regular(10))
+                                .foregroundColor(tc.textTertiary)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(DesignSystem.Erewhon.line, lineWidth: 1)
+                                )
+                        }
+                        if let range = mealTimeRange(for: mealType) {
+                            Text(range)
+                                .font(AppFont.regular(10.5))
+                                .foregroundColor(tc.textTertiary)
+                        }
+                    }
+
+                    Spacer()
+
+                    Text("\(sectionCalTotal)")
+                        .font(AppFont.display(16))
+                        .foregroundColor(tc.textPrimary)
+
+                    Image(systemName: "chevron.right")
+                        .font(AppFont.regular(13))
+                        .foregroundColor(tc.textTertiary)
+                        .rotationEffect(.degrees(isCollapsed ? 0 : 90))
+                        .animation(DesignSystem.Erewhon.ease(0.4), value: isCollapsed)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            plusButton(for: mealType)
+        }
+        .padding(.vertical, 15)
+    }
+
+    /// Pixel section header (preserved byte-identical, incl. the collapse toggle and the
+    /// + button's `settings.isCleanUI` border branch via `plusButton`).
+    private func mealHeaderPixel(mealType: MealType, allEntries: [FoodEntry],
+                                 sectionCalTotal: Int, isCollapsed: Bool) -> some View {
+        HStack(spacing: DesignSystem.Spacing.sm) {
+            Image(systemName: mealType.icon)
+                .font(AppFont.bold(16))
+                .foregroundColor(mealType.color)
+
+            Text(mealType.displayName)
+                .font(AppFont.bold(18))
+                .foregroundColor(tc.textPrimary)
+
+            if !allEntries.isEmpty {
+                Text("\(allEntries.count)")
+                    .font(AppFont.bold(DesignSystem.FontSizes.caption))
+                    .foregroundColor(mealType.color)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(mealType.color.opacity(0.15))
+                    .clipShape(AdaptivePillShapeStyle())
+            }
+
+            Spacer()
+
+            // Fix #8: show total cal when collapsed
+            if isCollapsed && !allEntries.isEmpty {
+                Text("\(sectionCalTotal) cal")
+                    .font(AppFont.regular(13))
+                    .foregroundColor(tc.textSecondary)
+            }
+
+            // Fix #8: collapse toggle (only when there are entries)
+            if !allEntries.isEmpty {
+                Button {
+                    toggleCollapse(mealType)
+                } label: {
+                    Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                        .font(AppFont.bold(13))
+                        .foregroundColor(tc.textSecondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+
+            plusButton(for: mealType)
+        }
+        .padding(.horizontal, DesignSystem.Spacing.md)
+        .padding(.top, DesignSystem.Spacing.md)
+        .padding(.bottom, (allEntries.isEmpty || isCollapsed) ? DesignSystem.Spacing.xs : DesignSystem.Spacing.sm)
+    }
+
+    /// The per-section + button (existing add entry point; preserves the isCleanUI border
+    /// branch — the only pre-existing pixel fragment in the meal header).
+    private func plusButton(for mealType: MealType) -> some View {
+        Button {
+            viewModel.openAddFoodChoice(for: mealType)
+        } label: {
+            Text("+")
+                .font(AppFont.bold(16))
+                .foregroundColor(.white)
+                .frame(width: 30, height: 30)
+                .adaptivePill(
+                    borderColor: settings.isCleanUI ? .clear : mealType.color.adjustedBrightness(-0.2),
+                    fillColor: .clear,
+                    fillGradient: DesignSystem.Colors.adaptiveGradientFrom(mealType.color)
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private func toggleCollapse(_ mealType: MealType) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            if collapsedSections.contains(mealType) {
+                collapsedSections.remove(mealType)
+            } else {
+                collapsedSections.insert(mealType)
+            }
+        }
+    }
+
+    /// Shared meal body: empty-state add affordance, or solo swipe cards + bundle rows.
+    /// Swipe / delete / undo + drag logic untouched (F3-hardened).
+    @ViewBuilder
+    private func mealBody(mealType: MealType, allEntries: [FoodEntry], soloEntries: [FoodEntry],
+                          bundleDict: [String: [FoodEntry]], sortedBundleIds: [String]) -> some View {
+        if allEntries.isEmpty {
+            // Tappable empty state row (drag target still registers via the section)
+            Button {
+                viewModel.openAddFoodChoice(for: mealType)
+            } label: {
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    Image(systemName: "plus")
+                        .font(AppFont.bold(13))
+                        .foregroundColor(mealType.color)
+                    Text("Add \(mealType.displayName)")
+                        .font(AppFont.regular(DesignSystem.FontSizes.callout))
+                        .foregroundColor(tc.textSecondary)
+                    Spacer()
+                }
+                .padding(DesignSystem.Spacing.md)
+                .adaptiveCard(borderColor: mealType.color.opacity(0.3), fillColor: mealType.color.opacity(0.06))
+            }
+            .buttonStyle(PlainButtonStyle())
+        } else {
+            VStack(spacing: DesignSystem.Spacing.sm) {
+                // Solo entries with swipe actions (Fix #5)
+                ForEach(soloEntries, id: \.id) { entry in
+                    SwipeableEntryCard(
+                        entry: entry,
+                        onFavorite: { Task { await viewModel.toggleFavorite(entry) } },
+                        onEdit: { viewModel.startEditing(entry) },
+                        onDelete: {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                viewModel.deleteWithUndo(entry)
+                            }
+                        }
+                    )
+                    .transition(.asymmetric(
+                        insertion: .scale.combined(with: .opacity),
+                        removal: .opacity
+                    ))
+                }
+
+                // Bundle rows (Fix #2 UI)
+                ForEach(sortedBundleIds, id: \.self) { bundleId in
+                    if let components = bundleDict[bundleId] {
+                        bundleRow(bundleId: bundleId, components: components)
+                            .transition(.asymmetric(
+                                insertion: .scale.combined(with: .opacity),
+                                removal: .opacity
+                            ))
+                    }
+                }
             }
         }
     }
@@ -597,73 +810,26 @@ struct FoodLogView: View {
             : "\(viewModel.selectedDateDisplayLabel)'s Progress"
 
         return VStack(spacing: DesignSystem.Spacing.md) {
-            if settings.isCleanUI {
-                Text(progressTitle.uppercased())
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundColor(Color(hex: "#5A7A6E"))
-                    .kerning(0.8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                Text(progressTitle)
-                    .font(AppFont.bold(DesignSystem.FontSizes.title2))
-                    .foregroundColor(tc.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            Text(progressTitle)
+                .font(AppFont.bold(DesignSystem.FontSizes.title2))
+                .foregroundColor(tc.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             // Paged carousel: Page 1 = calories+macros, Page 2 = extra nutrients
             TabView {
                 // Page 1: Calorie ring + macro cards
                 VStack(spacing: DesignSystem.Spacing.md) {
-                    if settings.isCleanUI {
-                        VStack(spacing: 0) {
-                            ZStack {
-                                Circle()
-                                    .stroke(settings.isCleanDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06), lineWidth: 14)
-                                Circle()
-                                    .trim(from: 0, to: viewModel.calorieProgress)
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [Color(hex: "#5EEAD4"), Color(hex: "#0D9488")],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        style: StrokeStyle(lineWidth: 14, lineCap: .round)
-                                    )
-                                    .rotationEffect(.degrees(-90))
-                                    .animation(.spring(response: 0.8, dampingFraction: 0.7), value: viewModel.calorieProgress)
-                                VStack(spacing: 2) {
-                                    Text("\(viewModel.totalCalories)")
-                                        .font(.system(size: 30, weight: .bold, design: .rounded))
-                                        .foregroundColor(tc.textPrimary)
-                                        .tracking(-0.5)
-                                        .contentTransition(.numericText())
-                                    Text("kcal")
-                                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                                        .foregroundColor(tc.textSecondary)
-                                }
-                            }
-                            .frame(width: 170, height: 170)
-
-                            Text("of \(Int(viewModel.currentGoal?.calorieTarget ?? 2100)) goal")
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
-                                .foregroundColor(tc.textSecondary)
-                                .padding(.top, 10)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, DesignSystem.Spacing.sm)
-                    } else {
-                        PixelCalorieRing(
-                            progress: viewModel.calorieProgress,
-                            calories: viewModel.totalCalories,
-                            filledColor: tc.ringFilled,
-                            emptyColor: tc.ringEmpty,
-                            textColor: tc.textPrimary,
-                            labelColor: tc.textSecondary
-                        )
-                        .frame(width: 210, height: 210)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, DesignSystem.Spacing.sm)
-                    }
+                    PixelCalorieRing(
+                        progress: viewModel.calorieProgress,
+                        calories: viewModel.totalCalories,
+                        filledColor: tc.ringFilled,
+                        emptyColor: tc.ringEmpty,
+                        textColor: tc.textPrimary,
+                        labelColor: tc.textSecondary
+                    )
+                    .frame(width: 210, height: 210)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, DesignSystem.Spacing.sm)
 
                     LazyVGrid(columns: [
                         GridItem(.flexible()),
@@ -710,6 +876,162 @@ struct FoodLogView: View {
         .frame(maxWidth: .infinity)
         .padding(DesignSystem.Spacing.lg)
         .adaptiveCard(borderColor: tc.primary.opacity(0.2), fillColor: tc.cardBackground)
+    }
+
+    // MARK: - Food Hero (Erewhon, D3)
+
+    /// Mockup `.food-hero`: mini calorie ring + three macro tracks. Uses the existing
+    /// calorie/macro progress values; ring figure + macro values in display (D9).
+    private var foodHeroClean: some View {
+        HStack(alignment: .center, spacing: 18) {
+            miniRingClean
+            VStack(spacing: 13) {
+                macroTrackClean(
+                    label: "Protein",
+                    value: Int(viewModel.totalProtein),
+                    target: Int(viewModel.currentGoal?.proteinTarget ?? 1),
+                    unit: "g",
+                    progress: viewModel.proteinProgress,
+                    color: tc.macroBarProtein
+                )
+                macroTrackClean(
+                    label: "Carbs",
+                    value: Int(viewModel.totalCarbs),
+                    target: Int(viewModel.currentGoal?.carbTarget ?? 1),
+                    unit: "g",
+                    progress: viewModel.carbProgress,
+                    color: tc.macroBarCarbs
+                )
+                macroTrackClean(
+                    label: "Fat",
+                    value: Int(viewModel.totalFat),
+                    target: Int(viewModel.currentGoal?.fatTarget ?? 1),
+                    unit: "g",
+                    progress: viewModel.fatProgress,
+                    color: tc.macroBarFat
+                )
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 4)
+    }
+
+    /// Mockup `.mini-ring`: calorie progress arc + centered display figure (D9).
+    private var miniRingClean: some View {
+        let goal = Int(viewModel.currentGoal?.calorieTarget ?? 2100)
+        return ZStack {
+            Circle()
+                .stroke(tc.ringEmpty, lineWidth: 8)
+            Circle()
+                .trim(from: 0, to: min(max(viewModel.calorieProgress, 0), 1))
+                .stroke(tc.primary, style: StrokeStyle(lineWidth: 9, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(DesignSystem.Erewhon.ease(0.8), value: viewModel.calorieProgress)
+            VStack(spacing: 4) {
+                Text(viewModel.totalCalories.formatted())
+                    .font(AppFont.display(22))
+                    .foregroundColor(tc.textPrimary)
+                    .contentTransition(.numericText())
+                Text("of \(goal.formatted())")
+                    .font(AppFont.regular(9))
+                    .foregroundColor(tc.textTertiary)
+            }
+        }
+        .frame(width: 104, height: 104)
+    }
+
+    /// Mockup `.fm`: colored macro label + display value/goal over a token track fill.
+    private func macroTrackClean(
+        label: String, value: Int, target: Int, unit: String,
+        progress: Double, color: Color
+    ) -> some View {
+        VStack(spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(label)
+                    .font(AppFont.bold(12))
+                    .foregroundColor(color)
+                Spacer()
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text("\(value)")
+                        .font(AppFont.display(13))
+                        .foregroundColor(tc.textPrimary)
+                        .contentTransition(.numericText())
+                    Text("/ \(target) \(unit)")
+                        .font(AppFont.regular(11))
+                        .foregroundColor(tc.textTertiary)
+                }
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(tc.ringEmpty)
+                    Capsule()
+                        .fill(color)
+                        .frame(width: geo.size.width * min(max(progress, 0), 1))
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: progress)
+                }
+            }
+            .frame(height: 7)
+        }
+    }
+
+    // MARK: - Nutrition Details (Erewhon detgrid, D4)
+
+    /// Mockup `.detgrid`: 3-column hairline grid of logged advanced nutrients. Values in
+    /// display, units in Hanken (D9). Gated by `trackAdvancedNutrition` — hidden entirely
+    /// when off (deviation from the always-on mockup, noted).
+    private var nutritionDetailsClean: some View {
+        let entries = viewModel.displayedEntries
+        let sugar = entries.compactMap(\.sugar).reduce(0, +)
+        let fiber = entries.compactMap(\.fiber).reduce(0, +)
+        let sodium = entries.compactMap(\.sodium).reduce(0, +)
+        let satFat = entries.compactMap(\.saturatedFat).reduce(0, +)
+        let cholesterol = entries.compactMap(\.cholesterol).reduce(0, +)
+        let potassium = entries.compactMap(\.potassium).reduce(0, +)
+
+        return VStack(spacing: 0) {
+            secHead("Nutrition details", "Logged today")
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 1),
+                    GridItem(.flexible(), spacing: 1),
+                    GridItem(.flexible(), spacing: 1)
+                ],
+                spacing: 1
+            ) {
+                detCell(label: "Sugar", value: sugar, unit: "g")
+                detCell(label: "Fiber", value: fiber, unit: "g")
+                detCell(label: "Sodium", value: sodium, unit: "mg")
+                detCell(label: "Sat. Fat", value: satFat, unit: "g")
+                detCell(label: "Cholest.", value: cholesterol, unit: "mg")
+                detCell(label: "Potassium", value: potassium, unit: "mg")
+            }
+            .background(DesignSystem.Erewhon.lineSoft)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(DesignSystem.Erewhon.line, lineWidth: 1)
+            )
+        }
+    }
+
+    private func detCell(label: String, value: Double, unit: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(AppFont.regular(10.5))
+                .foregroundColor(tc.textTertiary)
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(Int(value.rounded()).formatted())
+                    .font(AppFont.display(19))
+                    .foregroundColor(tc.textPrimary)
+                Text(unit)
+                    .font(AppFont.regular(10))
+                    .foregroundColor(tc.textSecondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 15)
+        .padding(.horizontal, 13)
+        .background(tc.cardBackground)
     }
 
     // MARK: - Nutrients Detail Page (Page 2 of progress)
@@ -786,10 +1108,7 @@ struct FoodLogView: View {
     private var recentFoodsSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
             if settings.isCleanUI {
-                Text("RECENT FOODS")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundColor(Color(hex: "#5A7A6E"))
-                    .kerning(0.8)
+                secHead("Recent foods", "Tap to add")
             } else {
                 Text("Recent Foods")
                     .font(AppFont.bold(DesignSystem.FontSizes.title2))
@@ -812,27 +1131,31 @@ struct FoodLogView: View {
 
     // MARK: - Quick Log Card
 
+    /// Mockup `.rfood`: photo/icon header + name + display calories + relative time, with
+    /// the favorite star kept as an in-chip affordance (D5). Behavior (tap-to-quick-log,
+    /// favorite toggle) unchanged; still fed by `recentFoods` only (no new dedup).
     private func quickLogCard(entry: FoodEntry, showFavoriteButton: Bool) -> some View {
         Button {
             Task { await viewModel.quickLog(entry) }
         } label: {
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Photo / icon area (mockup `.ph`)
                 ZStack(alignment: .topTrailing) {
                     if let photoData = entry.photoData,
                        let uiImage = UIImage(data: photoData) {
                         Image(uiImage: uiImage)
                             .resizable()
                             .scaledToFill()
-                            .frame(width: 80, height: 80)
-                            .clipShape(AdaptiveCardShapeStyle())
+                            .frame(width: 120, height: 70)
+                            .clipped()
                     } else {
                         ZStack {
-                            AdaptiveCardShapeStyle()
-                                .fill(tc.primary.opacity(0.1))
-                                .frame(width: 80, height: 80)
+                            Rectangle()
+                                .fill(tc.ringEmpty)
+                                .frame(width: 120, height: 70)
                             Image(systemName: "fork.knife")
-                                .font(AppFont.regular(28))
-                                .foregroundColor(tc.primary)
+                                .font(AppFont.regular(24))
+                                .foregroundColor(tc.textSecondary)
                         }
                     }
 
@@ -841,9 +1164,9 @@ struct FoodLogView: View {
                             Task { await viewModel.toggleFavorite(entry) }
                         } label: {
                             Image(systemName: entry.isFavorite ? "star.fill" : "star")
-                                .font(AppFont.bold(14))
+                                .font(AppFont.bold(12))
                                 .foregroundColor(entry.isFavorite ? tc.macroBarCarbs : .white)
-                                .padding(6)
+                                .padding(5)
                                 .background(
                                     Circle()
                                         .fill(entry.isFavorite
@@ -851,155 +1174,183 @@ struct FoodLogView: View {
                                               : Color.black.opacity(0.4))
                                 )
                         }
-                        .offset(x: 4, y: -4)
+                        .buttonStyle(PlainButtonStyle())
+                        .offset(x: -4, y: 4)
                     }
                 }
 
-                Text(entry.name)
-                    .font(AppFont.bold(DesignSystem.FontSizes.footnote))
-                    .foregroundColor(tc.textPrimary)
-                    .lineLimit(1)
-                    .frame(width: 80, alignment: .leading)
+                // Meta (mockup `.meta`): name + calories/time
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(entry.name)
+                        .font(AppFont.bold(11.5))
+                        .foregroundColor(tc.textPrimary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(height: 30, alignment: .top)
 
-                Text("\(entry.calories) cal")
-                    .font(AppFont.regular(DesignSystem.FontSizes.caption))
-                    .foregroundColor(tc.textSecondary)
-
-                Text(viewModel.relativeTimeString(from: entry.date))
-                    .font(AppFont.regular(10))
-                    .foregroundColor(tc.textTertiary)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("\(entry.calories)")
+                            .font(AppFont.display(13))
+                            .foregroundColor(tc.textPrimary)
+                        Spacer(minLength: 4)
+                        Text("cal · \(viewModel.relativeTimeString(from: entry.date))")
+                            .font(AppFont.regular(9))
+                            .foregroundColor(tc.textTertiary)
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.horizontal, 11)
+                .padding(.vertical, 10)
             }
-            .padding(DesignSystem.Spacing.sm)
+            .frame(width: 120)
             .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
         }
         .buttonStyle(PlainButtonStyle())
     }
 
-    // MARK: - Macro Card
+    // MARK: - Macro Card (pixel progress only — Erewhon uses macroTrackClean)
 
-    @ViewBuilder
     private func macroCard(
         icon: String, title: String,
         current: Int, target: Int, unit: String,
         color: Color, progress: Double
     ) -> some View {
-        if settings.isCleanUI {
-            let macroColors = cleanMacroColors(for: title)
-            VStack(spacing: 0) {
-                Circle()
-                    .fill(macroColors.dot)
-                    .frame(width: 6, height: 6)
-                    .padding(.bottom, 8)
+        VStack(spacing: DesignSystem.Spacing.sm) {
+            Image(systemName: icon)
+                .font(AppFont.bold(14))
+                .foregroundColor(.white)
+                .frame(width: 34, height: 34)
+                .adaptivePill(
+                    borderColor: color.adjustedBrightness(-0.2),
+                    fillColor: .clear,
+                    fillGradient: DesignSystem.Colors.adaptiveGradientFrom(color)
+                )
 
-                Text(title)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundColor(macroColors.label)
+            Text(title)
+                .font(AppFont.regular(12))
+                .foregroundColor(tc.textSecondary)
 
-                Text("\(current)")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundColor(macroColors.value)
-                    .tracking(-0.4)
-                    .contentTransition(.numericText())
-                    .padding(.top, 2)
+            Text("\(current)")
+                .font(AppFont.bold(20))
+                .foregroundColor(tc.textPrimary)
 
-                Text("/ \(target)\(unit)")
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundColor(tc.textTertiary)
-                    .padding(.top, 1)
+            Text("/ \(target)\(unit)")
+                .font(AppFont.regular(10))
+                .foregroundColor(tc.textTertiary)
 
+            GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.white.opacity(0.06))
-                        .frame(height: 3)
-                    GeometryReader { geo in
-                        Capsule()
-                            .fill(macroColors.dot)
-                            .frame(width: geo.size.width * min(max(progress, 0), 1), height: 3)
-                            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: progress)
-                    }
-                    .frame(height: 3)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(tc.macroBarTrack)
+                        .frame(height: 4)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(color)
+                        .frame(width: geometry.size.width * min(max(progress, 0), 1), height: 4)
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: progress)
                 }
-                .padding(.top, 8)
             }
-            .padding(.vertical, 14)
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity)
-            .background(
+            .frame(height: 4)
+        }
+        .padding(DesignSystem.Spacing.md)
+        .frame(maxWidth: .infinity)
+        .adaptiveCard(borderColor: color.opacity(0.2), fillColor: tc.cardBackground)
+    }
+
+    // MARK: - Add to Log (Erewhon, D7)
+
+    /// Mockup `.addlog`: three method rows wired to the SAME destinations the current add
+    /// flow exposes (AI describe, food database, barcode). Additional surface — the
+    /// per-section + entry points and the AddFoodChoiceSheet are untouched.
+    private var addToLogSection: some View {
+        VStack(spacing: 0) {
+            secHead("Add to log", "Choose a method")
+            VStack(spacing: 1) {
+                addRow(
+                    icon: "camera.viewfinder", title: "Scan food",
+                    subtitle: "Describe or snap a photo, AI does the rest",
+                    beta: true, accent: true
+                ) {
+                    viewModel.pendingMealType = .uncategorized
+                    viewModel.openDescribeMeal()
+                }
+                addRow(
+                    icon: "magnifyingglass", title: "Food database",
+                    subtitle: "Search thousands of foods",
+                    beta: false, accent: false
+                ) {
+                    viewModel.pendingMealType = .uncategorized
+                    viewModel.formMealType = .uncategorized
+                    viewModel.showingFoodDatabase = true
+                }
+                addRow(
+                    icon: "barcode", title: "Scan barcode",
+                    subtitle: "Auto-fill from product label",
+                    beta: false, accent: false
+                ) {
+                    viewModel.pendingMealType = .uncategorized
+                    viewModel.formMealType = .uncategorized
+                    showingBarcodeOptions = true
+                }
+            }
+            .background(DesignSystem.Erewhon.lineSoft)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(macroColors.tint)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.white.opacity(0.04), lineWidth: 0.5)
-                    )
+                    .stroke(DesignSystem.Erewhon.line, lineWidth: 1)
             )
-        } else {
-            VStack(spacing: DesignSystem.Spacing.sm) {
-                Image(systemName: icon)
-                    .font(AppFont.bold(14))
-                    .foregroundColor(.white)
-                    .frame(width: 34, height: 34)
-                    .adaptivePill(
-                        borderColor: color.adjustedBrightness(-0.2),
-                        fillColor: .clear,
-                        fillGradient: DesignSystem.Colors.adaptiveGradientFrom(color)
-                    )
-
-                Text(title)
-                    .font(AppFont.regular(12))
-                    .foregroundColor(tc.textSecondary)
-
-                Text("\(current)")
-                    .font(AppFont.bold(20))
-                    .foregroundColor(tc.textPrimary)
-
-                Text("/ \(target)\(unit)")
-                    .font(AppFont.regular(10))
-                    .foregroundColor(tc.textTertiary)
-
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(tc.macroBarTrack)
-                            .frame(height: 4)
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(color)
-                            .frame(width: geometry.size.width * min(max(progress, 0), 1), height: 4)
-                            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: progress)
-                    }
-                }
-                .frame(height: 4)
-            }
-            .padding(DesignSystem.Spacing.md)
-            .frame(maxWidth: .infinity)
-            .adaptiveCard(borderColor: color.opacity(0.2), fillColor: tc.cardBackground)
         }
     }
 
-    private func cleanMacroColors(for title: String) -> (dot: Color, label: Color, value: Color, tint: Color) {
-        let isDark = settings.isCleanDark
-        switch title.lowercased() {
-        case "protein":
-            return (
-                dot: Color(hex: "#2DD4BF"),
-                label: Color(hex: "#5EEAD4"),
-                value: Color(hex: isDark ? "#99F6E4" : "#0D9488"),
-                tint: Color(hex: "#0D9488").opacity(isDark ? 0.1 : 0.06)
-            )
-        case "carbs":
-            return (
-                dot: Color(hex: "#FBBF24"),
-                label: Color(hex: "#D4A843"),
-                value: Color(hex: isDark ? "#FDE68A" : "#92400E"),
-                tint: Color(hex: "#D4A843").opacity(isDark ? 0.08 : 0.06)
-            )
-        default: // fat
-            return (
-                dot: Color(hex: "#E8956E"),
-                label: Color(hex: "#C07A5C"),
-                value: Color(hex: isDark ? "#FDBA9E" : "#9A3412"),
-                tint: Color(hex: "#C07A5C").opacity(isDark ? 0.08 : 0.06)
-            )
+    /// Mockup `.addrow`: leading icon tile (accent-filled for the first row) + title
+    /// (+ Beta tag) + subtitle + chevron.
+    private func addRow(icon: String, title: String, subtitle: String,
+                        beta: Bool, accent: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: icon)
+                    .font(AppFont.regular(16))
+                    .foregroundColor(accent ? DesignSystem.Erewhon.onAccent : tc.textSecondary)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(accent ? tc.primary : tc.ringEmpty)
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 8) {
+                        Text(title)
+                            .font(AppFont.bold(13.5))
+                            .foregroundColor(tc.textPrimary)
+                        if beta {
+                            Text("Beta")
+                                .font(AppFont.regular(9))
+                                .foregroundColor(tc.primary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 5)
+                                        .stroke(tc.primary.opacity(0.4), lineWidth: 1)
+                                )
+                        }
+                    }
+                    Text(subtitle)
+                        .font(AppFont.regular(11))
+                        .foregroundColor(tc.textTertiary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(AppFont.regular(13))
+                    .foregroundColor(tc.textTertiary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 15)
+            .frame(maxWidth: .infinity)
+            .background(tc.cardBackground)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(PlainButtonStyle())
     }
 
     // MARK: - Toast Overlay
