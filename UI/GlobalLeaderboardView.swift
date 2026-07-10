@@ -7,6 +7,11 @@
 
 import SwiftUI
 
+/// RETIRED (R4c): the global ladder now lives inline on Battle as `BattleStandingsBlock`
+/// (top 10 + my row). This standalone screen is no longer pushed or presented anywhere — it
+/// survives only so any lingering reference or preview keeps compiling. All fetch/board logic
+/// stays in `GlobalLeaderboardViewModel`.
+///
 /// The global leaderboard (D3): a single world-readable ladder with a metric toggle
 /// (RR / Wins / Streak); Wins/Streak are per-league (1/3/5-Day sub-toggle), RR is global.
 /// Fetch-on-view + pull-to-refresh; rows are NOT tappable (global strangers have no profile

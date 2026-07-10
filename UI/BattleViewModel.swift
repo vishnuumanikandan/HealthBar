@@ -261,6 +261,10 @@ final class BattleViewModel {
         // Viewing the Battle list clears the pulse + "since you looked" deltas. The recap
         // sheet (DuelUIState.pendingResolutions) supersedes the old claim toast (D1c/D4).
         await coordinator.markDuelsSeen(duels, isFullList: true)
+        // R4c §1: the matchup preview fills the featured slot only when there is no active duel
+        // (the active-duel featured card wins). Re-rolls once per load (each appear / refresh).
+        if active.isEmpty { await loadMatchupPreview() }
+        else { matchupPreview = nil }
     }
 
     // MARK: - Actions

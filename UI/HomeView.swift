@@ -1048,7 +1048,7 @@ struct HomeView: View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 Text(title)
-                    .font(AppFont.bold(15))
+                    .font(AppFont.display(15))
                     .foregroundColor(tc.textPrimary)
                 Spacer()
                 if let meta {
@@ -1074,10 +1074,10 @@ struct HomeView: View {
                 Image(systemName: "leaf")
                     .font(AppFont.regular(18))
                     .foregroundColor(tc.primary)
-                // D1.1/D4: wordmark stays Hanken (Bebas is reserved for the hero numeral
-                // this prompt), a deliberate deviation from the mockup's Bebas `.wordmark`.
+                // R4c: wordmark → display (Bebas), reversing the R3b deviation now that the
+                // Tier-B rule (R4 D1) is the standing convention for the flat branch.
                 Text("HealthBar")
-                    .font(AppFont.bold(27))
+                    .font(AppFont.display(27))
                     .foregroundColor(tc.textPrimary)
             }
             // Accent tick under the wordmark. §1.1 suggested Erewhon.lineSoft, but the HTML
@@ -1123,13 +1123,13 @@ struct HomeView: View {
                 resDivider
                 resChip(icon: "bolt", label: "Total XP") {
                     Text(summary.totalXP.formatted())
-                        .font(AppFont.bold(17)).foregroundColor(tc.textPrimary)
+                        .font(AppFont.display(17)).foregroundColor(tc.textPrimary)
                 }
                 resDivider
                 resChip(icon: "flame", label: "Streak") {
                     HStack(alignment: .firstTextBaseline, spacing: 0) {
                         Text("\(summary.currentStreak)")
-                            .font(AppFont.bold(17)).foregroundColor(tc.textPrimary)
+                            .font(AppFont.display(17)).foregroundColor(tc.textPrimary)
                         Text(" days")
                             .font(AppFont.regular(10)).foregroundColor(tc.textSecondary)
                     }
@@ -1171,7 +1171,7 @@ struct HomeView: View {
         let remaining = max(0, goal - total)
         return VStack(alignment: .leading, spacing: 0) {
             Text("Today's fuel")
-                .font(AppFont.bold(12))
+                .font(AppFont.display(12))
                 .foregroundColor(tc.textTertiary)
             HStack(alignment: .firstTextBaseline, spacing: 11) {
                 Text("\(total)")
@@ -1298,12 +1298,12 @@ struct HomeView: View {
         return VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Purity")
-                    .font(AppFont.bold(12))
+                    .font(AppFont.display(12))
                     .foregroundColor(tc.textPrimary)
                 Spacer()
                 HStack(alignment: .firstTextBaseline, spacing: 0) {
                     Text("\(score)")
-                        .font(AppFont.bold(16))
+                        .font(AppFont.display(16))
                         .foregroundColor(tc.textPrimary)
                     Text(" / \(target)")
                         .font(AppFont.regular(11))
@@ -1340,7 +1340,7 @@ struct HomeView: View {
                 Text(label).font(AppFont.bold(11)).foregroundColor(color)
             }
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text("\(value)").font(AppFont.bold(30)).foregroundColor(tc.textPrimary)
+                Text("\(value)").font(AppFont.display(30)).foregroundColor(tc.textPrimary)
                 Text("/\(target) g").font(AppFont.regular(11)).foregroundColor(tc.textTertiary)
             }
             .padding(.vertical, 9)
