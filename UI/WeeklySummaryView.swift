@@ -107,31 +107,31 @@ struct WeeklySummaryView: View {
     // MARK: - Clean Segmented Control
 
     private var cleanSegmentedControl: some View {
-        HStack(spacing: 4) {
+        // Erewhon .seg: recessed --sunk track, raised surface-2 pill for the active tab.
+        HStack(spacing: 2) {
             ForEach(WeeklyMetric.allCases) { metric in
                 Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    withAnimation(DesignSystem.Erewhon.ease(0.35)) {
                         selectedMetric = metric
                     }
                 } label: {
                     Text(metric.displayName)
-                        .font(.system(size: 14, weight: metric == selectedMetric ? .bold : .medium, design: .rounded))
-                        .foregroundColor(metric == selectedMetric ? tc.textPrimary : tc.textSecondary)
+                        .font(metric == selectedMetric ? AppFont.bold(11) : AppFont.regular(11))
+                        .foregroundColor(metric == selectedMetric ? tc.segActiveText : tc.segInactiveText)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 36)
+                        .frame(height: 30)
                         .background(
                             metric == selectedMetric
-                                ? RoundedRectangle(cornerRadius: 10).fill(tc.cardBackground)
-                                    .shadow(color: Color.black.opacity(0.08), radius: 2, y: 1)
+                                ? RoundedRectangle(cornerRadius: 7).fill(tc.segActiveFill)
+                                    .shadow(color: DesignSystem.Erewhon.subtleShadow.color, radius: 2, y: 1)
                                 : nil
                         )
                 }
             }
         }
-        .padding(4)
+        .padding(3)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(settings.isCleanDark ? Color.white.opacity(0.04) : Color.black.opacity(0.04))
+            RoundedRectangle(cornerRadius: 10).fill(tc.segBackground)
         )
     }
 
@@ -141,19 +141,21 @@ struct WeeklySummaryView: View {
         VStack(spacing: 10) {
             // Goal line text
             Text(goalText)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .font(AppFont.regular(13))
                 .foregroundColor(tc.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             // Chart area
             ZStack(alignment: .bottom) {
-                // Goal line
+                // Goal line — neutral dashed rule per .goal-line (replaces the red).
                 GeometryReader { geometry in
                     let goalY = geometry.size.height * (1 - goalForMetric(selectedMetric) / maxValue)
-                    Rectangle()
-                        .fill(Color(hex: "#EF4444").opacity(0.5))
-                        .frame(height: 1)
-                        .offset(y: goalY)
+                    Path { path in
+                        path.move(to: CGPoint(x: 0, y: 0))
+                        path.addLine(to: CGPoint(x: geometry.size.width, y: 0))
+                    }
+                    .stroke(DesignSystem.Erewhon.line, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                    .offset(y: goalY)
                 }
 
                 HStack(alignment: .bottom, spacing: 8) {
@@ -166,7 +168,7 @@ struct WeeklySummaryView: View {
                 VStack {
                     Spacer()
                     Rectangle()
-                        .fill(tc.textTertiary.opacity(0.3))
+                        .fill(DesignSystem.Erewhon.line)
                         .frame(height: 1)
                 }
             }
@@ -178,10 +180,10 @@ struct WeeklySummaryView: View {
                 ForEach(summary.days) { day in
                     VStack(spacing: 3) {
                         Text(day.dayName)
-                            .font(.system(size: 12, weight: day.isToday ? .bold : .medium, design: .rounded))
+                            .font(day.isToday ? AppFont.bold(12) : AppFont.regular(12))
                             .foregroundColor(day.isToday ? tc.primary : tc.textTertiary)
                         Text(day.dayNumber)
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .font(AppFont.regular(11))
                             .foregroundColor(day.isToday ? tc.primary : tc.textTertiary)
                     }
                     .frame(maxWidth: .infinity)
@@ -190,11 +192,11 @@ struct WeeklySummaryView: View {
         }
         .padding(18)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: DesignSystem.Erewhon.cardRadius)
                 .fill(tc.cardBackground)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.white.opacity(settings.isCleanDark ? 0.05 : 0), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: DesignSystem.Erewhon.cardRadius)
+                        .stroke(DesignSystem.Erewhon.line, lineWidth: 1)
                 )
         )
     }
@@ -202,12 +204,13 @@ struct WeeklySummaryView: View {
     private func cleanDayBar(_ day: DaySummary) -> some View {
         let value = selectedMetric.value(from: day)
         let heightPercent = maxValue > 0 ? min(value / maxValue, 1.0) : 0
-        let barColor = day.isToday ? Color(hex: "#0D9488") : Color(hex: "#5EEAD4").opacity(settings.isCleanDark ? 0.6 : 0.7)
+        // Today = full accent; other days = dimmed accent (mockup .bar vs .col.today .bar).
+        let barColor = day.isToday ? tc.primary : tc.primary.opacity(settings.isCleanDark ? 0.5 : 0.4)
 
         return VStack {
             Spacer()
             if value > 0 {
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: 6)
                     .fill(barColor)
                     .frame(height: animateChart ? 200 * heightPercent : 0)
             } else {
@@ -224,8 +227,8 @@ struct WeeklySummaryView: View {
     private var cleanThisWeekStats: some View {
         VStack(spacing: 12) {
             Text("THIS WEEK")
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundColor(Color(hex: "#5A7A6E"))
+                .font(AppFont.bold(11))
+                .foregroundColor(tc.textSecondary)
                 .kerning(0.8)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -259,31 +262,31 @@ struct WeeklySummaryView: View {
     private func cleanStatCard(title: String, value: String, subtitle: String, isOnTrack: Bool) -> some View {
         VStack(spacing: 6) {
             Text(title)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundColor(isOnTrack ? .white.opacity(0.85) : tc.textSecondary)
+                .font(AppFont.regular(11))
+                .foregroundColor(isOnTrack ? DesignSystem.Erewhon.onAccent.opacity(0.85) : tc.textSecondary)
 
             Text(value)
-                .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundColor(isOnTrack ? .white : tc.textPrimary)
+                .font(AppFont.bold(22))
+                .foregroundColor(isOnTrack ? DesignSystem.Erewhon.onAccent : tc.textPrimary)
                 .tracking(-0.3)
                 .contentTransition(.numericText())
 
             Text(subtitle)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundColor(isOnTrack ? .white.opacity(0.7) : tc.textTertiary)
+                .font(AppFont.regular(11))
+                .foregroundColor(isOnTrack ? DesignSystem.Erewhon.onAccent.opacity(0.7) : tc.textTertiary)
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 6)
         .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: DesignSystem.Erewhon.buttonRadius)
                 .fill(isOnTrack
-                    ? LinearGradient(colors: [Color(hex: "#0D9488"), Color(hex: "#0A6B63")], startPoint: .top, endPoint: .bottom)
-                    : LinearGradient(colors: [tc.cardBackground], startPoint: .top, endPoint: .bottom)
+                    ? AnyShapeStyle(LinearGradient(colors: [tc.primary, tc.primaryDark], startPoint: .top, endPoint: .bottom))
+                    : AnyShapeStyle(tc.cardBackground)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(isOnTrack ? Color.clear : Color.white.opacity(settings.isCleanDark ? 0.05 : 0.08), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: DesignSystem.Erewhon.buttonRadius)
+                        .stroke(isOnTrack ? Color.clear : DesignSystem.Erewhon.line, lineWidth: 1)
                 )
         )
     }

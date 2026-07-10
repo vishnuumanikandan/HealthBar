@@ -103,17 +103,37 @@ struct LeaderboardSection: View {
 
     // MARK: - Header
 
+    @ViewBuilder
     private var header: some View {
-        HStack(spacing: DesignSystem.Spacing.sm) {
-            Image(systemName: "trophy.fill")
-                .font(AppFont.regular(20))
-                .foregroundColor(DesignSystem.Colors.goldMid)
+        if settings.isCleanUI {
+            // Erewhon sec-head: title + right-aligned metric caption over a soft hairline.
+            VStack(spacing: 0) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Leaderboard")
+                        .font(AppFont.bold(15))
+                        .foregroundColor(tc.textPrimary)
+                    Spacer()
+                    Text("Days on goal")
+                        .font(AppFont.regular(11))
+                        .foregroundColor(tc.textTertiary)
+                }
+                .padding(.bottom, 10)
+                Rectangle()
+                    .fill(DesignSystem.Erewhon.lineSoft)
+                    .frame(height: 1)
+            }
+        } else {
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                Image(systemName: "trophy.fill")
+                    .font(AppFont.regular(20))
+                    .foregroundColor(DesignSystem.Colors.goldMid)
 
-            Text("Leaderboard")
-                .font(AppFont.bold(22))
-                .foregroundColor(tc.textPrimary)
+                Text("Leaderboard")
+                    .font(AppFont.bold(22))
+                    .foregroundColor(tc.textPrimary)
 
-            Spacer()
+                Spacer()
+            }
         }
     }
 
@@ -305,7 +325,7 @@ struct LeaderboardSection: View {
             // need a real metal outline there. Pixel mode draws its own border
             // from the adaptiveCard borderColor, so this stays clean-only.
             if let metal, settings.isCleanUI {
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: DesignSystem.Erewhon.cardRadius)
                     .stroke(metal.opacity(0.55), lineWidth: 1.5)
             }
         }
@@ -357,12 +377,15 @@ struct LeaderboardSection: View {
     // MARK: - Colors
 
     /// Podium metals: gold, silver, bronze. nil off the podium or without data.
+    /// Flat (Erewhon) uses the shared rank-metal tokens; pixel keeps its original hexes so
+    /// pixel Home stays byte-identical (D7).
     private func metalColor(_ position: Int, hasData: Bool) -> Color? {
         guard hasData else { return nil }
+        let isClean = settings.isCleanUI
         switch position {
-        case 1: return DesignSystem.Colors.goldMid
-        case 2: return Color(hex: "#9CA3AF") // silver
-        case 3: return Color(hex: "#CD7F32") // bronze
+        case 1: return isClean ? DesignSystem.Erewhon.rankGold : DesignSystem.Colors.goldMid
+        case 2: return isClean ? DesignSystem.Erewhon.rankSilver : Color(hex: "#9CA3AF") // silver
+        case 3: return isClean ? DesignSystem.Erewhon.rankBronze : Color(hex: "#CD7F32") // bronze
         default: return nil
         }
     }

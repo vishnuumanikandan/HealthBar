@@ -188,6 +188,11 @@ final class HomeViewModel {
     /// seen — the "since you looked" deltas persist until the user views Battle or an Arena.
     private(set) var activeDuels: [DuelDTO] = []
 
+    /// Incoming friend-request count, surfaced as the Home Squad-jump badge (R3b D6). Loaded
+    /// from the existing local-cache read alongside `loadDuels`; guest-gated at the call site
+    /// exactly like `loadDuels` (so guests never trigger the fetch).
+    private(set) var incomingRequestCount: Int = 0
+
     /// Loads duels through the full lifecycle (score push, resolution, RR claim) and keeps
     /// the active ones for the strip. Guests never call this (gated in the view).
     @MainActor
@@ -197,6 +202,9 @@ final class HomeViewModel {
         activeDuels = actives.sorted { (a: DuelDTO, b: DuelDTO) in
             (a.endAt ?? Date.distantFuture) < (b.endAt ?? Date.distantFuture)
         }
+        // R3b D6: refresh the Squad-jump badge from the same local-cache path. Cache-only —
+        // no new Firestore entry point; the call sites already guard `!isGuest`.
+        incomingRequestCount = ((try? await coordinator.fetchRequests(direction: "incoming")) ?? []).count
     }
 
     /// Opponent's movement since last markSeen for an active duel, else nil.
