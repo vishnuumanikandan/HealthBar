@@ -844,28 +844,37 @@ struct HomeView: View {
     // MARK: - Main Content
 
     private var contentView: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                // Title
+        ScrollViewReader { proxy in
+            ScrollView {
                 if isClean {
-                    Text("HealthBar")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundColor(tc.textPrimary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 16)
-                        .padding(.bottom, 22)
+                    cleanContent(proxy)
                 } else {
-                    Text("HealthBar")
-                        .font(AppFont.serifTitle(32))
-                        .foregroundColor(tc.textPrimary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 16)
-                        .padding(.bottom, 22)
+                    pixelContent
                 }
+            }
+            .scrollIndicators(.hidden)
+            // R2 §5: the tab bar is a `.safeAreaInset` on the TabView, which doesn't propagate
+            // through this tab's NavigationStack to the ScrollView — reserve the bar's height so
+            // bottom content clears the translucent bar (matches ProfileView).
+            .contentMargins(.bottom, DesignSystem.Erewhon.tabBarContentHeight + 12, for: .scrollContent)
+        }
+    }
 
-                VStack(spacing: 14) {
+    // MARK: - Pixel Home Content (byte-identical to pre-R3b)
+
+    /// Pixel-theme dashboard: the section order and bodies are preserved exactly. Rendered
+    /// only when `!isClean`, so every section takes its pixel branch.
+    private var pixelContent: some View {
+        VStack(spacing: 0) {
+            Text("HealthBar")
+                .font(AppFont.serifTitle(32))
+                .foregroundColor(tc.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 22)
+
+            VStack(spacing: 14) {
                     // 1. XP / Rank Card
                     xpAndStreakSection
 
@@ -893,7 +902,7 @@ struct HomeView: View {
                         sectionLabel("Daily Quests")
                         Spacer()
                         Text(viewModel.questProgressText)
-                            .font(isClean ? .system(size: 11, weight: .medium, design: .rounded) : AppFont.regular(12))
+                            .font(AppFont.regular(12))
                             .foregroundColor(tc.textSecondary)
                     }
                     .padding(.top, 8)
@@ -932,12 +941,621 @@ struct HomeView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
             }
+    }
+
+    // MARK: - Erewhon (Flat) Home Content — R3b
+
+    /// Anchor id for the Quests jump target (D3).
+    private static let questsAnchorID = "erewhon-quests-anchor"
+
+    /// Flat dashboard rebuilt to the committed mockup's `#screen-home`
+    /// (design/erewhon/arena.html). Rendered only when `isClean`; pixel uses `pixelContent`.
+    private func cleanContent(_ proxy: ScrollViewProxy) -> some View {
+        let insightsShown = viewModel.dailyInsights != nil && !isInsightsCardDismissedToday
+        return VStack(spacing: 0) {
+            Group {
+                appHead
+                    .padding(.top, 6)
+
+                if let summary = viewModel.summary {
+                    resourceRow(summary)
+                        .padding(.top, 20)
+                    xpLine(summary)
+                        .padding(.top, 14)
+                    calorieHero(summary)
+                        .padding(.top, 28)
+                }
+
+                jumpCards(proxy)
+                    .padding(.top, 18)
+
+                if let summary = viewModel.summary {
+                    purityBlock(summary)
+                        .padding(.top, 26)
+                }
+
+                // Daily Spark (kept) — renders nothing unless a mid-duel non-guest hasn't played.
+                sparkQTECard
+
+                // Active duels (kept), recontainerized into the block + sec-head language.
+                cleanDuelsBlock
+            }
+
+            Group {
+                // Nutrition block (macros)
+                if let summary = viewModel.summary {
+                    VStack(spacing: 0) {
+                        secHead("Nutrition", "Macros")
+                        macrosCard(summary)
+                    }
+                    .padding(.top, 30)
+                }
+
+                actionsRow
+                    .padding(.top, 24)
+
+                // Insights (kept) — position unchanged relative to the quests block.
+                if insightsShown, let insights = viewModel.dailyInsights {
+                    insightsCard(insights)
+                        .padding(.top, 30)
+                }
+
+                questsBlockClean
+                    .padding(.top, insightsShown ? 16 : 30)
+                    .id(Self.questsAnchorID)
+
+                mealsBlockClean
+                    .padding(.top, 30)
+
+                VStack(spacing: 0) {
+                    secHead("Weekly summary", nil)
+                    weeklyContent
+                }
+                .padding(.top, 30)
+
+                LeaderboardSection(
+                    viewModel: leaderboardViewModel,
+                    coordinator: coordinator,
+                    authService: authService,
+                    onAddFriends: { showFriends = true }
+                )
+                .padding(.top, 30)
+            }
         }
-        .scrollIndicators(.hidden)
-        // R2 §5: the tab bar is a `.safeAreaInset` on the TabView, which doesn't propagate
-        // through this tab's NavigationStack to the ScrollView — reserve the bar's height so
-        // bottom content clears the translucent bar (matches ProfileView).
-        .contentMargins(.bottom, DesignSystem.Erewhon.tabBarContentHeight + 12, for: .scrollContent)
+        .padding(.horizontal, 22)
+        .padding(.bottom, 24)
+    }
+
+    // MARK: Flat — shared card treatment + section header
+
+    /// Erewhon surface card: fill + hairline + subtle shadow. `radius` defaults to the
+    /// mockup's 14 (`.res`/`.jump`/`.macros`); meal slots pass 16 (`.slot`).
+    private func flatCard<Content: View>(
+        radius: CGFloat = DesignSystem.Erewhon.buttonRadius,
+        @ViewBuilder _ content: () -> Content
+    ) -> some View {
+        content()
+            .background(RoundedRectangle(cornerRadius: radius).fill(tc.cardBackground))
+            .overlay(RoundedRectangle(cornerRadius: radius).stroke(DesignSystem.Erewhon.line, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: radius))
+            .shadow(color: DesignSystem.Erewhon.subtleShadow.color,
+                    radius: DesignSystem.Erewhon.subtleShadow.radius,
+                    x: 0, y: DesignSystem.Erewhon.subtleShadow.y)
+    }
+
+    /// Mockup `.sec-head`: title + optional right-aligned meta over a soft hairline.
+    private func secHead(_ title: String, _ meta: String?) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(AppFont.bold(15))
+                    .foregroundColor(tc.textPrimary)
+                Spacer()
+                if let meta {
+                    Text(meta)
+                        .font(AppFont.regular(11))
+                        .foregroundColor(tc.textTertiary)
+                }
+            }
+            .padding(.bottom, 10)
+            Rectangle()
+                .fill(DesignSystem.Erewhon.lineSoft)
+                .frame(height: 1)
+        }
+        .padding(.bottom, 14)
+    }
+
+    // MARK: Flat — app head + resource row + XP line
+
+    /// Mockup `.app-head`: centered leaf wordmark over a short accent tick.
+    private var appHead: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 9) {
+                Image(systemName: "leaf")
+                    .font(AppFont.regular(18))
+                    .foregroundColor(tc.primary)
+                // D1.1/D4: wordmark stays Hanken (Bebas is reserved for the hero numeral
+                // this prompt), a deliberate deviation from the mockup's Bebas `.wordmark`.
+                Text("HealthBar")
+                    .font(AppFont.bold(27))
+                    .foregroundColor(tc.textPrimary)
+            }
+            // Accent tick under the wordmark. §1.1 suggested Erewhon.lineSoft, but the HTML
+            // (which wins) uses accent @ 0.55 — a lineSoft hairline would be invisible here.
+            RoundedRectangle(cornerRadius: 2)
+                .fill(tc.primary.opacity(0.55))
+                .frame(width: 38, height: 2)
+                .padding(.top, 13)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var resDivider: some View {
+        Rectangle().fill(DesignSystem.Erewhon.lineSoft).frame(width: 1)
+    }
+
+    private func resChip<V: View>(icon: String, label: String, @ViewBuilder value: () -> V) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(AppFont.regular(18))
+                .foregroundColor(tc.textSecondary)
+                .frame(width: 20, height: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(AppFont.regular(10))
+                    .foregroundColor(tc.textTertiary)
+                value()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 13)
+        .padding(.horizontal, 14)
+    }
+
+    /// Mockup `.resource`: Rank / Total XP / Streak chips in one hairlined surface card.
+    private func resourceRow(_ summary: TodaySummary) -> some View {
+        flatCard {
+            HStack(spacing: 0) {
+                resChip(icon: "shield", label: "Rank") {
+                    Text(summary.currentRankTier.displayName)
+                        .font(AppFont.bold(17)).foregroundColor(tc.textPrimary)
+                }
+                resDivider
+                resChip(icon: "bolt", label: "Total XP") {
+                    Text(summary.totalXP.formatted())
+                        .font(AppFont.bold(17)).foregroundColor(tc.textPrimary)
+                }
+                resDivider
+                resChip(icon: "flame", label: "Streak") {
+                    HStack(alignment: .firstTextBaseline, spacing: 0) {
+                        Text("\(summary.currentStreak)")
+                            .font(AppFont.bold(17)).foregroundColor(tc.textPrimary)
+                        Text(" days")
+                            .font(AppFont.regular(10)).foregroundColor(tc.textSecondary)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Mockup `.xpline`: level + XP-to-next over an accent-filled track (D1.3).
+    private func xpLine(_ summary: TodaySummary) -> some View {
+        VStack(spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Level \(summary.currentLevel)")
+                    .font(AppFont.bold(12))
+                    .foregroundColor(tc.textPrimary)
+                Spacer()
+                Text("\(summary.xpForNextLevel) XP to next")
+                    .font(AppFont.bold(11))
+                    .foregroundColor(tc.primary)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(tc.segBackground)
+                    Capsule().fill(tc.primary)
+                        .frame(width: geo.size.width * min(max(viewModel.levelProgressPercentage, 0), 1))
+                }
+            }
+            .frame(height: 7)
+        }
+    }
+
+    // MARK: Flat — calorie hero + jump cards
+
+    /// Mockup `.hero`: big Bebas calorie numeral (D4 — display's first Erewhon call site).
+    private func calorieHero(_ summary: TodaySummary) -> some View {
+        let goal = summary.goal.calorieTarget
+        let total = summary.totalCalories
+        let pct = viewModel.calorieProgressPercentage
+        let remaining = max(0, goal - total)
+        return VStack(alignment: .leading, spacing: 0) {
+            Text("Today's fuel")
+                .font(AppFont.bold(12))
+                .foregroundColor(tc.textTertiary)
+            HStack(alignment: .firstTextBaseline, spacing: 11) {
+                Text("\(total)")
+                    .font(AppFont.display(76))
+                    .foregroundColor(tc.textPrimary)
+                    .fixedSize()
+                Text("/ \(goal.formatted()) kcal")
+                    .font(AppFont.bold(14))
+                    .foregroundColor(tc.textSecondary)
+            }
+            .padding(.top, 5)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(tc.segBackground)
+                    Capsule()
+                        .fill(LinearGradient(colors: [tc.primaryDark, tc.primary],
+                                             startPoint: .leading, endPoint: .trailing))
+                        .frame(width: geo.size.width * min(max(pct, 0), 1))
+                }
+            }
+            .frame(height: 9)
+            .padding(.top, 16)
+            HStack(spacing: 5) {
+                Text("\(Int((pct * 100).rounded()))%")
+                    .font(AppFont.bold(12))
+                    .foregroundColor(tc.primary)
+                Text("of goal · \(remaining) kcal left")
+                    .font(AppFont.regular(12))
+                    .foregroundColor(tc.textTertiary)
+            }
+            .padding(.top, 10)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Mockup `.hero-jump`: Quests (scrolls to the quests block) + Squad (pushes Friends).
+    private func jumpCards(_ proxy: ScrollViewProxy) -> some View {
+        let completed = viewModel.completedQuestsCount
+        let total = viewModel.totalQuestsCount
+        let friendCount = leaderboardViewModel.entries.filter { !$0.isCurrentUser }.count
+        let showSquadBadge = !authService.isGuest && viewModel.incomingRequestCount > 0
+        return HStack(spacing: 11) {
+            jumpCard(
+                icon: "list.bullet",
+                iconColor: tc.primary,
+                title: "Quests",
+                subtitle: "\(completed) of \(total) done",
+                badge: "\(completed)/\(total)",
+                a11y: "Daily quests, \(completed) of \(total) complete",
+                action: {
+                    withAnimation(DesignSystem.Erewhon.ease(0.5)) {
+                        proxy.scrollTo(Self.questsAnchorID, anchor: .top)
+                    }
+                }
+            )
+            jumpCard(
+                icon: "person.2",
+                iconColor: DesignSystem.Erewhon.social,
+                title: "Squad",
+                subtitle: friendCount > 0 ? "\(friendCount) friend\(friendCount == 1 ? "" : "s")" : "Add friends",
+                badge: showSquadBadge ? "\(viewModel.incomingRequestCount)" : nil,
+                a11y: "Squad, \(friendCount) friends"
+                    + (showSquadBadge ? ", \(viewModel.incomingRequestCount) requests" : ""),
+                action: { showFriends = true }
+            )
+        }
+    }
+
+    private func jumpCard(icon: String, iconColor: Color, title: String, subtitle: String,
+                          badge: String?, a11y: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            flatCard {
+                HStack(spacing: 11) {
+                    Image(systemName: icon)
+                        .font(AppFont.regular(20))
+                        .foregroundColor(iconColor)
+                        .frame(width: 22, height: 22)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title)
+                            .font(AppFont.bold(13))
+                            .foregroundColor(tc.textPrimary)
+                        Text(subtitle)
+                            .font(AppFont.regular(10.5))
+                            .foregroundColor(tc.textTertiary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    if let badge {
+                        Text(badge)
+                            .font(AppFont.bold(13))
+                            .foregroundColor(tc.textPrimary)
+                    }
+                }
+                .padding(.vertical, 13)
+                .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(a11y)
+    }
+
+    // MARK: Flat — purity + macros
+
+    /// Purity band name + chip color, mirroring PurityScoreInfoSheet's toxin-score taxonomy
+    /// (lower score = purer). Reuses the app's canonical band language.
+    private func purityBand(_ score: Int) -> (name: String, color: Color) {
+        switch score {
+        case ..<21:  return ("Clean", tc.primary)
+        case ..<41:  return ("Good", tc.primaryDark)
+        case ..<61:  return ("Moderate", tc.macroBarFat)
+        case ..<81:  return ("High", tc.macroBarCarbs)
+        default:     return ("Very High", DesignSystem.Colors.danger)
+        }
+    }
+
+    /// Mockup `.purity`: horizontal bar with the target notch at `target/100` (D1.6).
+    private func purityBlock(_ summary: TodaySummary) -> some View {
+        let score = summary.totalToxinScore
+        let target = summary.goal.purityTarget
+        let band = purityBand(score)
+        let fillFrac = min(max(Double(score) / 100.0, 0), 1)
+        let notchFrac = min(max(Double(target) / 100.0, 0), 1)
+        return VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Purity")
+                    .font(AppFont.bold(12))
+                    .foregroundColor(tc.textPrimary)
+                Spacer()
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    Text("\(score)")
+                        .font(AppFont.bold(16))
+                        .foregroundColor(tc.textPrimary)
+                    Text(" / \(target)")
+                        .font(AppFont.regular(11))
+                        .foregroundColor(tc.textSecondary)
+                    Text(band.name)
+                        .font(AppFont.bold(11))
+                        .foregroundColor(band.color)
+                        .padding(.leading, 6)
+                }
+            }
+            GeometryReader { geo in
+                let w = geo.size.width
+                ZStack(alignment: .leading) {
+                    Capsule().fill(tc.segBackground).frame(height: 8)
+                    Capsule().fill(band.color).frame(width: w * fillFrac, height: 8)
+                    Rectangle()
+                        .fill(tc.textPrimary.opacity(0.38))
+                        .frame(width: 2, height: 14)
+                        .offset(x: w * notchFrac - 1)
+                }
+            }
+            .frame(height: 8)
+        }
+    }
+
+    private var macroDivider: some View {
+        Rectangle().fill(DesignSystem.Erewhon.lineSoft).frame(width: 1)
+    }
+
+    private func macroColumn(label: String, value: Int, target: Int, progress: Double, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 7) {
+                RoundedRectangle(cornerRadius: 3).fill(color).frame(width: 8, height: 8)
+                Text(label).font(AppFont.bold(11)).foregroundColor(color)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text("\(value)").font(AppFont.bold(30)).foregroundColor(tc.textPrimary)
+                Text("/\(target) g").font(AppFont.regular(11)).foregroundColor(tc.textTertiary)
+            }
+            .padding(.vertical, 9)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(tc.segBackground)
+                    Capsule().fill(color).frame(width: geo.size.width * min(max(progress, 0), 1))
+                }
+            }
+            .frame(height: 6)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 15)
+        .padding(.horizontal, 14)
+    }
+
+    /// Mockup `.macros`: three colored macro columns in one hairlined surface card.
+    private func macrosCard(_ summary: TodaySummary) -> some View {
+        flatCard {
+            HStack(spacing: 0) {
+                macroColumn(
+                    label: "Protein", value: Int(summary.totalProtein), target: Int(summary.goal.proteinTarget),
+                    progress: summary.goal.proteinTarget > 0 ? summary.totalProtein / summary.goal.proteinTarget : 0,
+                    color: tc.macroBarProtein
+                )
+                macroDivider
+                macroColumn(
+                    label: "Carbs", value: Int(summary.totalCarbs), target: Int(summary.goal.carbTarget),
+                    progress: summary.goal.carbTarget > 0 ? summary.totalCarbs / summary.goal.carbTarget : 0,
+                    color: tc.macroBarCarbs
+                )
+                macroDivider
+                macroColumn(
+                    label: "Fat", value: Int(summary.totalFat), target: Int(summary.goal.fatTarget),
+                    progress: summary.goal.fatTarget > 0 ? summary.totalFat / summary.goal.fatTarget : 0,
+                    color: tc.macroBarFat
+                )
+            }
+        }
+    }
+
+    // MARK: Flat — actions + quests + meals + duels
+
+    /// Mockup `.actions` (D5): primary "Log food" + ghost "Scan" via AppButton (R2 styling).
+    private var actionsRow: some View {
+        HStack(spacing: 11) {
+            AppButton(title: "Log food", style: .primary,
+                      action: { selectedTab = 1 }, icon: "arrow.up.right")
+            AppButton(title: "Scan", style: .secondary,
+                      action: { viewModel.showQuickScan = true }, icon: "viewfinder")
+        }
+        .sheet(isPresented: $viewModel.showQuickScan) {
+            QuickScanView(viewModel: viewModel, selectedTab: $selectedTab)
+        }
+    }
+
+    /// Mockup `.quest` rows under a sec-head. Scroll target for the Quests jump.
+    private var questsBlockClean: some View {
+        let quests = viewModel.summary?.quests ?? []
+        let completed = viewModel.completedQuestsCount
+        let total = viewModel.totalQuestsCount
+        return VStack(spacing: 0) {
+            secHead("Daily quests", "\(completed) / \(total) done")
+            if viewModel.allQuestsComplete {
+                AllQuestsCompleteView(totalXPFromQuests: viewModel.totalQuestXPEarnedToday)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            } else if !quests.isEmpty {
+                ForEach(Array(quests.enumerated()), id: \.element.id) { index, quest in
+                    cleanQuestRowNew(quest, isLast: index == quests.count - 1)
+                }
+            } else {
+                Text("No quests today")
+                    .font(AppFont.regular(14))
+                    .foregroundColor(tc.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 20)
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.allQuestsComplete)
+    }
+
+    private func cleanQuestRowNew(_ quest: DailyQuest, isLast: Bool) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(quest.isCompleted ? tc.primary : Color.clear)
+                    .frame(width: 25, height: 25)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(quest.isCompleted ? tc.primary : DesignSystem.Erewhon.line, lineWidth: 2)
+                    )
+                    .overlay {
+                        if quest.isCompleted {
+                            Image(systemName: "checkmark")
+                                .font(AppFont.bold(11))
+                                .foregroundColor(DesignSystem.Erewhon.onAccent)
+                        }
+                    }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(quest.title)
+                        .font(AppFont.bold(14.5))
+                        .foregroundColor(quest.isCompleted ? tc.textSecondary : tc.textPrimary)
+                        .strikethrough(quest.isCompleted)
+                    Text(quest.questDescription)
+                        .font(AppFont.regular(12))
+                        .foregroundColor(tc.textTertiary)
+                }
+                Spacer()
+                Text("+\(quest.xpReward) XP")
+                    .font(AppFont.bold(12))
+                    .foregroundColor(quest.isCompleted ? tc.textTertiary : tc.primary)
+            }
+            .padding(.vertical, 15)
+            if !isLast {
+                Rectangle().fill(DesignSystem.Erewhon.lineSoft).frame(height: 1)
+            }
+        }
+    }
+
+    /// Mockup `.inv`: 2-column meal grid + a single dashed empty slot that jumps to Food.
+    private var mealsBlockClean: some View {
+        let entries = viewModel.summary?.entries ?? []
+        return VStack(spacing: 0) {
+            secHead("Today's meals", "\(entries.count) logged")
+            LazyVGrid(
+                columns: [GridItem(.flexible(), spacing: 11), GridItem(.flexible(), spacing: 11)],
+                spacing: 11
+            ) {
+                ForEach(entries) { entry in
+                    mealSlot(entry)
+                }
+                emptyMealSlot
+            }
+        }
+    }
+
+    private func mealSlot(_ entry: FoodEntry) -> some View {
+        flatCard(radius: DesignSystem.CornerRadius.lg) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Image(systemName: entry.mealType.icon)
+                        .font(AppFont.regular(18))
+                        .foregroundColor(tc.textSecondary)
+                    Spacer()
+                    Text(mealTimeString(from: entry.date))
+                        .font(AppFont.regular(10))
+                        .foregroundColor(tc.textTertiary)
+                }
+                Spacer(minLength: 12)
+                Text(entry.name)
+                    .font(AppFont.bold(13.5))
+                    .foregroundColor(tc.textPrimary)
+                    .lineLimit(2)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("\(entry.calories)")
+                        .font(AppFont.bold(22))
+                        .foregroundColor(tc.textPrimary)
+                    Text("kcal")
+                        .font(AppFont.regular(10))
+                        .foregroundColor(tc.textTertiary)
+                }
+                .padding(.top, 7)
+            }
+            .padding(15)
+            .frame(maxWidth: .infinity, minHeight: 116, alignment: .leading)
+        }
+    }
+
+    private var emptyMealSlot: some View {
+        Button {
+            selectedTab = 1
+        } label: {
+            VStack(spacing: 11) {
+                Image(systemName: "plus")
+                    .font(AppFont.regular(16))
+                    .foregroundColor(tc.textTertiary)
+                    .frame(width: 34, height: 34)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(DesignSystem.Erewhon.line, style: StrokeStyle(lineWidth: 1.5, dash: [3]))
+                    )
+                Text("Empty slot")
+                    .font(AppFont.regular(10.5))
+                    .foregroundColor(tc.textTertiary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 116)
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
+                    .stroke(DesignSystem.Erewhon.line, style: StrokeStyle(lineWidth: 1, dash: [4]))
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Empty meal slot, add a meal")
+    }
+
+    private func mealTimeString(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: date)
+    }
+
+    /// Active duels (kept), recontainerized into the block + sec-head language for flat.
+    @ViewBuilder
+    private var cleanDuelsBlock: some View {
+        if !viewModel.activeDuels.isEmpty {
+            VStack(spacing: 0) {
+                secHead("Active duels", "\(viewModel.activeDuels.count) live")
+                VStack(spacing: 11) {
+                    ForEach(viewModel.activeDuels) { duel in
+                        duelStripCard(duel)
+                    }
+                }
+            }
+            .padding(.top, 26)
+        }
     }
 
     // MARK: - Active Duels Strip (D1c)
@@ -1034,107 +1652,7 @@ struct HomeView: View {
     // MARK: - XP and Streak Section
 
     private var xpAndStreakSection: some View {
-        Group {
-            if isClean {
-                cleanHeroCard
-            } else {
-                rpgHeroCard
-            }
-        }
-    }
-
-    /// Clean mode hero card: teal gradient with decorative bubbles
-    private var cleanHeroCard: some View {
-        ZStack {
-            // Gradient background
-            RoundedRectangle(cornerRadius: 20)
-                .fill(
-                    LinearGradient(
-                        stops: [
-                            .init(color: Color(hex: "#0A6B63"), location: 0),
-                            .init(color: Color(hex: "#0D8A7E"), location: 0.5),
-                            .init(color: Color(hex: "#11A594"), location: 1)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            // Decorative bubbles
-            Circle()
-                .fill(Color.white.opacity(0.05))
-                .frame(width: 120, height: 120)
-                .offset(x: 90, y: -40)
-
-            Circle()
-                .fill(Color.white.opacity(0.03))
-                .frame(width: 80, height: 80)
-                .offset(x: -50, y: 50)
-
-            // Content
-            VStack(spacing: 0) {
-                if let summary = viewModel.summary {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(summary.currentRankTier.displayName)
-                                .font(.system(size: 20, weight: .semibold, design: .rounded))
-                                .foregroundColor(.white)
-                                .tracking(-0.3)
-                            Text("Level \(summary.currentLevel)")
-                                .font(.system(size: 13, weight: .medium, design: .rounded))
-                                .foregroundColor(.white.opacity(0.6))
-                        }
-
-                        Spacer()
-
-                        // Streak pill
-                        HStack(spacing: 5) {
-                            Image(systemName: "flame.fill")
-                                .font(.system(size: 15))
-                                .foregroundColor(Color(hex: "#FBBF24"))
-                            Text("\(summary.currentStreak)")
-                                .font(.system(size: 16, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
-                            Text("days")
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
-                                .foregroundColor(.white.opacity(0.6))
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 5)
-                        .background(Color.black.opacity(0.2))
-                        .clipShape(Capsule())
-                    }
-
-                    // XP Progress
-                    VStack(spacing: 4) {
-                        HStack {
-                            Text("XP Progress")
-                                .font(.system(size: 10, weight: .regular, design: .rounded))
-                                .foregroundColor(.white.opacity(0.6))
-                            Spacer()
-                            Text("\(summary.xpForNextLevel) to next level")
-                                .font(.system(size: 10, weight: .regular, design: .rounded))
-                                .foregroundColor(.white.opacity(0.35))
-                        }
-
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.white.opacity(0.12))
-                                .frame(height: 5)
-                            GeometryReader { geo in
-                                Capsule()
-                                    .fill(Color.white.opacity(0.85))
-                                    .frame(width: geo.size.width * viewModel.levelProgressPercentage, height: 5)
-                            }
-                            .frame(height: 5)
-                        }
-                    }
-                    .padding(.top, 14)
-                }
-            }
-            .padding(18)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 20))
+        rpgHeroCard
     }
 
     /// RPG mode hero card: flat card with icon pills
@@ -1232,48 +1750,37 @@ struct HomeView: View {
     private var nutritionTopRow: some View {
         HStack(spacing: 12) {
             // Calorie ring (2.4fr)
-            if isClean {
-                cleanCalorieCard
-                    .frame(height: 240)
-            } else {
-                AdaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground) {
-                    PixelCalorieRing(
-                        progress: viewModel.calorieProgressPercentage,
-                        calories: viewModel.summary?.totalCalories ?? 0,
-                        filledColor: tc.ringFilled,
-                        emptyColor: tc.ringEmpty,
-                        textColor: tc.textPrimary,
-                        labelColor: tc.textSecondary
-                    )
-                    .padding(14)
-                }
-                .frame(height: 240)
+            AdaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground) {
+                PixelCalorieRing(
+                    progress: viewModel.calorieProgressPercentage,
+                    calories: viewModel.summary?.totalCalories ?? 0,
+                    filledColor: tc.ringFilled,
+                    emptyColor: tc.ringEmpty,
+                    textColor: tc.textPrimary,
+                    labelColor: tc.textSecondary
+                )
+                .padding(14)
             }
+            .frame(height: 240)
 
             // Purity bar (1fr)
-            if isClean {
-                cleanPurityCard
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 240)
-            } else {
-                AdaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground) {
-                    PurityVerticalBar(
-                        score: viewModel.summary?.totalToxinScore ?? 0,
-                        borderColor: tc.primary,
-                        trackColor: tc.ringEmpty,
-                        band1: tc.purityBand1,
-                        band2: tc.purityBand2,
-                        band3: tc.purityBand3,
-                        band4: tc.purityBand4,
-                        labelColor: tc.textSecondary,
-                        valueColor: tc.textPrimary
-                    )
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 6)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 240)
+            AdaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground) {
+                PurityVerticalBar(
+                    score: viewModel.summary?.totalToxinScore ?? 0,
+                    borderColor: tc.primary,
+                    trackColor: tc.ringEmpty,
+                    band1: tc.purityBand1,
+                    band2: tc.purityBand2,
+                    band3: tc.purityBand3,
+                    band4: tc.purityBand4,
+                    labelColor: tc.textSecondary,
+                    valueColor: tc.textPrimary
+                )
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 6)
             }
+            .frame(maxWidth: .infinity)
+            .frame(height: 240)
         }
         .sheet(isPresented: $showingPurityScoreInfo) {
             PurityScoreInfoSheet()
@@ -1285,109 +1792,29 @@ struct HomeView: View {
     private var macroRow: some View {
         HStack(spacing: 8) {
             if let summary = viewModel.summary {
-                if isClean {
-                    cleanMacroCell(
-                        label: "Protein",
-                        value: "\(Int(summary.totalProtein))g",
-                        progress: summary.goal.proteinTarget > 0 ? summary.totalProtein / summary.goal.proteinTarget : 0,
-                        dotColor: Color(hex: "#2DD4BF"),
-                        labelColor: Color(hex: "#5EEAD4"),
-                        valueColor: Color(hex: "#99F6E4"),
-                        tintColor: Color(hex: "#0D9488"),
-                        barColor: Color(hex: "#14B8A6"),
-                        barTrackColor: Color(hex: "#0D9488").opacity(0.15)
-                    )
-                    cleanMacroCell(
-                        label: "Carbs",
-                        value: "\(Int(summary.totalCarbs))g",
-                        progress: summary.goal.carbTarget > 0 ? summary.totalCarbs / summary.goal.carbTarget : 0,
-                        dotColor: Color(hex: "#FBBF24"),
-                        labelColor: Color(hex: "#D4A843"),
-                        valueColor: Color(hex: "#FDE68A"),
-                        tintColor: Color(hex: "#D4A843"),
-                        barColor: Color(hex: "#D4A843"),
-                        barTrackColor: Color(hex: "#D4A843").opacity(0.12)
-                    )
-                    cleanMacroCell(
-                        label: "Fat",
-                        value: "\(Int(summary.totalFat))g",
-                        progress: summary.goal.fatTarget > 0 ? summary.totalFat / summary.goal.fatTarget : 0,
-                        dotColor: Color(hex: "#E8956E"),
-                        labelColor: Color(hex: "#C07A5C"),
-                        valueColor: Color(hex: "#FDBA9E"),
-                        tintColor: Color(hex: "#C07A5C"),
-                        barColor: Color(hex: "#C07A5C"),
-                        barTrackColor: Color(hex: "#C07A5C").opacity(0.12)
-                    )
-                } else {
-                    rpgMacroCard(
-                        icon: "leaf.fill", label: "Protein",
-                        value: "\(Int(summary.totalProtein))g",
-                        progress: summary.goal.proteinTarget > 0 ? summary.totalProtein / summary.goal.proteinTarget : 0,
-                        progressColor: tc.macroBarProtein,
-                        iconGradient: DesignSystem.Colors.threeBand(light: tc.iconGreen.light, mid: tc.iconGreen.mid, dark: tc.iconGreen.dark)
-                    )
-                    rpgMacroCard(
-                        icon: "flame.fill", label: "Carbs",
-                        value: "\(Int(summary.totalCarbs))g",
-                        progress: summary.goal.carbTarget > 0 ? summary.totalCarbs / summary.goal.carbTarget : 0,
-                        progressColor: tc.macroBarCarbs,
-                        iconGradient: DesignSystem.Colors.threeBand(light: tc.iconOrange.light, mid: tc.iconOrange.mid, dark: tc.iconOrange.dark)
-                    )
-                    rpgMacroCard(
-                        icon: "drop.fill", label: "Fat",
-                        value: "\(Int(summary.totalFat))g",
-                        progress: summary.goal.fatTarget > 0 ? summary.totalFat / summary.goal.fatTarget : 0,
-                        progressColor: tc.macroBarFat,
-                        iconGradient: DesignSystem.Colors.threeBand(light: tc.iconAmber.light, mid: tc.iconAmber.mid, dark: tc.iconAmber.dark)
-                    )
-                }
-            }
-        }
-    }
-
-    /// Clean mode macro cell: tinted background, small dot, colored text
-    private func cleanMacroCell(label: String, value: String, progress: Double, dotColor: Color, labelColor: Color, valueColor: Color, tintColor: Color, barColor: Color, barTrackColor: Color) -> some View {
-        VStack(spacing: 0) {
-            Circle()
-                .fill(dotColor)
-                .frame(width: 6, height: 6)
-                .padding(.bottom, 8)
-
-            Text(label)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundColor(labelColor)
-
-            Text(value)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundColor(valueColor)
-                .tracking(-0.4)
-                .padding(.top, 2)
-
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(barTrackColor)
-                    .frame(height: 3)
-                GeometryReader { geo in
-                    Capsule()
-                        .fill(barColor)
-                        .frame(width: geo.size.width * min(max(progress, 0), 1), height: 3)
-                }
-                .frame(height: 3)
-            }
-            .padding(.top, 8)
-        }
-        .padding(.vertical, 14)
-        .padding(.horizontal, 10)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(tintColor.opacity(settings.isCleanDark ? 0.1 : 0.06))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.white.opacity(0.04), lineWidth: 0.5)
+                rpgMacroCard(
+                    icon: "leaf.fill", label: "Protein",
+                    value: "\(Int(summary.totalProtein))g",
+                    progress: summary.goal.proteinTarget > 0 ? summary.totalProtein / summary.goal.proteinTarget : 0,
+                    progressColor: tc.macroBarProtein,
+                    iconGradient: DesignSystem.Colors.threeBand(light: tc.iconGreen.light, mid: tc.iconGreen.mid, dark: tc.iconGreen.dark)
                 )
-        )
+                rpgMacroCard(
+                    icon: "flame.fill", label: "Carbs",
+                    value: "\(Int(summary.totalCarbs))g",
+                    progress: summary.goal.carbTarget > 0 ? summary.totalCarbs / summary.goal.carbTarget : 0,
+                    progressColor: tc.macroBarCarbs,
+                    iconGradient: DesignSystem.Colors.threeBand(light: tc.iconOrange.light, mid: tc.iconOrange.mid, dark: tc.iconOrange.dark)
+                )
+                rpgMacroCard(
+                    icon: "drop.fill", label: "Fat",
+                    value: "\(Int(summary.totalFat))g",
+                    progress: summary.goal.fatTarget > 0 ? summary.totalFat / summary.goal.fatTarget : 0,
+                    progressColor: tc.macroBarFat,
+                    iconGradient: DesignSystem.Colors.threeBand(light: tc.iconAmber.light, mid: tc.iconAmber.mid, dark: tc.iconAmber.dark)
+                )
+            }
+        }
     }
 
     /// RPG mode macro card with icon pill and progress bar
@@ -1430,125 +1857,11 @@ struct HomeView: View {
 
     // MARK: - Section Label
 
-    @ViewBuilder
     private func sectionLabel(_ text: String) -> some View {
-        if isClean {
-            Text(text.uppercased())
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundColor(tc.textSecondary)
-                .tracking(0.8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            Text(text)
-                .font(AppFont.bold(22))
-                .foregroundColor(tc.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    // MARK: - Clean Calorie Card
-
-    private var cleanRingTrackColor: Color {
-        settings.isCleanDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
-    }
-
-    private var cleanCalorieCard: some View {
-        RoundedRectangle(cornerRadius: 16)
-            .fill(tc.cardBackground)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(settings.isCleanDark ? Color.white.opacity(0.05) : Color.black.opacity(0.04), lineWidth: 0.5)
-            )
-            .overlay {
-                VStack(spacing: 0) {
-                    ZStack {
-                        Circle()
-                            .stroke(cleanRingTrackColor, lineWidth: 14)
-                        Circle()
-                            .trim(from: 0, to: viewModel.calorieProgressPercentage)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [Color(hex: "#5EEAD4"), Color(hex: "#0D9488")],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                style: StrokeStyle(lineWidth: 14, lineCap: .round)
-                            )
-                            .rotationEffect(.degrees(-90))
-                            .animation(.spring(response: 0.8, dampingFraction: 0.7), value: viewModel.calorieProgressPercentage)
-
-                        VStack(spacing: 2) {
-                            Text("\(viewModel.summary?.totalCalories ?? 0)")
-                                .font(.system(size: 28, weight: .bold, design: .rounded))
-                                .foregroundColor(tc.textPrimary)
-                                .tracking(-0.5)
-                                .contentTransition(.numericText())
-                            Text("kcal")
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
-                                .foregroundColor(tc.textSecondary)
-                        }
-                    }
-                    .frame(width: 130, height: 130)
-
-                    Text("of \(viewModel.summary?.goal.calorieTarget.formatted() ?? "2,100") goal")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundColor(tc.textSecondary)
-                        .padding(.top, 10)
-                }
-                .padding(16)
-            }
-    }
-
-    // MARK: - Clean Purity Card
-
-    private var cleanPurityCard: some View {
-        let score = viewModel.summary?.totalToxinScore ?? 0
-        let progress = min(CGFloat(score) / 100.0, 1.0)
-        let barColor: Color = score < 30 ? Color(hex: "#22C55E") : score < 60 ? Color(hex: "#F97316") : Color(hex: "#EF4444")
-
-        return RoundedRectangle(cornerRadius: 16)
-            .fill(tc.cardBackground)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(settings.isCleanDark ? Color.white.opacity(0.05) : Color.black.opacity(0.04), lineWidth: 0.5)
-            )
-            .overlay {
-                VStack(spacing: 6) {
-                    Text("PURITY")
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundColor(tc.textSecondary)
-                        .tracking(0.5)
-
-                    ZStack(alignment: .bottom) {
-                        Capsule()
-                            .fill(settings.isCleanDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
-                            .frame(width: 20)
-
-                        GeometryReader { geo in
-                            VStack {
-                                Spacer()
-                                Capsule()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [barColor, barColor.opacity(0.7)],
-                                            startPoint: .bottom,
-                                            endPoint: .top
-                                        )
-                                    )
-                                    .frame(width: 20, height: geo.size.height * progress)
-                                    .animation(.spring(response: 0.8, dampingFraction: 0.7), value: score)
-                            }
-                        }
-                        .frame(width: 20)
-                    }
-                    .frame(height: 100)
-
-                    Text("\(score)")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundColor(tc.textPrimary)
-                }
-                .padding(14)
-            }
+        Text(text)
+            .font(AppFont.bold(22))
+            .foregroundColor(tc.textPrimary)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Action Buttons
@@ -1559,62 +1872,34 @@ struct HomeView: View {
             Button {
                 selectedTab = 1
             } label: {
-                if isClean {
+                AdaptiveCard(borderColor: tc.buttonBorder, fillGradient: DesignSystem.Colors.threeBand(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)) {
                     HStack(spacing: 8) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 16, weight: .semibold))
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 22))
                             .foregroundColor(.white)
-                        Text("Log food")
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        Text("Log Food")
+                            .font(AppFont.bold(16))
                             .foregroundColor(.white)
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(Color(hex: "#0D9488"))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                } else {
-                    AdaptiveCard(borderColor: tc.buttonBorder, fillGradient: DesignSystem.Colors.threeBand(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(.white)
-                            Text("Log Food")
-                                .font(AppFont.bold(16))
-                                .foregroundColor(.white)
-                        }
-                    }
-                    .frame(height: 54)
                 }
+                .frame(height: 54)
             }
 
             // Scan button
             Button {
                 viewModel.showQuickScan = true
             } label: {
-                if isClean {
-                    Image(systemName: "barcode.viewfinder")
-                        .font(.system(size: 18))
-                        .foregroundColor(Color(hex: "#2DD4BF"))
-                        .frame(width: 52, height: 48)
-                        .background(tc.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
-                        )
-                } else {
-                    AdaptiveCard(borderColor: tc.buttonBorder, fillGradient: DesignSystem.Colors.threeBand(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "barcode.viewfinder")
-                                .font(.system(size: 22))
-                                .foregroundColor(.white)
-                            Text("Scan")
-                                .font(AppFont.regular(11))
-                                .foregroundColor(.white)
-                        }
+                AdaptiveCard(borderColor: tc.buttonBorder, fillGradient: DesignSystem.Colors.threeBand(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "barcode.viewfinder")
+                            .font(.system(size: 22))
+                            .foregroundColor(.white)
+                        Text("Scan")
+                            .font(AppFont.regular(11))
+                            .foregroundColor(.white)
                     }
-                    .frame(width: 80, height: 54)
                 }
+                .frame(width: 80, height: 54)
             }
         }
         .sheet(isPresented: $viewModel.showQuickScan) {
@@ -1626,19 +1911,10 @@ struct HomeView: View {
 
     private var questBoard: some View {
         ZStack {
-            if isClean {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(tc.cardBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(tc.primary.opacity(settings.isCleanDark ? 0.08 : 0.06), lineWidth: 0.5)
-                    )
-            } else {
-                WoodenBoardBackground(style: tc.questBoardStyle)
-                    .clipShape(PixelCardShape(step: 4, steps: 4))
-            }
+            WoodenBoardBackground(style: tc.questBoardStyle)
+                .clipShape(PixelCardShape(step: 4, steps: 4))
 
-            VStack(spacing: isClean ? 0 : 10) {
+            VStack(spacing: 10) {
                 // Insights card (inside board)
                 if let insights = viewModel.dailyInsights, !isInsightsCardDismissedToday {
                     insightsCard(insights)
@@ -1649,18 +1925,8 @@ struct HomeView: View {
                     AllQuestsCompleteView(totalXPFromQuests: viewModel.totalQuestXPEarnedToday)
                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 } else if let quests = viewModel.summary?.quests, !quests.isEmpty {
-                    if isClean {
-                        ForEach(Array(quests.enumerated()), id: \.element.id) { index, quest in
-                            questRow(quest)
-                            if index < quests.count - 1 {
-                                Divider()
-                                    .background(Color.white.opacity(0.05))
-                            }
-                        }
-                    } else {
-                        ForEach(quests, id: \.id) { quest in
-                            questRow(quest)
-                        }
+                    ForEach(quests, id: \.id) { quest in
+                        questRow(quest)
                     }
                 } else {
                     Text("No quests today")
@@ -1737,59 +2003,8 @@ struct HomeView: View {
         }
     }
 
-    @ViewBuilder
     private func questRow(_ quest: DailyQuest) -> some View {
-        if isClean {
-            cleanQuestRow(quest)
-        } else {
-            rpgQuestRow(quest)
-        }
-    }
-
-    /// Clean mode quest row: minimal divider-separated layout
-    @ViewBuilder
-    private func cleanQuestRow(_ quest: DailyQuest) -> some View {
-        HStack(spacing: 12) {
-            // Simple check circle
-            ZStack {
-                Circle()
-                    .fill(quest.isCompleted ? Color(hex: "#0D9488") : Color.clear)
-                    .frame(width: 20, height: 20)
-                    .overlay(
-                        Circle()
-                            .stroke(quest.isCompleted ? Color(hex: "#0D9488") : Color(hex: "#3A4D44"), lineWidth: 1.5)
-                    )
-                if quest.isCompleted {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.white)
-                }
-            }
-
-            // Title only (no description in clean mode)
-            Text(quest.title)
-                .font(.system(size: 14, weight: .medium, design: .rounded))
-                .foregroundColor(quest.isCompleted ? Color(hex: "#3F554A") : Color(hex: "#D0DBD5"))
-                .strikethrough(quest.isCompleted)
-                .lineLimit(1)
-
-            Spacer()
-
-            // Simple XP pill
-            Text("+\(quest.xpReward) XP")
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .tracking(0.3)
-                .foregroundColor(quest.isCompleted ? Color(hex: "#3F554A") : Color(hex: "#2DD4BF"))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(
-                    Capsule()
-                        .fill(quest.isCompleted
-                            ? Color.white.opacity(0.04)
-                            : Color(hex: "#0D9488").opacity(0.15))
-                )
-        }
-        .padding(.vertical, 12)
+        rpgQuestRow(quest)
     }
 
     /// RPG mode quest row: pixel cards with bookmarks
@@ -1881,9 +2096,8 @@ struct HomeView: View {
         }
     }
 
-    @ViewBuilder
     private func filledInventorySlot(_ entry: FoodEntry) -> some View {
-        if isClean {
+        AdaptiveCard(borderColor: tc.invBorderColor, fillColor: tc.cardBackground) {
             VStack(spacing: 0) {
                 // Icon area
                 ZStack(alignment: .topTrailing) {
@@ -1895,7 +2109,7 @@ struct HomeView: View {
                                 .scaledToFit()
                         } else {
                             Image(systemName: "fork.knife")
-                                .font(.system(size: 22))
+                                .font(.system(size: 24))
                                 .foregroundColor(tc.primary)
                         }
                     }
@@ -1903,90 +2117,34 @@ struct HomeView: View {
 
                     // Time badge
                     Text(timeString(from: entry.date))
-                        .font(.system(size: 8, weight: .regular, design: .rounded))
-                        .foregroundColor(tc.textTertiary)
-                        .padding(3)
+                        .font(AppFont.regular(9))
+                        .foregroundColor(tc.textSecondary)
+                        .padding(2)
+                        .background(tc.invTimeBg)
+                        .padding(4)
                 }
 
                 // Divider
                 Rectangle()
-                    .fill(settings.isCleanDark ? Color.white.opacity(0.05) : Color.black.opacity(0.05))
-                    .frame(height: 0.5)
+                    .fill(tc.invBorderColor.opacity(0.2))
+                    .frame(height: 2)
 
                 // Label area
-                VStack(spacing: 3) {
+                VStack(spacing: 4) {
                     Text(entry.name)
-                        .font(.system(size: 10, weight: .regular, design: .rounded))
+                        .font(AppFont.regular(11))
                         .foregroundColor(tc.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                     Text("\(entry.calories) cal")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .font(AppFont.bold(11))
                         .foregroundColor(tc.primary)
                 }
                 .padding(.vertical, 6)
                 .padding(.horizontal, 4)
             }
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(tc.cardBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(settings.isCleanDark ? Color.white.opacity(0.05) : Color.black.opacity(0.06), lineWidth: 0.5)
-                    )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .aspectRatio(1/1.1, contentMode: .fit)
-        } else {
-            AdaptiveCard(borderColor: tc.invBorderColor, fillColor: tc.cardBackground) {
-                VStack(spacing: 0) {
-                    // Icon area
-                    ZStack(alignment: .topTrailing) {
-                        Group {
-                            if let photoData = entry.photoData,
-                               let uiImage = UIImage(data: photoData) {
-                                Image(uiImage: uiImage)
-                                    .resizable()
-                                    .scaledToFit()
-                            } else {
-                                Image(systemName: "fork.knife")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(tc.primary)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                        // Time badge
-                        Text(timeString(from: entry.date))
-                            .font(AppFont.regular(9))
-                            .foregroundColor(tc.textSecondary)
-                            .padding(2)
-                            .background(tc.invTimeBg)
-                            .padding(4)
-                    }
-
-                    // Divider
-                    Rectangle()
-                        .fill(tc.invBorderColor.opacity(0.2))
-                        .frame(height: 2)
-
-                    // Label area
-                    VStack(spacing: 4) {
-                        Text(entry.name)
-                            .font(AppFont.regular(11))
-                            .foregroundColor(tc.textPrimary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        Text("\(entry.calories) cal")
-                            .font(AppFont.bold(11))
-                            .foregroundColor(tc.primary)
-                    }
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 4)
-                }
-            }
-            .aspectRatio(1/1.1, contentMode: .fit)
         }
+        .aspectRatio(1/1.1, contentMode: .fit)
     }
 
     private func emptyInventorySlot() -> some View {
@@ -1995,12 +2153,7 @@ struct HomeView: View {
         let emptyIcon: Color
         let emptyText: Color
 
-        if isClean {
-            emptyBorder = settings.isCleanDark ? Color.white.opacity(0.04) : Color.black.opacity(0.06)
-            emptyFill = settings.isCleanDark ? Color.white.opacity(0.02) : Color.black.opacity(0.02)
-            emptyIcon = tc.textTertiary
-            emptyText = tc.textTertiary
-        } else if currentTheme == .night {
+        if currentTheme == .night {
             emptyBorder = Color(hex: "#312E81")
             emptyFill = Color(hex: "#1E1B4B").opacity(0.3)
             emptyIcon = Color(hex: "#312E81")
