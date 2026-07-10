@@ -14,6 +14,9 @@ struct BattleView: View {
 
     @State private var viewModel: BattleViewModel
 
+    /// D4: the existing global-leaderboard VM, owned here to power the inline standings block.
+    @State private var leaderboardVM: GlobalLeaderboardViewModel
+
     /// Retained to construct the ChallengeSheet.
     private let coordinator: AppCoordinator
     /// Read-only — gates the guest empty-state.
@@ -27,6 +30,10 @@ struct BattleView: View {
     @State private var showingChallenge = false
     @State private var showingMatchmaking = false
     @State private var showingLeaderboard = false
+    /// D2: friend to pre-select in ChallengeSheet (set by the matchup card's Challenge CTA).
+    @State private var challengePreselect: DuelOpponentCandidate?
+    /// D7: session-local collapse for the duel-history block (resets on view recreation).
+    @State private var historyExpanded = false
     @State private var duelToForfeit: DuelDTO?
     /// Navigate by duelId (String is Hashable — navigationDestination(item:) requires Hashable,
     /// which DuelDTO is not; the destination looks the duel up). Keeps DuelDTO untouched.
@@ -43,10 +50,9 @@ struct BattleView: View {
         authService: any AuthService,
         onCreateAccount: @escaping () -> Void = {}
     ) {
-        self._viewModel = State(initialValue: BattleViewModel(
-            coordinator: coordinator,
-            myUid: authService.currentUserEmail ?? ""
-        ))
+        let uid = authService.currentUserEmail ?? ""
+        self._viewModel = State(initialValue: BattleViewModel(coordinator: coordinator, myUid: uid))
+        self._leaderboardVM = State(initialValue: GlobalLeaderboardViewModel(coordinator: coordinator, myUid: uid))
         self.coordinator = coordinator
         self.authService = authService
         self.onCreateAccount = onCreateAccount
@@ -92,6 +98,7 @@ struct BattleView: View {
             // Guests never load; load once per appearance (pull-to-refresh re-loads).
             guard !authService.isGuest else { return }
             if !viewModel.didLoadOnce { await viewModel.load() }
+            await leaderboardVM.loadInitial()   // D4: inline standings board (idempotent)
             macroGuessPlayedToday = (await coordinator.todayQTEState())?.macroGuessPlayed ?? false
             consumePendingArena()
         }
@@ -103,7 +110,7 @@ struct BattleView: View {
             DuelRecapSheet(summary: summary)
         }
         .sheet(isPresented: $showingChallenge) {
-            ChallengeSheet(coordinator: coordinator) {
+            ChallengeSheet(coordinator: coordinator, preselected: challengePreselect) {
                 Task { await viewModel.load() }
             }
         }
@@ -177,10 +184,12 @@ struct BattleView: View {
             VStack(spacing: DesignSystem.Spacing.lg) {
                 arenaHead
 
-                // Featured duel = the soonest-ending active duel (viewModel.active is
-                // pre-sorted). Omitted when there are none (D2).
+                // Featured slot: an active duel's card wins; otherwise the R4b matchup preview
+                // (me vs a random friend, or a labelled SAMPLE) when there is no active duel (D2).
                 if let featured = viewModel.active.first {
                     featuredCard(featured)
+                } else if let preview = viewModel.matchupPreview {
+                    matchupPreviewCard(preview)
                 }
 
                 actionsRow
@@ -194,10 +203,10 @@ struct BattleView: View {
                     section("Outgoing Challenges", viewModel.outgoing) { outgoingRow($0) }
                     // Featured duel is excluded from the Active section (D2).
                     section("Active Duels", Array(viewModel.active.dropFirst())) { activeRow($0) }
-                    section("Finished", viewModel.finished) { finishedRow($0) }
+                    historyBlock   // D7: collapsible "Duel history" (replaces the Finished section)
                 }
 
-                leaderboardRow
+                standingsBlock   // D4: inline global standings (replaces the leaderboard row)
             }
             .padding(.horizontal, 22)
             .padding(.top, DesignSystem.Spacing.sm)
@@ -296,37 +305,185 @@ struct BattleView: View {
             AppButton(title: "Find a match", style: .primary,
                       action: { showingMatchmaking = true }, icon: "bolt.horizontal.fill")
             AppButton(title: "Challenge a friend", style: .secondary,
-                      action: { showingChallenge = true }, icon: "flag.2.crossed.fill")
+                      action: { challengePreselect = nil; showingChallenge = true }, icon: "flag.2.crossed.fill")
         }
     }
 
-    /// Block-styled entry into the existing global leaderboard (D2). Replaces the old
-    /// toolbar/in-content leaderboard button; keeps the existing navigation destination.
-    private var leaderboardRow: some View {
-        Button { showingLeaderboard = true } label: {
-            HStack(spacing: DesignSystem.Spacing.sm) {
-                Image(systemName: "trophy.fill").foregroundColor(tc.primary)
-                Text("Global Leaderboard")
-                    .font(AppFont.bold(14))
+    /// D4: inline global standings block (seg pickers + top 10 + my row + "View all"). Owns no
+    /// logic — renders the BattleView-owned `GlobalLeaderboardViewModel`; "View all" opens the
+    /// existing full board via the existing navigation destination.
+    private var standingsBlock: some View {
+        BattleStandingsBlock(viewModel: leaderboardVM, myUid: authService.currentUserEmail ?? "") {
+            showingLeaderboard = true
+        }
+    }
+
+    // MARK: - Matchup preview card (D2)
+
+    /// The matchup preview: me vs one random friend (or a labelled SAMPLE), shown in the featured
+    /// slot when there is no active duel. Reuses the versus/compare language; avatars are metal
+    /// (tinted by each side's rr — REAL here, unlike the R4 featured card). "Challenge"
+    /// pre-selects the friend in ChallengeSheet.
+    private func matchupPreviewCard(_ p: BattleViewModel.MatchupPreview) -> some View {
+        VStack(spacing: 0) {
+            if p.isSample {
+                sampleTag.padding(.bottom, 16)
+            }
+            HStack(alignment: .top, spacing: 0) {
+                fighterColumn(initial: p.myInitial, isMe: true, name: nil,
+                              subline: tierLabel(p.myRR), tint: erewhonRankMetal(forRR: p.myRR))
+                vsMid
+                fighterColumn(initial: p.theirInitial, isMe: false, name: p.opponentName,
+                              subline: tierLabel(p.theirRR), tint: erewhonRankMetal(forRR: p.theirRR))
+            }
+            VStack(spacing: 14) {
+                previewCompareRow("Days on goal", mine: "\(p.myDays)", theirs: "\(p.theirDays)",
+                                  mineVal: Double(p.myDays), theirsVal: Double(p.theirDays))
+                previewCompareRow("Streak", mine: "\(p.myStreak)", theirs: "\(p.theirStreak)",
+                                  mineVal: Double(p.myStreak), theirsVal: Double(p.theirStreak))
+                previewCompareRow("RR", mine: p.myRR.map { "\($0)" } ?? "—",
+                                  theirs: p.theirRR.map { "\($0)" } ?? "—",
+                                  mineVal: p.myRR.map(Double.init), theirsVal: p.theirRR.map(Double.init))
+            }
+            .padding(.top, 22)
+            AppButton(title: p.isSample ? "Find an opponent" : "Challenge", style: .primary,
+                      action: {
+                          challengePreselect = p.candidate
+                          showingChallenge = true
+                      }, icon: "flag.2.crossed.fill")
+                .padding(.top, 20)
+        }
+        .padding(.vertical, 24)
+        .padding(.horizontal, 16)
+        .adaptiveCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.cardBackground)
+    }
+
+    /// Mockup `.crow` + `.cbars`: a labelled compare row with paired share bars. My value tints
+    /// social (accent when I lead); theirs tints ink (accent when they lead) — same as the
+    /// featured card. A nil (unpublished) side reads as "—" with neutral bars.
+    private func previewCompareRow(_ label: String, mine: String, theirs: String,
+                                   mineVal: Double?, theirsVal: Double?) -> some View {
+        let iLead = leads(mineVal, theirsVal)
+        let theyLead = leads(theirsVal, mineVal)
+        return VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                Text(mine)
+                    .font(AppFont.display(18))
+                    .foregroundColor(iLead ? tc.primary : DesignSystem.Erewhon.social)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                Text(label)
+                    .font(AppFont.regular(11))
+                    .foregroundColor(tc.textTertiary)
+                    .frame(minWidth: 84)
+                    .multilineTextAlignment(.center)
+                Text(theirs)
+                    .font(AppFont.display(18))
+                    .foregroundColor(theyLead ? tc.primary : tc.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            HStack(spacing: 6) {
+                compareBar(fraction: barShare(mineVal, theirsVal, forMine: true),
+                           color: DesignSystem.Erewhon.social, fromLeading: false)
+                compareBar(fraction: barShare(mineVal, theirsVal, forMine: false),
+                           color: tc.primary, fromLeading: true)
+            }
+        }
+    }
+
+    /// Mockup eyebrow tag making the SAMPLE card unmistakable as a placeholder (never a real user).
+    private var sampleTag: some View {
+        HStack {
+            Spacer()
+            Text("SAMPLE MATCHUP")
+                .font(AppFont.display(11))
+                .tracking(1.1)
+                .foregroundColor(tc.textSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(tc.segBackground))
+            Spacer()
+        }
+    }
+
+    /// Rank-tier label for a fighter sub-line ("Copper 2"); "Unranked" when rr is unpublished.
+    private func tierLabel(_ rr: Int?) -> String {
+        rr.map { Rank.rankTier(from: $0).displayName } ?? "Unranked"
+    }
+
+    /// True when `a` strictly leads `b` (both published).
+    private func leads(_ a: Double?, _ b: Double?) -> Bool {
+        guard let a, let b else { return false }
+        return a > b
+    }
+
+    /// Share fraction for a preview compare bar. An unpublished side → neutral (both 0.5).
+    private func barShare(_ mine: Double?, _ theirs: Double?, forMine: Bool) -> Double {
+        guard let m = mine, let t = theirs else { return 0.5 }
+        if Int(m) == Int(t) { return 0.5 }
+        let total = m + t
+        guard total > 0 else { return 0.5 }
+        return min(0.92, max(0.08, (forMine ? m : t) / total))
+    }
+
+    // MARK: - Duel history (D7)
+
+    /// Collapsible "Duel history" block: header shows the W–L–D record + net RR (display figures)
+    /// with a chevron; collapsed by default; expanding reveals the existing finished rows
+    /// unchanged. Hidden entirely when there are no finished duels.
+    @ViewBuilder
+    private var historyBlock: some View {
+        if !viewModel.finished.isEmpty {
+            let stats = viewModel.historyStats
+            VStack(spacing: 0) {
+                Button {
+                    withAnimation(DesignSystem.Erewhon.ease(0.25)) { historyExpanded.toggle() }
+                } label: {
+                    historyHeader(stats)
+                }
+                .buttonStyle(.plain)
+
+                if historyExpanded {
+                    VStack(spacing: 11) {
+                        ForEach(viewModel.finished) { finishedRow($0) }
+                    }
+                    .padding(.top, 14)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func historyHeader(_ stats: BattleViewModel.DuelHistoryStats) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: DesignSystem.Spacing.sm) {
+                Text("Duel history")
+                    .font(AppFont.display(15))
                     .foregroundColor(tc.textPrimary)
                 Spacer()
-                Image(systemName: "chevron.right")
+                Text(stats.recordText)
+                    .font(AppFont.display(15))
+                    .foregroundColor(tc.textPrimary)
+                Text(stats.netRRText)
+                    .font(AppFont.display(13))
+                    .foregroundColor(tc.textSecondary)
+                Image(systemName: historyExpanded ? "chevron.up" : "chevron.down")
                     .font(AppFont.regular(12))
                     .foregroundColor(tc.textTertiary)
             }
-            .padding(DesignSystem.Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .adaptiveCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.cardBackground)
+            .padding(.bottom, 10)
+            Rectangle()
+                .fill(DesignSystem.Erewhon.lineSoft)
+                .frame(height: 1)
         }
-        .buttonStyle(.plain)
+        .contentShape(Rectangle())
     }
 
     // MARK: - Fighter pieces (D4)
 
     /// Mockup `.fighter`: initials avatar, name (mine = the `.you-tag` pill), league sub-line.
-    private func fighterColumn(initial: String, isMe: Bool, name: String?, subline: String) -> some View {
+    private func fighterColumn(initial: String, isMe: Bool, name: String?, subline: String, tint: Color? = nil) -> some View {
         VStack(spacing: 10) {
-            favAvatar(initial: initial)
+            favAvatar(initial: initial, tint: tint)
             if isMe {
                 youTag
             } else if let name {
@@ -346,13 +503,17 @@ struct BattleView: View {
 
     /// Mockup `.fav`: rounded-square initials avatar. Neutral fill + hairline (no rank
     /// metal — opponent rank isn't tracked; D4 deviation).
-    private func favAvatar(initial: String) -> some View {
+    private func favAvatar(initial: String, tint: Color? = nil) -> some View {
         Text(initial)
             .font(AppFont.bold(23))
-            .foregroundColor(tc.textPrimary)
+            .foregroundColor(tint != nil ? .white : tc.textPrimary)
             .frame(width: 60, height: 60)
-            .background(RoundedRectangle(cornerRadius: 19).fill(tc.segBackground))
-            .overlay(RoundedRectangle(cornerRadius: 19).stroke(DesignSystem.Erewhon.line, lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 19).fill(tint ?? tc.segBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: tint != nil ? 14 : 19)
+                    .stroke(tint != nil ? Color.white.opacity(0.25) : DesignSystem.Erewhon.line, lineWidth: 1)
+                    .padding(tint != nil ? 5 : 0)
+            )
     }
 
     /// Mockup `.you-tag`: social-tinted "YOU" pill (a badge — stays Hanken per D1).
@@ -560,11 +721,11 @@ struct BattleView: View {
                         .foregroundColor(tc.textSecondary)
                     Spacer()
                     Text(viewModel.finishedLabel(duel).uppercased())
-                        .font(AppFont.bold(12))
+                        .font(AppFont.display(12))
                         .foregroundColor(tc.textPrimary)
                     if let delta = viewModel.rrDeltaText(duel) {
                         Text(delta)
-                            .font(AppFont.bold(12))
+                            .font(AppFont.display(12))
                             .foregroundColor(tc.textSecondary)
                     }
                 }
@@ -660,5 +821,270 @@ struct BattleView: View {
             get: { DuelUIState.shared.pendingResolutions.first },
             set: { if $0 == nil { DuelUIState.shared.dequeueResolution() } }
         )
+    }
+}
+
+// MARK: - D4/D5: inline global standings block
+
+/// The embedded standings block on Battle (D4): sec-head + the existing metric/league seg pickers,
+/// the top 10 rows plus my row appended when I'm outside them, and a "View all" footer that opens
+/// the full board. Renders the BattleView-owned `GlobalLeaderboardViewModel` (unchanged) — no new
+/// logic. Rows follow the mockup standings anatomy (D5): rank chip (podium metals + crown),
+/// tier-tinted avatar, name + you-pill, tier sub-line, display value; global rows show no pips.
+private struct BattleStandingsBlock: View {
+
+    let viewModel: GlobalLeaderboardViewModel
+    let myUid: String
+    let onViewAll: () -> Void
+
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
+    /// One rendered standing: the projection, its rank-chip position (nil → "—"), and whether it's me.
+    private struct Standing: Identifiable {
+        let dto: GlobalLeaderboardDTO
+        let position: Int?
+        let isMe: Bool
+        var id: String { dto.id ?? "" }
+    }
+
+    /// Top 10 + my row appended when I'm outside them. My appended row's chip uses `myRRPosition`
+    /// on the RR board and "—" on the wins/streak boards (no position API there).
+    private var standings: [Standing] {
+        let top = Array(viewModel.rows.prefix(10))
+        var list = top.enumerated().map {
+            Standing(dto: $0.element, position: $0.offset + 1, isMe: viewModel.isMe($0.element))
+        }
+        if let mine = viewModel.myEntry, let myId = mine.id, !top.contains(where: { $0.id == myId }) {
+            list.append(Standing(dto: mine,
+                                 position: (viewModel.metric == .rr) ? viewModel.myRRPosition : nil,
+                                 isMe: true))
+        }
+        return list
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            secHead
+            pickers.padding(.bottom, 14)
+            rowsContent
+            viewAllRow
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: sec-head
+
+    private var secHead: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Standings").font(AppFont.display(15)).foregroundColor(tc.textPrimary)
+                Spacer()
+                Text(metricCaption).font(AppFont.regular(11)).foregroundColor(tc.textTertiary)
+            }
+            .padding(.bottom, 10)
+            Rectangle().fill(DesignSystem.Erewhon.lineSoft).frame(height: 1)
+        }
+        .padding(.bottom, 14)
+    }
+
+    private var metricCaption: String {
+        switch viewModel.metric {
+        case .rr: return "Ranked Rating"
+        case .wins: return "\(viewModel.league)-day wins"
+        case .streak: return "\(viewModel.league)-day streak"
+        }
+    }
+
+    // MARK: pickers (existing seg style)
+
+    private var metricBinding: Binding<LeaderboardMetric> {
+        Binding(get: { viewModel.metric }, set: { newValue in
+            viewModel.metric = newValue
+            Task { await viewModel.boardChanged() }
+        })
+    }
+    private var leagueBinding: Binding<Int> {
+        Binding(get: { viewModel.league }, set: { newValue in
+            viewModel.league = newValue
+            Task { await viewModel.boardChanged() }
+        })
+    }
+
+    private var pickers: some View {
+        VStack(spacing: DesignSystem.Spacing.sm) {
+            Picker("Metric", selection: metricBinding) {
+                ForEach(LeaderboardMetric.allCases) { m in Text(m.rawValue).tag(m) }
+            }
+            .pickerStyle(.segmented)
+            if viewModel.showsLeaguePicker {
+                Picker("League", selection: leagueBinding) {
+                    ForEach(DuelConstants.leagues, id: \.self) { d in Text("\(d)-Day").tag(d) }
+                }
+                .pickerStyle(.segmented)
+            }
+        }
+    }
+
+    // MARK: rows
+
+    @ViewBuilder
+    private var rowsContent: some View {
+        if viewModel.isLoading && !viewModel.hasLoaded {
+            ProgressView().tint(tc.primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DesignSystem.Spacing.lg)
+        } else {
+            let rows = standings
+            if rows.isEmpty {
+                // Empty board (day one) is not an error — a quiet empty row (D4/D6).
+                Text("No one on this board yet — finish a ranked duel.")
+                    .font(AppFont.regular(13))
+                    .foregroundColor(tc.textTertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 13)
+            } else {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, s in
+                        standingRow(s, isLast: index == rows.count - 1)
+                    }
+                }
+            }
+        }
+    }
+
+    private func standingRow(_ s: Standing, isLast: Bool) -> some View {
+        let metal = s.position.flatMap { metalColor($0) }
+        let row = HStack(alignment: .center, spacing: 13) {
+            rankChip(s.position, metal: metal)
+            avatar(initial: initial(for: s.dto), tint: erewhonRankMetal(forRR: s.dto.rr))
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    Text(s.dto.displayName.isEmpty ? "@\(s.dto.username)" : s.dto.displayName)
+                        .font(AppFont.bold(14)).foregroundColor(tc.textPrimary).lineLimit(1)
+                    if s.isMe { youPill }
+                }
+                Text(Rank.rankTier(from: s.dto.rr).displayName)
+                    .font(AppFont.regular(11)).foregroundColor(tc.textTertiary).lineLimit(1)
+            }
+            Spacer(minLength: DesignSystem.Spacing.sm)
+            valueColumn(s.dto)
+        }
+        .padding(.vertical, 13)
+
+        return Group {
+            if s.isMe {
+                row
+                    .padding(.horizontal, 8)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(tc.cardBackground.mix(with: tc.primary, by: 0.09)))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(tc.primary.opacity(0.4), lineWidth: 1.5))
+            } else {
+                VStack(spacing: 0) {
+                    row.padding(.horizontal, 4)
+                    if !isLast { Rectangle().fill(DesignSystem.Erewhon.lineSoft).frame(height: 1) }
+                }
+            }
+        }
+    }
+
+    private func rankChip(_ position: Int?, metal: Color?) -> some View {
+        VStack(spacing: 1) {
+            if position == 1 {
+                Image(systemName: "crown.fill").font(.system(size: 10))
+                    .foregroundColor(metal ?? DesignSystem.Colors.goldMid)
+            }
+            Text(position.map { "\($0)" } ?? "—")
+                .font(AppFont.display(15))
+                .foregroundColor(metal != nil ? .white : tc.textSecondary)
+                .monospacedDigit()
+                .frame(width: 26, height: 26)
+                .background(RoundedRectangle(cornerRadius: 8).fill(metal ?? tc.segBackground))
+        }
+        .frame(width: 30)
+    }
+
+    private func avatar(initial: String, tint: Color?) -> some View {
+        Text(initial)
+            .font(AppFont.bold(15))
+            .foregroundColor(tint != nil ? .white : tc.textPrimary)
+            .frame(width: 38, height: 38)
+            .background(RoundedRectangle(cornerRadius: 12).fill(tint ?? tc.segBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: 9)
+                    .stroke(tint != nil ? Color.white.opacity(0.22) : DesignSystem.Erewhon.line, lineWidth: 1)
+                    .padding(3)
+            )
+    }
+
+    private var youPill: some View {
+        Text("You")
+            .font(AppFont.bold(9))
+            .tracking(0.4)
+            .textCase(.uppercase)
+            .foregroundColor(tc.primary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(RoundedRectangle(cornerRadius: 6).fill(tc.primary.opacity(0.13)))
+    }
+
+    /// Trailing value in `display` + its caption; no pips (RR/wins/streak are unbounded) (D5).
+    private func valueColumn(_ dto: GlobalLeaderboardDTO) -> some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Text(viewModel.valueText(dto))
+                .font(AppFont.display(viewModel.metric == .rr ? 17 : 20))
+                .foregroundColor(tc.textPrimary)
+                .lineLimit(1)
+            Text(viewModel.captionText(dto))
+                .font(AppFont.regular(10))
+                .foregroundColor(tc.textTertiary)
+        }
+    }
+
+    private func initial(for dto: GlobalLeaderboardDTO) -> String {
+        let name = dto.displayName.isEmpty ? dto.username : dto.displayName
+        return name.first.map { String($0).uppercased() } ?? "?"
+    }
+
+    /// Podium metals (D5): Erewhon rank-metal tokens for 1/2/3, nil off-podium.
+    private func metalColor(_ position: Int) -> Color? {
+        switch position {
+        case 1: return DesignSystem.Erewhon.rankGold
+        case 2: return DesignSystem.Erewhon.rankSilver
+        case 3: return DesignSystem.Erewhon.rankBronze
+        default: return nil
+        }
+    }
+
+    // MARK: View all
+
+    private var viewAllRow: some View {
+        Button(action: onViewAll) {
+            HStack {
+                Text("View all")
+                    .font(AppFont.bold(13))
+                    .foregroundColor(tc.primary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(AppFont.regular(12))
+                    .foregroundColor(tc.textTertiary)
+            }
+            .padding(.vertical, 13)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Rank-tier avatar metal from `rr`, using the Erewhon rank-metal tokens (never hardcoded hexes).
+/// `nil` → neutral fill. Only four metal tokens exist pre-R5/R6, so the top tiers share `rankGold`;
+/// a decorative tint, not a precise per-rank ladder colour.
+fileprivate func erewhonRankMetal(forRR rr: Int?) -> Color? {
+    guard let rr else { return nil }
+    switch Rank.getRank(from: rr) {
+    case .stone: return nil
+    case .copper: return DesignSystem.Erewhon.rankBronze
+    case .iron: return DesignSystem.Erewhon.rankIron
+    case .gold, .rankVII, .rankVIII, .rankIX: return DesignSystem.Erewhon.rankGold
+    case .platinum, .diamond: return DesignSystem.Erewhon.rankSilver
     }
 }

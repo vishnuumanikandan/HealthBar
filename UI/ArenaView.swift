@@ -188,10 +188,10 @@ struct ArenaView: View {
         if viewModel.isFinished {
             VStack(spacing: DesignSystem.Spacing.xs) {
                 Text(viewModel.outcomeHeadline.uppercased())
-                    .font(AppFont.bold(20))
+                    .font(AppFont.display(20))
                     .foregroundColor(tc.textPrimary)
                 if let delta = viewModel.rrDeltaText {
-                    Text(delta).font(AppFont.bold(14)).foregroundColor(tc.textSecondary)
+                    Text(delta).font(AppFont.display(14)).foregroundColor(tc.textSecondary)
                 }
                 if let resolvedAt = viewModel.resolvedAt {
                     Text(resolvedAt.formatted(.dateTime.month().day().year()))
@@ -246,7 +246,7 @@ struct ArenaView: View {
                 Image(systemName: "checkmark.circle.fill").font(.system(size: 11)).foregroundColor(tc.primary)
             }
             Text(score.map { "\(Int($0.rounded()))" } ?? "—")
-                .font(AppFont.bold(14))
+                .font(AppFont.display(14))
                 .foregroundColor(tc.textPrimary)
         }
     }

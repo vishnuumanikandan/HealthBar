@@ -140,13 +140,12 @@ struct LeaderboardSection: View {
     // MARK: - Ranking List
 
     private var rankingList: some View {
-        // LazyVStack, never a nested ScrollView/List: the page scrolls as one.
-        LazyVStack(spacing: DesignSystem.Spacing.md) {
-            // Rows cascade in once, top rank first: state reveal, not
-            // decoration. 40ms steps keep the whole board under half a second
-            // even with a full friends list.
+        // LazyVStack, never a nested ScrollView/List: the page scrolls as one. Hairline-separated
+        // ladder rows (D5); the whole board still cascades in once, top rank first — 40ms steps
+        // keep it under half a second even with a full friends list.
+        LazyVStack(spacing: 0) {
             ForEach(Array(viewModel.entries.enumerated()), id: \.element.uid) { index, entry in
-                entryRow(entry, position: index + 1)
+                entryRow(entry, position: index + 1, isLast: index == viewModel.entries.count - 1)
                     .opacity(revealed ? 1 : 0)
                     .offset(y: revealed ? 0 : 14)
                     .animation(
@@ -258,118 +257,163 @@ struct LeaderboardSection: View {
     /// Friend rows open the read-only profile sheet; the current-user row
     /// stays inert (own profile lives in the Profile tab).
     @ViewBuilder
-    private func entryRow(_ entry: LeaderboardEntry, position: Int) -> some View {
+    private func entryRow(_ entry: LeaderboardEntry, position: Int, isLast: Bool) -> some View {
         if entry.isCurrentUser {
-            entryRowContent(entry, position: position)
+            entryRowContent(entry, position: position, isLast: isLast)
         } else {
             Button {
                 profileEntry = entry
             } label: {
-                entryRowContent(entry, position: position)
+                entryRowContent(entry, position: position, isLast: isLast)
             }
             .buttonStyle(PlainButtonStyle())
         }
     }
 
-    /// Pure ranking row: big position numeral, identity, score. The per-friend
-    /// detail (level, streak, rank) lives in the friends tab and the profile
-    /// sheet now, so this list reads as a single question: who is winning?
-    private func entryRowContent(_ entry: LeaderboardEntry, position: Int) -> some View {
+    /// Mockup `.lrow`: rank chip · rank-tinted avatar · name (+ you-pill) & tier/level sub-line ·
+    /// days-on-goal figure with the dashed 7-pip strip. The you-row gets a full-row accent
+    /// highlight (replacing the old tinted fill); podium chips carry the metal; other rows are
+    /// hairline-separated (D5).
+    @ViewBuilder
+    private func entryRowContent(_ entry: LeaderboardEntry, position: Int, isLast: Bool) -> some View {
         let metal = metalColor(position, hasData: entry.hasData)
-        return HStack(spacing: DesignSystem.Spacing.md) {
-            rankNumeral(position, hasData: entry.hasData, metal: metal)
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: DesignSystem.Spacing.xs) {
-                    Text(entry.displayName.isEmpty ? "@\(entry.username)" : entry.displayName)
-                        .font(AppFont.bold(16))
-                        .foregroundColor(tc.textPrimary)
-                        .lineLimit(1)
-
-                    if entry.isCurrentUser {
-                        Text("You")
-                            .font(AppFont.bold(10))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(tc.primary))
-                    }
-                }
-
-                if !entry.displayName.isEmpty && !entry.username.isEmpty {
-                    Text("@\(entry.username)")
-                        .font(AppFont.regular(11))
-                        .foregroundColor(tc.textSecondary)
-                }
-            }
-
-            Spacer()
-
+        let row = HStack(alignment: .center, spacing: 13) {
+            rankChip(position, hasData: entry.hasData, metal: metal)
+            avatar(initial: initial(for: entry), tint: entry.hasData ? erewhonRankMetal(forRR: entry.rr) : nil)
+            who(entry)
+            Spacer(minLength: DesignSystem.Spacing.sm)
             adherenceColumn(entry)
         }
-        .padding(.vertical, DesignSystem.Spacing.md)
-        .padding(.horizontal, DesignSystem.Spacing.md)
-        .adaptiveCard(
-            borderColor: metal?.opacity(0.85)
-                ?? (entry.isCurrentUser ? tc.primary : tc.primary.opacity(0.3)),
-            // Opaque tinted fills, never translucent: pixelCard paints its
-            // full-strength border base UNDER the fill, so any alpha here
-            // bleeds metal through the whole card.
-            fillColor: metal.map { tc.cardBackground.mix(with: $0, by: 0.16) }
-                ?? (entry.isCurrentUser
-                    ? tc.cardBackground.mix(with: tc.primary, by: 0.10)
-                    : tc.cardBackground)
-        )
-        .overlay {
-            // The clean-mode card stroke is intentionally faint; podium cards
-            // need a real metal outline there. Pixel mode draws its own border
-            // from the adaptiveCard borderColor, so this stays clean-only.
-            if let metal, settings.isCleanUI {
-                RoundedRectangle(cornerRadius: DesignSystem.Erewhon.cardRadius)
-                    .stroke(metal.opacity(0.55), lineWidth: 1.5)
+        .padding(.vertical, 13)
+        .opacity(entry.hasData ? 1.0 : 0.7)
+
+        if entry.isCurrentUser {
+            // Full-row accent highlight (mockup `.is-you`) — replaces the old tinted fill.
+            row
+                .padding(.horizontal, 8)
+                .background(RoundedRectangle(cornerRadius: 12).fill(tc.cardBackground.mix(with: tc.primary, by: 0.09)))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(tc.primary.opacity(0.4), lineWidth: 1.5))
+        } else {
+            VStack(spacing: 0) {
+                row.padding(.horizontal, 4)
+                if !isLast {
+                    Rectangle().fill(DesignSystem.Erewhon.lineSoft).frame(height: 1)
+                }
             }
         }
-        .opacity(entry.hasData ? 1.0 : 0.7)
     }
 
-    /// The ranking, stated plainly: a big numeral, metal-colored on the podium,
-    /// a crown over first place, a dash for unranked "no data yet" rows.
-    private func rankNumeral(_ position: Int, hasData: Bool, metal: Color?) -> some View {
+    /// Mockup `.pos`: a small rounded-square rank chip. Podium chips are metal-filled (white
+    /// numeral); off-podium chips are neutral. Crown kept above #1 (where it lives today).
+    private func rankChip(_ position: Int, hasData: Bool, metal: Color?) -> some View {
         VStack(spacing: 1) {
             if hasData && position == 1 {
                 Image(systemName: "crown.fill")
-                    .font(.system(size: 11))
+                    .font(.system(size: 10))
                     .foregroundColor(metal ?? DesignSystem.Colors.goldMid)
             }
-
             Text(hasData ? "\(position)" : "–")
-                .font(AppFont.bold(hasData && position <= 3 ? 26 : 17))
-                .foregroundColor(metal ?? (hasData ? tc.textSecondary : tc.textTertiary))
+                .font(AppFont.display(15))
+                .foregroundColor(metal != nil ? .white : (hasData ? tc.textSecondary : tc.textTertiary))
                 .monospacedDigit()
+                .frame(width: 26, height: 26)
+                .background(RoundedRectangle(cornerRadius: 8).fill(metal ?? tc.segBackground))
         }
-        .frame(width: 40)
+        .frame(width: 30)
     }
 
-    /// The score: days on goal out of 7, plus the percentage.
-    private func adherenceColumn(_ entry: LeaderboardEntry) -> some View {
-        VStack(alignment: .trailing, spacing: 2) {
-            if entry.hasData {
-                Text("\(entry.weeklyGoalsMet)/7")
-                    .font(AppFont.bold(22))
-                    .foregroundColor(tc.textPrimary)
-                    .monospacedDigit()
+    /// Mockup `.av`: 38×38 rounded-square initials avatar, rank-tinted (nil tint → neutral fill).
+    private func avatar(initial: String, tint: Color?) -> some View {
+        Text(initial)
+            .font(AppFont.bold(15))
+            .foregroundColor(tint != nil ? .white : tc.textPrimary)
+            .frame(width: 38, height: 38)
+            .background(RoundedRectangle(cornerRadius: 12).fill(tint ?? tc.segBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: 9)
+                    .stroke(tint != nil ? Color.white.opacity(0.22) : DesignSystem.Erewhon.line, lineWidth: 1)
+                    .padding(3)
+            )
+    }
 
-                Text("days on goal")
-                    .font(AppFont.regular(10))
-                    .foregroundColor(tc.textSecondary)
+    /// Name (+ you-pill) and the tier/level sub-line.
+    private func who(_ entry: LeaderboardEntry) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                Text(entry.displayName.isEmpty ? "@\(entry.username)" : entry.displayName)
+                    .font(AppFont.bold(14))
+                    .foregroundColor(tc.textPrimary)
+                    .lineLimit(1)
+                if entry.isCurrentUser { youPill }
+            }
+            if let sub = subline(entry) {
+                Text(sub)
+                    .font(AppFont.regular(11))
+                    .foregroundColor(tc.textTertiary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    /// Mockup `.you` pill: accent-tinted "YOU".
+    private var youPill: some View {
+        Text("You")
+            .font(AppFont.bold(9))
+            .tracking(0.4)
+            .textCase(.uppercase)
+            .foregroundColor(tc.primary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(RoundedRectangle(cornerRadius: 6).fill(tc.primary.opacity(0.13)))
+    }
+
+    /// Sub-line: "Tier · Lv N" for published rows (tier omitted when rr is unpublished — no
+    /// invented tier); plain @username for no-data rows (no invented tier/level).
+    private func subline(_ entry: LeaderboardEntry) -> String? {
+        guard entry.hasData else {
+            return entry.displayName.isEmpty ? nil : "@\(entry.username)"
+        }
+        let tier = entry.rr.map { Rank.rankTier(from: $0).displayName }
+        return [tier, "Lv \(entry.level)"].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// First initial for the avatar (display name, else username).
+    private func initial(for entry: LeaderboardEntry) -> String {
+        let name = entry.displayName.isEmpty ? entry.username : entry.displayName
+        return name.first.map { String($0).uppercased() } ?? "?"
+    }
+
+    /// Days-on-goal figure (display) with the dashed 7-pip strip; a dash for no-data rows.
+    private func adherenceColumn(_ entry: LeaderboardEntry) -> some View {
+        VStack(alignment: .trailing, spacing: 5) {
+            if entry.hasData {
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text("\(entry.weeklyGoalsMet)")
+                        .font(AppFont.display(18))
+                        .foregroundColor(tc.textPrimary)
+                    Text("/7")
+                        .font(AppFont.regular(10))
+                        .foregroundColor(tc.textTertiary)
+                }
+                pips(on: entry.weeklyGoalsMet)
             } else {
                 Text("–")
-                    .font(AppFont.bold(22))
+                    .font(AppFont.display(18))
                     .foregroundColor(tc.textTertiary)
-
                 Text("no data yet")
                     .font(AppFont.regular(10))
                     .foregroundColor(tc.textTertiary)
+            }
+        }
+    }
+
+    /// Mockup `.pips`: seven 7×3 pips, the first `count` filled with the accent.
+    private func pips(on count: Int) -> some View {
+        HStack(spacing: 2) {
+            ForEach(0..<7, id: \.self) { i in
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(i < count ? tc.primary : tc.segBackground)
+                    .frame(width: 7, height: 3)
             }
         }
     }
@@ -401,5 +445,19 @@ struct LeaderboardSection: View {
                 .foregroundColor(DesignSystem.Colors.danger)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Rank-tier avatar metal from `rr`, using the Erewhon rank-metal tokens (never hardcoded
+/// hexes). `nil` → neutral fill. Only four metal tokens exist pre-R5/R6, so the top tiers
+/// share `rankGold`; this is a decorative wash, not a precise per-rank ladder colour.
+fileprivate func erewhonRankMetal(forRR rr: Int?) -> Color? {
+    guard let rr else { return nil }
+    switch Rank.getRank(from: rr) {
+    case .stone: return nil
+    case .copper: return DesignSystem.Erewhon.rankBronze
+    case .iron: return DesignSystem.Erewhon.rankIron
+    case .gold, .rankVII, .rankVIII, .rankIX: return DesignSystem.Erewhon.rankGold
+    case .platinum, .diamond: return DesignSystem.Erewhon.rankSilver
     }
 }

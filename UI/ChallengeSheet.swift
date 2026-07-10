@@ -16,6 +16,8 @@ struct ChallengeSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private let coordinator: AppCoordinator
+    /// D2: a friend to pre-select on open (from the matchup preview's Challenge CTA). Additive.
+    private let preselected: DuelOpponentCandidate?
     private let onSent: () -> Void
 
     @State private var settings = SettingsManager.shared
@@ -28,19 +30,33 @@ struct ChallengeSheet: View {
     /// nil until the user picks — drives the "must choose a league" gate.
     @State private var selectedLeague: Int?
 
+    /// D3: username filter for the EVERYONE (directory) section — shown only on long lists.
+    @State private var directoryFilter = ""
+
     /// Per-league starting-path slot usage (D2.6), zero-filled for every league on load.
     @State private var usageByLeague: [Int: Int] = [:]
 
     @State private var isSending = false
     @State private var inlineError: String?
 
-    init(coordinator: AppCoordinator, onSent: @escaping () -> Void = {}) {
+    init(coordinator: AppCoordinator, preselected: DuelOpponentCandidate? = nil, onSent: @escaping () -> Void = {}) {
         self.coordinator = coordinator
+        self.preselected = preselected
         self.onSent = onSent
     }
 
     private var friends: [DuelOpponentCandidate] { candidates.filter { $0.source == .friend } }
     private var guildMates: [DuelOpponentCandidate] { candidates.filter { $0.source == .guild } }
+    private var directoryPeople: [DuelOpponentCandidate] { candidates.filter { $0.source == .directory } }
+
+    /// Directory rows after the username filter (leading-@ stripped, case-insensitive contains —
+    /// the same normalization FriendsView uses). Empty query → the whole directory.
+    private var filteredDirectory: [DuelOpponentCandidate] {
+        let q = directoryFilter.trimmingCharacters(in: .whitespaces).lowercased()
+        let needle = q.hasPrefix("@") ? String(q.dropFirst()) : q
+        guard !needle.isEmpty else { return directoryPeople }
+        return directoryPeople.filter { $0.username.lowercased().contains(needle) }
+    }
 
     /// Validate by construction: both selections required, not mid-send.
     private var canSend: Bool { selectedOpponent != nil && selectedLeague != nil && !isSending }
@@ -85,7 +101,7 @@ struct ChallengeSheet: View {
             Image(systemName: "person.2.slash")
                 .font(AppFont.regular(40))
                 .foregroundColor(tc.textTertiary)
-            Text("Add friends or join a guild to duel")
+            Text("Couldn't load people to challenge right now. Close and try again in a moment.")
                 .font(AppFont.regular(15))
                 .foregroundColor(tc.textSecondary)
                 .multilineTextAlignment(.center)
@@ -134,7 +150,53 @@ struct ChallengeSheet: View {
             if !guildMates.isEmpty {
                 pickerSection("Guild", guildMates)
             }
+            if !directoryPeople.isEmpty {
+                everyoneSection
+            }
         }
+    }
+
+    /// D3: everyone else in the public directory. A username filter appears once the section is
+    /// long (~10+); the pending accept flow + respondBy expiry are the consent mechanism.
+    private var everyoneSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            Text("EVERYONE")
+                .font(AppFont.regular(11))
+                .foregroundColor(tc.textTertiary)
+
+            if directoryPeople.count > 10 {
+                directoryFilterField
+            }
+
+            let rows = filteredDirectory
+            if rows.isEmpty {
+                Text("No one matches that username.")
+                    .font(AppFont.regular(13))
+                    .foregroundColor(tc.textTertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                LazyVStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                    ForEach(rows) { person in
+                        opponentRow(person)
+                    }
+                }
+            }
+        }
+    }
+
+    private var directoryFilterField: some View {
+        HStack(spacing: DesignSystem.Spacing.xs) {
+            Image(systemName: "magnifyingglass")
+                .font(AppFont.regular(13))
+                .foregroundColor(tc.textTertiary)
+            TextField("Filter by @username", text: $directoryFilter)
+                .font(AppFont.regular(14))
+                .foregroundColor(tc.textPrimary)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
+        }
+        .padding(DesignSystem.Spacing.sm)
+        .adaptiveCard(borderColor: tc.primary.opacity(0.2), fillColor: tc.cardBackground)
     }
 
     private func pickerSection(_ title: String, _ people: [DuelOpponentCandidate]) -> some View {
@@ -235,6 +297,11 @@ struct ChallengeSheet: View {
         async let usage = coordinator.duelSlotUsageByLeague()
         candidates = await people
         usageByLeague = await usage
+        // D2: pre-select the passed-in friend, matched by uid so the row's `==` selection holds.
+        if let pre = preselected, selectedOpponent == nil,
+           let match = candidates.first(where: { $0.uid == pre.uid }) {
+            selectedOpponent = match
+        }
         loadingPeople = false
     }
 
