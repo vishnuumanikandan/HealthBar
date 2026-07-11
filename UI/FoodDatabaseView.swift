@@ -43,7 +43,7 @@ struct FoodDatabaseView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text("Food Database")
-                        .font(AppFont.bold(20))
+                        .font(AppFont.display(20))
                         .foregroundColor(tc.textPrimary)
                 }
                 ToolbarItem(placement: .cancellationAction) {
@@ -121,10 +121,10 @@ struct FoodDatabaseView: View {
                             .font(AppFont.bold(DesignSystem.FontSizes.footnote))
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
-                            .foregroundStyle(isSelected ? tc.textPrimary : tc.textSecondary)
+                            .foregroundStyle(isSelected ? DesignSystem.Erewhon.onAccent : tc.textSecondary)
                             .adaptivePill(
-                                borderColor: tc.primary,
-                                fillColor: isSelected ? .white : tc.cardBackground
+                                borderColor: isSelected ? tc.primary : DesignSystem.Erewhon.line,
+                                fillColor: isSelected ? tc.primary : tc.cardBackground
                             )
                     }
                     .buttonStyle(.plain)
@@ -223,14 +223,10 @@ private struct AllFoodsTab: View {
                     } label: {
                         Label("Add \"\(dbViewModel.allFoodsSearchText)\" as Custom Food", systemImage: "plus")
                             .font(AppFont.bold(DesignSystem.FontSizes.callout))
-                            .foregroundColor(.white)
+                            .foregroundColor(DesignSystem.Erewhon.onAccent)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DesignSystem.Spacing.md)
-                            .adaptiveCard(
-                                borderColor: tc.buttonBorder,
-                                fillColor: .clear,
-                                fillGradient: DesignSystem.Colors.adaptiveGradient(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)
-                            )
+                            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .padding(.horizontal, DesignSystem.Spacing.lg)
@@ -247,14 +243,10 @@ private struct AllFoodsTab: View {
                     } label: {
                         Label("Can't find it? Add your own", systemImage: "plus.circle.fill")
                             .font(AppFont.bold(DesignSystem.FontSizes.callout))
-                            .foregroundColor(.white)
+                            .foregroundColor(DesignSystem.Erewhon.onAccent)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DesignSystem.Spacing.md)
-                            .adaptiveCard(
-                                borderColor: tc.buttonBorder,
-                                fillColor: .clear,
-                                fillGradient: DesignSystem.Colors.adaptiveGradient(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)
-                            )
+                            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .listRowBackground(Color.clear)
@@ -309,14 +301,10 @@ private struct MyFoodsTab: View {
                     } label: {
                         Label("Add New Food", systemImage: "plus")
                             .font(AppFont.bold(DesignSystem.FontSizes.callout))
-                            .foregroundColor(.white)
+                            .foregroundColor(DesignSystem.Erewhon.onAccent)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DesignSystem.Spacing.md)
-                            .adaptiveCard(
-                                borderColor: tc.buttonBorder,
-                                fillColor: .clear,
-                                fillGradient: DesignSystem.Colors.adaptiveGradient(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)
-                            )
+                            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .listRowBackground(Color.clear)
@@ -387,14 +375,10 @@ private struct MyMealsTab: View {
                     } label: {
                         Label("New Meal Bundle", systemImage: "plus")
                             .font(AppFont.bold(DesignSystem.FontSizes.callout))
-                            .foregroundColor(.white)
+                            .foregroundColor(DesignSystem.Erewhon.onAccent)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DesignSystem.Spacing.md)
-                            .adaptiveCard(
-                                borderColor: tc.buttonBorder,
-                                fillColor: .clear,
-                                fillGradient: DesignSystem.Colors.adaptiveGradient(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)
-                            )
+                            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .listRowBackground(Color.clear)
@@ -506,14 +490,10 @@ private struct MyRecipesTab: View {
                     } label: {
                         Label("New Recipe", systemImage: "plus")
                             .font(AppFont.bold(DesignSystem.FontSizes.callout))
-                            .foregroundColor(.white)
+                            .foregroundColor(DesignSystem.Erewhon.onAccent)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DesignSystem.Spacing.md)
-                            .adaptiveCard(
-                                borderColor: tc.buttonBorder,
-                                fillColor: .clear,
-                                fillGradient: DesignSystem.Colors.adaptiveGradient(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)
-                            )
+                            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .listRowBackground(Color.clear)
@@ -636,7 +616,7 @@ private struct CustomFoodRow: View {
             Button(action: onEdit) {
                 Label("Edit", systemImage: "pencil")
             }
-            .tint(.blue)
+            .tint(tc.primary)
         }
     }
 }
@@ -705,7 +685,7 @@ private struct SavedMealRow: View {
             Button(action: onEdit) {
                 Label("Edit", systemImage: "pencil")
             }
-            .tint(.blue)
+            .tint(tc.primary)
         }
         .contextMenu {
             Button(action: onEdit) {
@@ -826,7 +806,7 @@ private struct SavedRecipeRow: View {
             Button(action: onEdit) {
                 Label("Edit", systemImage: "pencil")
             }
-            .tint(.blue)
+            .tint(tc.primary)
         }
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             // Save to My Foods via leading swipe

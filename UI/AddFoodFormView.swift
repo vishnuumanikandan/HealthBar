@@ -73,7 +73,7 @@ struct AddFoodFormView: View {
                     VStack(spacing: DesignSystem.Spacing.md) {
                         HStack {
                             Text("Nutrition Info")
-                                .font(AppFont.bold(18))
+                                .font(AppFont.display(18))
                                 .foregroundColor(tc.textPrimary)
 
                             // Show "per 100g" label if barcode was scanned
@@ -96,11 +96,11 @@ struct AddFoodFormView: View {
                                     // Serving size input
                                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                                         Text("Serving Size (grams)")
-                                            .font(AppFont.bold(14))
+                                            .font(AppFont.display(14))
                                             .foregroundColor(tc.textSecondary)
 
                                         TextField("100", text: $viewModel.servingSize)
-                                            .font(.system(size: DesignSystem.FontSizes.body, weight: .medium))
+                                            .font(AppFont.regular(DesignSystem.FontSizes.body))
                                             .keyboardType(.decimalPad)
                                             .textFieldStyle(.plain)
                                             .padding(DesignSystem.Spacing.md)
@@ -119,14 +119,10 @@ struct AddFoodFormView: View {
                                         } label: {
                                             Text("Calculate")
                                                 .font(AppFont.bold(14))
-                                                .foregroundColor(.white)
+                                                .foregroundColor(DesignSystem.Erewhon.onAccent)
                                                 .padding(.horizontal, DesignSystem.Spacing.md)
                                                 .padding(.vertical, DesignSystem.Spacing.md)
-                                                .adaptiveCard(
-                                                    borderColor: tc.buttonBorder,
-                                                    fillColor: .clear,
-                                                    fillGradient: DesignSystem.Colors.adaptiveGradient(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)
-                                                )
+                                                .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary)
                                         }
                                     }
                                 }
@@ -255,7 +251,7 @@ struct AddFoodFormView: View {
     private var photoCaptureSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
             Text("Photo (Optional)")
-                .font(AppFont.bold(14))
+                .font(AppFont.display(14))
                 .foregroundColor(tc.textSecondary)
 
             Button {
@@ -329,18 +325,17 @@ struct AddFoodFormView: View {
     private var headerSection: some View {
         VStack(spacing: DesignSystem.Spacing.sm) {
             ZStack {
-                AdaptivePillShapeStyle()
-                    .fill(DesignSystem.Colors.adaptiveGradientFrom(tc.primary))
+                AdaptiveCardShapeStyle()
+                    .fill(tc.primary.opacity(0.12))
                     .frame(width: DesignSystem.Sizes.thumbnailLarge, height: DesignSystem.Sizes.thumbnailLarge)
-                    .overlay(AdaptivePillShapeStyle().stroke(tc.primary.adjustedBrightness(-0.2), lineWidth: 2))
 
                 Image(systemName: "fork.knife.circle.fill")
                     .font(AppFont.regular(40))
-                    .foregroundColor(.white)
+                    .foregroundColor(tc.primary)
             }
 
             Text("Log Your Meal")
-                .font(AppFont.bold(24))
+                .font(AppFont.display(24))
                 .foregroundColor(tc.textPrimary)
 
             Text("Enter the nutritional information for your meal")
@@ -355,7 +350,7 @@ struct AddFoodFormView: View {
     private var mealTypePickerSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
             Text("Meal Type")
-                .font(AppFont.bold(14))
+                .font(AppFont.display(14))
                 .foregroundColor(tc.textSecondary)
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -414,7 +409,7 @@ struct AddFoodFormView: View {
             }
 
             TextField(placeholder, text: text)
-                .font(.system(size: DesignSystem.FontSizes.body, weight: .regular))
+                .font(AppFont.regular(DesignSystem.FontSizes.body))
                 .padding(DesignSystem.Spacing.md)
                 .adaptiveCard(borderColor: errorMessage != nil ? DesignSystem.Colors.danger : tc.primary.opacity(0.3), fillColor: tc.cardBackground)
                 .onChange(of: text.wrappedValue) { oldValue, newValue in
@@ -437,14 +432,13 @@ struct AddFoodFormView: View {
             HStack(spacing: DesignSystem.Spacing.md) {
                 // Icon
                 ZStack {
-                    AdaptivePillShapeStyle()
-                        .fill(DesignSystem.Colors.adaptiveGradientFrom(iconColor))
+                    AdaptiveCardShapeStyle()
+                        .fill(iconColor.opacity(0.12))
                         .frame(width: DesignSystem.Sizes.iconCircle, height: DesignSystem.Sizes.iconCircle)
-                        .overlay(AdaptivePillShapeStyle().stroke(iconColor.adjustedBrightness(-0.2), lineWidth: 2))
 
                     Image(systemName: icon)
                         .font(AppFont.bold(18))
-                        .foregroundColor(.white)
+                        .foregroundColor(iconColor)
                 }
 
                 // Title
@@ -458,7 +452,7 @@ struct AddFoodFormView: View {
                 // Input field
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     TextField(placeholder, text: text)
-                        .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
+                        .font(AppFont.bold(DesignSystem.FontSizes.headline))
                         #if os(iOS)
                         .keyboardType(.decimalPad)
                         #endif
@@ -496,7 +490,7 @@ struct AddFoodFormView: View {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                     HStack(spacing: DesignSystem.Spacing.xs) {
                         Text("Purity Score")
-                            .font(AppFont.bold(16))
+                            .font(AppFont.display(16))
                             .foregroundColor(tc.textPrimary)
 
                         // Info button (44x44pt touch target)
@@ -519,7 +513,7 @@ struct AddFoodFormView: View {
                 Spacer()
 
                 Text("\(Int(viewModel.formToxinScore))")
-                    .font(AppFont.bold(24))
+                    .font(AppFont.display(24))
                     .foregroundColor(toxinScoreColor)
             }
 
@@ -551,7 +545,7 @@ struct AddFoodFormView: View {
     private var barcodeScanSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
             Text("Quick Entry")
-                .font(AppFont.bold(14))
+                .font(AppFont.display(14))
                 .foregroundColor(tc.textSecondary)
 
             Button {
@@ -560,14 +554,13 @@ struct AddFoodFormView: View {
                 HStack(spacing: DesignSystem.Spacing.md) {
                     // Barcode icon
                     ZStack {
-                        AdaptivePillShapeStyle()
-                            .fill(DesignSystem.Colors.adaptiveGradientFrom(tc.primary))
+                        AdaptiveCardShapeStyle()
+                            .fill(tc.primary.opacity(0.12))
                             .frame(width: DesignSystem.Sizes.iconCircle, height: DesignSystem.Sizes.iconCircle)
-                            .overlay(AdaptivePillShapeStyle().stroke(tc.primary.adjustedBrightness(-0.2), lineWidth: 2))
 
                         Image(systemName: "barcode.viewfinder")
                             .font(AppFont.bold(20))
-                            .foregroundColor(.white)
+                            .foregroundColor(tc.primary)
                     }
 
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
@@ -598,14 +591,13 @@ struct AddFoodFormView: View {
                 HStack(spacing: DesignSystem.Spacing.md) {
                     // Keyboard icon
                     ZStack {
-                        AdaptivePillShapeStyle()
-                            .fill(DesignSystem.Colors.adaptiveGradientFrom(tc.primary))
+                        AdaptiveCardShapeStyle()
+                            .fill(tc.primary.opacity(0.12))
                             .frame(width: DesignSystem.Sizes.iconCircle, height: DesignSystem.Sizes.iconCircle)
-                            .overlay(AdaptivePillShapeStyle().stroke(tc.primary.adjustedBrightness(-0.2), lineWidth: 2))
 
                         Image(systemName: "keyboard")
                             .font(AppFont.bold(20))
-                            .foregroundColor(.white)
+                            .foregroundColor(tc.primary)
                     }
 
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
@@ -722,7 +714,7 @@ struct AddFoodFormView: View {
                         .foregroundColor(tc.primary)
 
                     Text("Advanced Nutrition")
-                        .font(AppFont.bold(18))
+                        .font(AppFont.display(18))
                         .foregroundColor(tc.textPrimary)
 
                     Spacer()
@@ -818,14 +810,13 @@ struct AddFoodFormView: View {
         HStack(spacing: DesignSystem.Spacing.md) {
             // Icon
             ZStack {
-                AdaptivePillShapeStyle()
-                    .fill(DesignSystem.Colors.adaptiveGradientFrom(iconColor))
+                AdaptiveCardShapeStyle()
+                    .fill(iconColor.opacity(0.12))
                     .frame(width: 32, height: 32)
-                    .overlay(AdaptivePillShapeStyle().stroke(iconColor.adjustedBrightness(-0.2), lineWidth: 2))
 
                 Image(systemName: icon)
                     .font(AppFont.bold(14))
-                    .foregroundColor(.white)
+                    .foregroundColor(iconColor)
             }
 
             // Title
@@ -839,7 +830,7 @@ struct AddFoodFormView: View {
             // Input field
             HStack(spacing: DesignSystem.Spacing.xs) {
                 TextField(placeholder, text: text)
-                    .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
+                    .font(AppFont.bold(DesignSystem.FontSizes.headline))
                     #if os(iOS)
                     .keyboardType(.decimalPad)
                     #endif
@@ -901,21 +892,20 @@ struct ManualBarcodeEntryView: View {
             VStack(spacing: DesignSystem.Spacing.xl) {
                 // Icon
                 ZStack {
-                    AdaptivePillShapeStyle()
-                        .fill(DesignSystem.Colors.adaptiveGradientFrom(tc.primary))
+                    AdaptiveCardShapeStyle()
+                        .fill(tc.primary.opacity(0.12))
                         .frame(width: 80, height: 80)
-                        .overlay(AdaptivePillShapeStyle().stroke(tc.primary.adjustedBrightness(-0.2), lineWidth: 2))
 
                     Image(systemName: "keyboard")
                         .font(AppFont.bold(40))
-                        .foregroundColor(.white)
+                        .foregroundColor(tc.primary)
                 }
                 .padding(.top, DesignSystem.Spacing.xl)
 
                 // Instructions
                 VStack(spacing: DesignSystem.Spacing.sm) {
                     Text("Enter Barcode Number")
-                        .font(AppFont.bold(22))
+                        .font(AppFont.display(22))
                         .foregroundColor(tc.textPrimary)
 
                     Text("Enter the UPC or EAN barcode from the product packaging")
@@ -928,7 +918,7 @@ struct ManualBarcodeEntryView: View {
                 // Barcode input field
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                     TextField("e.g., 737628064502", text: $viewModel.manualBarcodeInput)
-                        .font(.system(size: DesignSystem.FontSizes.body, weight: .regular))
+                        .font(AppFont.regular(DesignSystem.FontSizes.body))
                         .keyboardType(.numberPad)
                         .textFieldStyle(.plain)
                         .padding(DesignSystem.Spacing.md)

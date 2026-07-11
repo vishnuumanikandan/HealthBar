@@ -43,7 +43,7 @@ struct DescribeMealView: View {
                 // Header
                 HStack {
                     Text("Describe Your Meal")
-                        .font(AppFont.bold(20))
+                        .font(AppFont.display(20))
                         .foregroundColor(tc.textPrimary)
                     Spacer()
                     MealTypePill(mealType: viewModel.pendingMealType)
@@ -75,7 +75,7 @@ struct DescribeMealView: View {
                         // Text input
                         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
                             Text("What did you eat?")
-                                .font(AppFont.bold(14))
+                                .font(AppFont.display(14))
                                 .foregroundColor(tc.textSecondary)
 
                             TextEditor(text: $viewModel.mealDescriptionInput)
@@ -126,27 +126,13 @@ struct DescribeMealView: View {
                         }
 
                         // Analyze button
-                        Button {
-                            Task { await viewModel.recognizeMeal() }
-                        } label: {
-                            HStack(spacing: DesignSystem.Spacing.sm) {
-                                Image(systemName: "sparkles")
-                                    .font(AppFont.bold(16))
-                                Text("Analyze")
-                                    .font(AppFont.bold(16))
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, DesignSystem.Spacing.md)
-                            .background(
-                                SettingsManager.shared.isCleanUI
-                                    ? LinearGradient(colors: [DesignSystem.Colors.primary], startPoint: .top, endPoint: .bottom)
-                                    : DesignSystem.Colors.band3Green
-                            )
-                            .clipShape(AdaptivePillShapeStyle())
-                            .opacity(canAnalyze ? 1.0 : 0.5)
-                        }
-                        .disabled(!canAnalyze)
+                        AppButton(
+                            title: "Analyze",
+                            style: .primary,
+                            action: { Task { await viewModel.recognizeMeal() } },
+                            isDisabled: !canAnalyze,
+                            icon: "sparkles"
+                        )
                         .accessibilityLabel("Analyze meal description")
                         .accessibilityHint(!canAnalyze ? "Enter a meal description or add a photo first" : "Tap to estimate nutrition")
 

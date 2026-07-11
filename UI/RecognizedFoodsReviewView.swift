@@ -50,7 +50,7 @@ struct RecognizedFoodsReviewView: View {
                 // Header
                 HStack {
                     Text("Review & Confirm")
-                        .font(AppFont.bold(20))
+                        .font(AppFont.display(20))
                         .foregroundColor(tc.textPrimary)
                     Spacer()
                     MealTypePill(mealType: viewModel.pendingMealType)
@@ -85,39 +85,16 @@ struct RecognizedFoodsReviewView: View {
                 // Bottom bar
                 VStack(spacing: DesignSystem.Spacing.sm) {
                     // Log button
-                    Button {
-                        logItems()
-                    } label: {
-                        HStack(spacing: DesignSystem.Spacing.sm) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(AppFont.bold(16))
-                            Text("Log \(includedCount) item\(includedCount == 1 ? "" : "s")")
-                                .font(AppFont.bold(16))
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DesignSystem.Spacing.md)
-                        .background(
-                            SettingsManager.shared.isCleanUI
-                                ? LinearGradient(colors: [DesignSystem.Colors.primary], startPoint: .top, endPoint: .bottom)
-                                : DesignSystem.Colors.band3Green
-                        )
-                        .clipShape(AdaptivePillShapeStyle())
-                        .opacity(includedCount == 0 || viewModel.isSubmittingForm ? 0.5 : 1.0)
-                    }
-                    .disabled(includedCount == 0 || viewModel.isSubmittingForm)
+                    AppButton(
+                        title: "Log \(includedCount) item\(includedCount == 1 ? "" : "s")",
+                        style: .primary,
+                        action: logItems,
+                        isLoading: viewModel.isSubmittingForm,
+                        isDisabled: includedCount == 0 || viewModel.isSubmittingForm,
+                        icon: "checkmark.circle.fill"
+                    )
                     .accessibilityLabel("Log \(includedCount) food item\(includedCount == 1 ? "" : "s")")
                     .accessibilityHint(includedCount == 0 ? "No items selected" : "Tap to log selected items")
-
-                    if viewModel.isSubmittingForm {
-                        HStack(spacing: DesignSystem.Spacing.sm) {
-                            ProgressView()
-                                .tint(tc.primary)
-                            Text("Logging…")
-                                .font(AppFont.regular(13))
-                                .foregroundColor(tc.textSecondary)
-                        }
-                    }
 
                     // Save for later (Phase 10) — capture this AI result as a
                     // reusable meal/recipe. Independent of logging; hidden when
