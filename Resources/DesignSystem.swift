@@ -358,6 +358,20 @@ enum DesignSystem {
         static let rankIron = Color(light: Color(hex: "#7E8896"), dark: Color(hex: "#7E8896"))
         static let rankBronze = Color(light: Color(hex: "#B06A3C"), dark: Color(hex: "#C8814A"))
 
+        /// Rank-tier avatar metal from `rr`. `nil` → neutral fill. Bronze/iron/gold map to the
+        /// Erewhon metal tokens; platinum and diamond use the live accent (mockup `rk-diamond`).
+        /// Decorative wash, not a precise per-rank ladder colour.
+        static func rankMetal(forRR rr: Int?) -> Color? {
+            guard let rr else { return nil }
+            switch Rank.getRank(from: rr) {
+            case .stone: return nil
+            case .copper: return rankBronze
+            case .iron: return rankIron
+            case .gold, .rankVII, .rankVIII, .rankIX: return rankGold
+            case .platinum, .diamond: return SettingsManager.shared.activeColors.primary
+            }
+        }
+
         // Reserved hues (consumed by later R-prompts).
         static let pink = Color(light: Color(hex: "#AF4D80"), dark: Color(hex: "#DE77AB"))
         static let social = Color(light: Color(hex: "#00739D"), dark: Color(hex: "#00A4CD"))

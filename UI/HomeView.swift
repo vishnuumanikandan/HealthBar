@@ -554,6 +554,12 @@ struct HomeView: View {
     @State private var sparkPlayedToday: Bool = false
     @State private var currentTheme: TimeOfDayTheme = SettingsManager.shared.activeTheme
     @Environment(\.scenePhase) private var scenePhase
+    /// R6b §2: prefer the environment value over `UIAccessibility.isReduceMotionEnabled` — when
+    /// on, the Home entrance reveal is skipped and blocks render settled from the first frame.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Flips true on `cleanContent`'s first appear to trigger the one-time staggered entrance
+    /// reveal (R6b §2). Never reset, so tab switches on a live TabView don't replay it.
+    @State private var hasRevealed = false
     @AppStorage("insightsCardDismissedDate") private var insightsCardDismissedDate: String = ""
 
     /// Retained to construct the FriendProfileView sheet presented from the
@@ -948,6 +954,34 @@ struct HomeView: View {
     /// Anchor id for the Quests jump target (D3).
     private static let questsAnchorID = "erewhon-quests-anchor"
 
+    // R6b §2 — Erewhon entrance reveal tuning (no magic numbers at the call sites).
+    private static let entranceDuration: Double = 0.35
+    private static let entranceStagger: Double = 0.045
+    private static let entranceRise: CGFloat = 8
+    private static let entranceBlockCap: Int = 8
+
+    /// R6b §2 — one-time staggered entrance for the flat Home blocks (Erewhon only). Each block
+    /// fades in and rises `entranceRise` pt into place; `index` sets the per-block delay, capped
+    /// at `entranceBlockCap` so below-the-fold blocks settle together. Reduce Motion renders the
+    /// settled state from the first frame (no animation).
+    private struct EntranceReveal: ViewModifier {
+        let index: Int
+        let isRevealed: Bool
+        let reduceMotion: Bool
+
+        func body(content: Content) -> some View {
+            if reduceMotion {
+                content
+            } else {
+                let delay = Double(min(index, HomeView.entranceBlockCap)) * HomeView.entranceStagger
+                content
+                    .opacity(isRevealed ? 1 : 0)
+                    .offset(y: isRevealed ? 0 : HomeView.entranceRise)
+                    .animation(.easeOut(duration: HomeView.entranceDuration).delay(delay), value: isRevealed)
+            }
+        }
+    }
+
     /// Flat dashboard rebuilt to the committed mockup's `#screen-home`
     /// (design/erewhon/arena.html). Rendered only when `isClean`; pixel uses `pixelContent`.
     private func cleanContent(_ proxy: ScrollViewProxy) -> some View {
@@ -956,29 +990,37 @@ struct HomeView: View {
             Group {
                 appHead
                     .padding(.top, 6)
+                    .modifier(EntranceReveal(index: 0, isRevealed: hasRevealed, reduceMotion: reduceMotion))
 
                 if let summary = viewModel.summary {
                     resourceRow(summary)
                         .padding(.top, 20)
+                        .modifier(EntranceReveal(index: 1, isRevealed: hasRevealed, reduceMotion: reduceMotion))
                     xpLine(summary)
                         .padding(.top, 14)
+                        .modifier(EntranceReveal(index: 2, isRevealed: hasRevealed, reduceMotion: reduceMotion))
                     calorieHero(summary)
                         .padding(.top, 28)
+                        .modifier(EntranceReveal(index: 3, isRevealed: hasRevealed, reduceMotion: reduceMotion))
                 }
 
                 jumpCards(proxy)
                     .padding(.top, 18)
+                    .modifier(EntranceReveal(index: 4, isRevealed: hasRevealed, reduceMotion: reduceMotion))
 
                 if let summary = viewModel.summary {
                     purityBlock(summary)
                         .padding(.top, 26)
+                        .modifier(EntranceReveal(index: 5, isRevealed: hasRevealed, reduceMotion: reduceMotion))
                 }
 
                 // Daily Spark (kept) — renders nothing unless a mid-duel non-guest hasn't played.
                 sparkQTECard
+                    .modifier(EntranceReveal(index: 6, isRevealed: hasRevealed, reduceMotion: reduceMotion))
 
                 // Active duels (kept), recontainerized into the block + sec-head language.
                 cleanDuelsBlock
+                    .modifier(EntranceReveal(index: 7, isRevealed: hasRevealed, reduceMotion: reduceMotion))
             }
 
             Group {
@@ -989,29 +1031,35 @@ struct HomeView: View {
                         macrosCard(summary)
                     }
                     .padding(.top, 30)
+                    .modifier(EntranceReveal(index: 8, isRevealed: hasRevealed, reduceMotion: reduceMotion))
                 }
 
                 actionsRow
                     .padding(.top, 24)
+                    .modifier(EntranceReveal(index: 9, isRevealed: hasRevealed, reduceMotion: reduceMotion))
 
                 // Insights (kept) — position unchanged relative to the quests block.
                 if insightsShown, let insights = viewModel.dailyInsights {
                     insightsCard(insights)
                         .padding(.top, 30)
+                        .modifier(EntranceReveal(index: 10, isRevealed: hasRevealed, reduceMotion: reduceMotion))
                 }
 
                 questsBlockClean
                     .padding(.top, insightsShown ? 16 : 30)
                     .id(Self.questsAnchorID)
+                    .modifier(EntranceReveal(index: 11, isRevealed: hasRevealed, reduceMotion: reduceMotion))
 
                 mealsBlockClean
                     .padding(.top, 30)
+                    .modifier(EntranceReveal(index: 12, isRevealed: hasRevealed, reduceMotion: reduceMotion))
 
                 VStack(spacing: 0) {
                     secHead("Weekly summary", nil)
                     weeklyContent
                 }
                 .padding(.top, 30)
+                .modifier(EntranceReveal(index: 13, isRevealed: hasRevealed, reduceMotion: reduceMotion))
 
                 LeaderboardSection(
                     viewModel: leaderboardViewModel,
@@ -1020,10 +1068,12 @@ struct HomeView: View {
                     onAddFriends: { showFriends = true }
                 )
                 .padding(.top, 30)
+                .modifier(EntranceReveal(index: 14, isRevealed: hasRevealed, reduceMotion: reduceMotion))
             }
         }
         .padding(.horizontal, 22)
         .padding(.bottom, 24)
+        .onAppear { hasRevealed = true }
     }
 
     // MARK: Flat — shared card treatment + section header

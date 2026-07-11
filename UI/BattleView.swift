@@ -325,10 +325,10 @@ struct BattleView: View {
             }
             HStack(alignment: .top, spacing: 0) {
                 fighterColumn(initial: p.myInitial, isMe: true, name: nil,
-                              subline: tierLabel(p.myRR), tint: erewhonRankMetal(forRR: p.myRR))
+                              subline: tierLabel(p.myRR), tint: DesignSystem.Erewhon.rankMetal(forRR: p.myRR))
                 vsMid
                 fighterColumn(initial: p.theirInitial, isMe: false, name: p.opponentName,
-                              subline: tierLabel(p.theirRR), tint: erewhonRankMetal(forRR: p.theirRR))
+                              subline: tierLabel(p.theirRR), tint: DesignSystem.Erewhon.rankMetal(forRR: p.theirRR))
             }
             VStack(spacing: 14) {
                 previewCompareRow("Days on goal", mine: "\(p.myDays)", theirs: "\(p.theirDays)",
@@ -949,7 +949,7 @@ private struct BattleStandingsBlock: View {
         let metal = s.position.flatMap { metalColor($0) }
         let row = HStack(alignment: .center, spacing: 13) {
             rankChip(s.position, metal: metal)
-            avatar(initial: initial(for: s.dto), tint: erewhonRankMetal(forRR: s.dto.rr))
+            avatar(initial: initial(for: s.dto), tint: DesignSystem.Erewhon.rankMetal(forRR: s.dto.rr))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     Text(s.dto.displayName.isEmpty ? "@\(s.dto.username)" : s.dto.displayName)
@@ -1047,18 +1047,4 @@ private struct BattleStandingsBlock: View {
         }
     }
 
-}
-
-/// Rank-tier avatar metal from `rr`, using the Erewhon rank-metal tokens (never hardcoded hexes).
-/// `nil` → neutral fill. Only four metal tokens exist pre-R5/R6, so the top tiers share `rankGold`;
-/// a decorative tint, not a precise per-rank ladder colour.
-fileprivate func erewhonRankMetal(forRR rr: Int?) -> Color? {
-    guard let rr else { return nil }
-    switch Rank.getRank(from: rr) {
-    case .stone: return nil
-    case .copper: return DesignSystem.Erewhon.rankBronze
-    case .iron: return DesignSystem.Erewhon.rankIron
-    case .gold, .rankVII, .rankVIII, .rankIX: return DesignSystem.Erewhon.rankGold
-    case .platinum, .diamond: return DesignSystem.Erewhon.rankSilver
-    }
 }
