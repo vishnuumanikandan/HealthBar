@@ -33,7 +33,7 @@ struct AddFoodChoiceSheet: View {
                 // Title row
                 HStack {
                     Text("Add Food")
-                        .font(AppFont.bold(22))
+                        .font(AppFont.display(22))
                         .foregroundColor(tc.textPrimary)
                     Spacer()
                     MealTypePill(mealType: viewModel.pendingMealType)

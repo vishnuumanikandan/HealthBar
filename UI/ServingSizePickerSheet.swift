@@ -121,7 +121,7 @@ struct ServingSizePickerSheet: View {
     private var servingControl: some View {
         VStack(spacing: DesignSystem.Spacing.sm) {
             Text("Quantity")
-                .font(AppFont.bold(14))
+                .font(AppFont.display(14))
                 .foregroundColor(tc.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -145,7 +145,7 @@ struct ServingSizePickerSheet: View {
                     TextField("Qty", text: $quantityText)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.center)
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .font(AppFont.display(28))
                         .foregroundColor(tc.textPrimary)
                         .frame(width: 100)
                         .onChange(of: quantityText) { _, newValue in
@@ -183,7 +183,7 @@ struct ServingSizePickerSheet: View {
         VStack(spacing: DesignSystem.Spacing.sm) {
             HStack {
                 Text("Nutrition Preview")
-                    .font(AppFont.bold(14))
+                    .font(AppFont.display(14))
                     .foregroundColor(tc.textSecondary)
                 Spacer()
                 Text(quantityText.isEmpty ? "—" : "\(quantityText) \(food.unit)")
@@ -203,7 +203,7 @@ struct ServingSizePickerSheet: View {
     private func nutritionCell(label: String, value: String, unit: String, color: Color) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(AppFont.bold(20))
+                .font(AppFont.display(20))
                 .foregroundColor(color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
