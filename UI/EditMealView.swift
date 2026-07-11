@@ -85,7 +85,7 @@ struct EditMealView: View {
                     VStack(spacing: DesignSystem.Spacing.md) {
                         HStack {
                             Text("Nutrition Info")
-                                .font(AppFont.bold(18))
+                                .font(AppFont.display(18))
                                 .foregroundColor(tc.textPrimary)
                             Spacer()
                         }
@@ -199,17 +199,16 @@ struct EditMealView: View {
         VStack(spacing: DesignSystem.Spacing.sm) {
             ZStack {
                 AdaptiveCardShapeStyle()
-                    .fill(DesignSystem.Colors.adaptiveGradientFrom(tc.primary))
+                    .fill(tc.primary.opacity(0.12))
                     .frame(width: DesignSystem.Sizes.thumbnailLarge, height: DesignSystem.Sizes.thumbnailLarge)
-                    .overlay(AdaptiveCardShapeStyle().stroke(tc.primary.adjustedBrightness(-0.2), lineWidth: 2))
 
                 Image(systemName: "pencil.circle.fill")
                     .font(AppFont.regular(40))
-                    .foregroundColor(.white)
+                    .foregroundColor(tc.primary)
             }
 
             Text("Edit Meal")
-                .font(AppFont.bold(24))
+                .font(AppFont.display(24))
                 .foregroundColor(tc.textPrimary)
 
             Text("Update the details for this entry")
@@ -224,7 +223,7 @@ struct EditMealView: View {
     private var photoCaptureSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
             Text("Photo (Optional)")
-                .font(AppFont.bold(DesignSystem.FontSizes.footnote))
+                .font(AppFont.display(DesignSystem.FontSizes.footnote))
                 .foregroundColor(tc.textSecondary)
 
             Button {
@@ -309,7 +308,7 @@ struct EditMealView: View {
                     .foregroundColor(tc.textSecondary)
 
                 Text(title)
-                    .font(AppFont.bold(DesignSystem.FontSizes.footnote))
+                    .font(AppFont.display(DesignSystem.FontSizes.footnote))
                     .foregroundColor(tc.textSecondary)
 
                 if let errorMessage = errorMessage {
@@ -320,7 +319,7 @@ struct EditMealView: View {
             }
 
             TextField(placeholder, text: text)
-                .font(.system(size: DesignSystem.FontSizes.body, weight: .regular))
+                .font(AppFont.regular(DesignSystem.FontSizes.body))
                 .padding(DesignSystem.Spacing.md)
                 .adaptiveCard(borderColor: errorMessage != nil ? DesignSystem.Colors.danger : tc.primary.opacity(0.3), fillColor: tc.cardBackground)
         }
@@ -340,14 +339,13 @@ struct EditMealView: View {
             HStack(spacing: DesignSystem.Spacing.md) {
                 // Icon
                 ZStack {
-                    AdaptivePillShapeStyle()
-                        .fill(DesignSystem.Colors.adaptiveGradientFrom(iconColor))
+                    AdaptiveCardShapeStyle()
+                        .fill(iconColor.opacity(0.12))
                         .frame(width: DesignSystem.Sizes.iconCircle, height: DesignSystem.Sizes.iconCircle)
-                        .overlay(AdaptivePillShapeStyle().stroke(iconColor.adjustedBrightness(-0.2), lineWidth: 2))
 
                     Image(systemName: icon)
                         .font(AppFont.bold(18))
-                        .foregroundColor(.white)
+                        .foregroundColor(iconColor)
                 }
 
                 // Title
@@ -361,7 +359,7 @@ struct EditMealView: View {
                 // Input field
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     TextField(placeholder, text: text)
-                        .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
+                        .font(AppFont.bold(DesignSystem.FontSizes.headline))
                         #if os(iOS)
                         .keyboardType(.decimalPad)
                         #endif
@@ -393,7 +391,7 @@ struct EditMealView: View {
             HStack {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                     Text("Toxin Score")
-                        .font(AppFont.bold(16))
+                        .font(AppFont.display(16))
                         .foregroundColor(tc.textPrimary)
 
                     Text("Lower is better (0-100)")
@@ -404,7 +402,7 @@ struct EditMealView: View {
                 Spacer()
 
                 Text("\(Int(toxinScore))")
-                    .font(AppFont.bold(24))
+                    .font(AppFont.display(24))
                     .foregroundColor(toxinScoreColor)
             }
 

@@ -150,7 +150,7 @@ struct MealBuilderView: View {
 
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                 Text("Meal Photo")
-                    .font(AppFont.bold(14))
+                    .font(AppFont.display(14))
                     .foregroundColor(tc.textSecondary)
                 Text("Optional — shows as thumbnail in My Meals")
                     .font(AppFont.regular(12))
@@ -175,12 +175,12 @@ struct MealBuilderView: View {
     private var nameField: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
             Text("Meal Name")
-                .font(AppFont.bold(14))
+                .font(AppFont.display(14))
                 .foregroundColor(tc.textSecondary)
 
             TextField("e.g. Pre-Workout Snack", text: $mealName)
                 .focused($nameFieldFocused)
-                .font(.system(size: DesignSystem.FontSizes.body, weight: .medium))
+                .font(AppFont.regular(DesignSystem.FontSizes.body))
                 .foregroundColor(tc.textPrimary)
                 .padding(DesignSystem.Spacing.md)
                 .adaptiveCard(borderColor: tc.primary.opacity(0.15), fillColor: tc.cardBackground)
@@ -195,7 +195,7 @@ struct MealBuilderView: View {
             VStack(spacing: DesignSystem.Spacing.sm) {
                 HStack {
                     Text("Foods")
-                        .font(AppFont.bold(14))
+                        .font(AppFont.display(14))
                         .foregroundColor(tc.textSecondary)
                     Spacer()
                     Text("\(components.count) item\(components.count == 1 ? "" : "s")")
@@ -213,13 +213,12 @@ struct MealBuilderView: View {
     private func componentRow(component: SavedMealComponent, index: Int) -> some View {
         HStack(spacing: DesignSystem.Spacing.md) {
             ZStack {
-                AdaptivePillShapeStyle()
-                    .fill(DesignSystem.Colors.adaptiveGradientFrom(tc.primary))
+                AdaptiveCardShapeStyle()
+                    .fill(tc.primary.opacity(0.12))
                     .frame(width: 36, height: 36)
-                    .overlay(AdaptivePillShapeStyle().stroke(tc.primary.adjustedBrightness(-0.2), lineWidth: 2))
                 Image(systemName: "fork.knife")
                     .font(AppFont.bold(14))
-                    .foregroundColor(.white)
+                    .foregroundColor(tc.primary)
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -278,7 +277,7 @@ struct MealBuilderView: View {
         VStack(spacing: DesignSystem.Spacing.sm) {
             HStack {
                 Text("Meal Total")
-                    .font(AppFont.bold(14))
+                    .font(AppFont.display(14))
                     .foregroundColor(tc.textSecondary)
                 Spacer()
             }
@@ -294,7 +293,7 @@ struct MealBuilderView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Meal Purity Score")
-                        .font(AppFont.bold(14))
+                        .font(AppFont.display(14))
                         .foregroundColor(tc.textSecondary)
                     Text("Calorie-weighted average")
                         .font(AppFont.regular(12))
@@ -302,7 +301,7 @@ struct MealBuilderView: View {
                 }
                 Spacer()
                 Text("\(mealPurityScore)")
-                    .font(AppFont.bold(22))
+                    .font(AppFont.display(22))
                     .foregroundColor(purityColor)
                 Text("/ 100")
                     .font(AppFont.regular(12))
@@ -315,7 +314,7 @@ struct MealBuilderView: View {
     private func macroChip(value: String, label: String, color: Color) -> some View {
         VStack(spacing: 3) {
             Text(value)
-                .font(AppFont.bold(16))
+                .font(AppFont.display(16))
                 .foregroundColor(color)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
