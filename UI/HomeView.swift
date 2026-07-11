@@ -1707,7 +1707,7 @@ struct HomeView: View {
 
     /// RPG mode hero card: flat card with icon pills
     private var rpgHeroCard: some View {
-        AdaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground) {
+        AdaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground, isSelected: true) {  // R6c: preserved implicit-selection (review intent later)
             VStack(spacing: 14) {
                 if let summary = viewModel.summary {
                     HStack(spacing: 12) {
@@ -1800,7 +1800,7 @@ struct HomeView: View {
     private var nutritionTopRow: some View {
         HStack(spacing: 12) {
             // Calorie ring (2.4fr)
-            AdaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground) {
+            AdaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground, isSelected: true) {  // R6c: preserved implicit-selection (review intent later)
                 PixelCalorieRing(
                     progress: viewModel.calorieProgressPercentage,
                     calories: viewModel.summary?.totalCalories ?? 0,
@@ -1814,7 +1814,7 @@ struct HomeView: View {
             .frame(height: 240)
 
             // Purity bar (1fr)
-            AdaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground) {
+            AdaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground, isSelected: true) {  // R6c: preserved implicit-selection (review intent later)
                 PurityVerticalBar(
                     score: viewModel.summary?.totalToxinScore ?? 0,
                     borderColor: tc.primary,
@@ -1869,9 +1869,9 @@ struct HomeView: View {
 
     /// RPG mode macro card with icon pill and progress bar
     private func rpgMacroCard(icon: String, label: String, value: String, progress: Double, progressColor: Color, iconGradient: LinearGradient) -> some View {
-        AdaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground) {
+        AdaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground, isSelected: true) {  // R6c: preserved implicit-selection (review intent later)
             VStack(spacing: 0) {
-                AdaptivePill(borderColor: tc.primary, fillGradient: iconGradient) {
+                AdaptivePill(borderColor: tc.primary, fillGradient: iconGradient, isSelected: true) {  // R6c: preserved implicit-selection (review intent later)
                     Image(systemName: icon)
                         .font(.system(size: 14))
                         .foregroundColor(.white)
@@ -2103,7 +2103,9 @@ struct HomeView: View {
 
                 AdaptivePill(
                     borderColor: xpBadgeBorder,
-                    fillGradient: quest.isCompleted ? xpBadgeDoneGradient : xpBadgeGradient
+                    fillGradient: quest.isCompleted ? xpBadgeDoneGradient : xpBadgeGradient,
+                    // R6c: preserve retired heuristic — xpBadgeBorder == accent under Erewhon
+                    isSelected: isClean
                 ) {
                     HStack(spacing: 4) {
                         Image(systemName: "star.fill")

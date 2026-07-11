@@ -124,7 +124,8 @@ struct FoodDatabaseView: View {
                             .foregroundStyle(isSelected ? DesignSystem.Erewhon.onAccent : tc.textSecondary)
                             .adaptivePill(
                                 borderColor: isSelected ? tc.primary : DesignSystem.Erewhon.line,
-                                fillColor: isSelected ? tc.primary : tc.cardBackground
+                                fillColor: isSelected ? tc.primary : tc.cardBackground,
+                                isSelected: isSelected
                             )
                     }
                     .buttonStyle(.plain)
@@ -184,7 +185,7 @@ struct FoodDatabaseView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, DesignSystem.Spacing.lg)
                     .padding(.vertical, DesignSystem.Spacing.md)
-                    .adaptivePill(borderColor: tc.primary, fillColor: tc.primary)
+                    .adaptivePill(borderColor: tc.primary, fillColor: tc.primary, isSelected: true)  // R6c: preserved implicit-selection (review intent later)
                     .padding(.bottom, DesignSystem.Spacing.xl)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -226,7 +227,7 @@ private struct AllFoodsTab: View {
                             .foregroundColor(DesignSystem.Erewhon.onAccent)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DesignSystem.Spacing.md)
-                            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary)
+                            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary, isSelected: true)  // R6c: preserved implicit-selection (review intent later)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .padding(.horizontal, DesignSystem.Spacing.lg)
@@ -246,7 +247,7 @@ private struct AllFoodsTab: View {
                             .foregroundColor(DesignSystem.Erewhon.onAccent)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DesignSystem.Spacing.md)
-                            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary)
+                            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary, isSelected: true)  // R6c: preserved implicit-selection (review intent later)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .listRowBackground(Color.clear)
@@ -304,7 +305,7 @@ private struct MyFoodsTab: View {
                             .foregroundColor(DesignSystem.Erewhon.onAccent)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DesignSystem.Spacing.md)
-                            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary)
+                            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary, isSelected: true)  // R6c: preserved implicit-selection (review intent later)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .listRowBackground(Color.clear)
@@ -378,7 +379,7 @@ private struct MyMealsTab: View {
                             .foregroundColor(DesignSystem.Erewhon.onAccent)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DesignSystem.Spacing.md)
-                            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary)
+                            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary, isSelected: true)  // R6c: preserved implicit-selection (review intent later)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .listRowBackground(Color.clear)
@@ -493,7 +494,7 @@ private struct MyRecipesTab: View {
                             .foregroundColor(DesignSystem.Erewhon.onAccent)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(DesignSystem.Spacing.md)
-                            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary)
+                            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary, isSelected: true)  // R6c: preserved implicit-selection (review intent later)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .listRowBackground(Color.clear)

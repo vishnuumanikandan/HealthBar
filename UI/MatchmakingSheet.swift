@@ -164,7 +164,8 @@ struct MatchmakingSheet: View {
                 .padding(.vertical, DesignSystem.Spacing.sm)
                 // R2 selection convention: accent fill selected / surface + hairline unselected.
                 .adaptivePill(borderColor: isSelected ? tc.primary : DesignSystem.Erewhon.line,
-                              fillColor: isSelected ? tc.primary : tc.cardBackground)
+                              fillColor: isSelected ? tc.primary : tc.cardBackground,
+                              isSelected: isSelected)
         }
         .buttonStyle(.plain)
         .disabled(full)

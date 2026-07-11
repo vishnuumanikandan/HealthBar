@@ -120,7 +120,8 @@ struct MiniFoodPickerView: View {
                 .foregroundStyle(isSelected ? Color.white : tc.textPrimary)
                 .adaptivePill(
                     borderColor: isSelected ? tc.primary : tc.textTertiary.opacity(0.4),
-                    fillColor: isSelected ? tc.primary : tc.cardBackground
+                    fillColor: isSelected ? tc.primary : tc.cardBackground,
+                    isSelected: isSelected
                 )
         }
         .buttonStyle(.plain)

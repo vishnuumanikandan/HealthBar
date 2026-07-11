@@ -342,7 +342,7 @@ struct RecipeBuilderView: View {
                     .foregroundColor(tc.textPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(DesignSystem.Spacing.md)
-                    .adaptiveCard(borderColor: tc.primary, fillColor: .clear)
+                    .adaptiveCard(borderColor: tc.primary, fillColor: .clear, isSelected: true)  // R6c: preserved implicit-selection (review intent later)
                 }
                 .buttonStyle(PlainButtonStyle())
 
@@ -361,7 +361,7 @@ struct RecipeBuilderView: View {
                     .foregroundColor(showingCustomIngredientForm ? tc.textSecondary : tc.textPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(DesignSystem.Spacing.md)
-                    .adaptiveCard(borderColor: showingCustomIngredientForm ? tc.primary.opacity(0.3) : tc.primary, fillColor: .clear)
+                    .adaptiveCard(borderColor: showingCustomIngredientForm ? tc.primary.opacity(0.3) : tc.primary, fillColor: .clear, isSelected: !(showingCustomIngredientForm))
                 }
                 .buttonStyle(PlainButtonStyle())
             }
@@ -621,7 +621,8 @@ struct RecipeBuilderView: View {
             .padding(DesignSystem.Spacing.md)
             .adaptiveCard(
                 borderColor: savedAsFood ? tc.textTertiary : tc.primary,
-                fillColor: savedAsFood ? tc.textTertiary : tc.primary
+                fillColor: savedAsFood ? tc.textTertiary : tc.primary,
+                isSelected: !(savedAsFood)
             )
         }
         .buttonStyle(PlainButtonStyle())

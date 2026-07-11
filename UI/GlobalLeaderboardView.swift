@@ -151,7 +151,9 @@ struct GlobalLeaderboardView: View {
         .adaptiveCard(
             borderColor: metal?.opacity(0.85) ?? (mine ? tc.primary : tc.primary.opacity(0.3)),
             fillColor: metal.map { tc.cardBackground.mix(with: $0, by: 0.16) }
-                ?? (mine ? tc.cardBackground.mix(with: tc.primary, by: 0.10) : tc.cardBackground)
+                ?? (mine ? tc.cardBackground.mix(with: tc.primary, by: 0.10) : tc.cardBackground),
+            // R6c: preserve retired heuristic — accent border only on own row without a rank-metal
+            isSelected: metal == nil && mine
         )
         .overlay {
             if let metal, settings.isCleanUI {
@@ -226,7 +228,8 @@ struct GlobalLeaderboardView: View {
             .padding(DesignSystem.Spacing.md)
             .adaptiveCard(
                 borderColor: tc.primary,
-                fillColor: tc.cardBackground.mix(with: tc.primary, by: 0.10)
+                fillColor: tc.cardBackground.mix(with: tc.primary, by: 0.10),
+                isSelected: true  // R6c: preserved implicit-selection (review intent later)
             )
         }
     }

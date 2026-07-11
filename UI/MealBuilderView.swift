@@ -266,7 +266,7 @@ struct MealBuilderView: View {
             .foregroundColor(tc.primary)
             .frame(maxWidth: .infinity)
             .padding(DesignSystem.Spacing.md)
-            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primaryBackground)
+            .adaptiveCard(borderColor: tc.primary, fillColor: tc.primaryBackground, isSelected: true)  // R6c: preserved implicit-selection (review intent later)
         }
         .buttonStyle(PlainButtonStyle())
     }

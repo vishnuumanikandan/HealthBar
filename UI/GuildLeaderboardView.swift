@@ -174,7 +174,9 @@ struct GuildLeaderboardView: View {
             fillColor: metal.map { tc.cardBackground.mix(with: $0, by: 0.16) }
                 ?? (entry.isCurrentUser
                     ? tc.cardBackground.mix(with: tc.primary, by: 0.10)
-                    : tc.cardBackground)
+                    : tc.cardBackground),
+            // R6c: preserve retired heuristic — accent border only on own row without a rank-metal
+            isSelected: metal == nil && entry.isCurrentUser
         )
         .overlay {
             if let metal, settings.isCleanUI {

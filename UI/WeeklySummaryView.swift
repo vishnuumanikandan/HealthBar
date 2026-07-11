@@ -320,7 +320,7 @@ struct WeeklySummaryView: View {
     // MARK: - Pixel Bar Chart
 
     private var pixelBarChart: some View {
-        AdaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground) {
+        AdaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground, isSelected: true) {  // R6c: preserved implicit-selection (review intent later)
             VStack(spacing: 10) {
                 // Goal line text
                 Text(goalText)

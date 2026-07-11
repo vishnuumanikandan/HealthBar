@@ -235,7 +235,8 @@ struct ArenaView: View {
         .frame(maxWidth: .infinity)
         .adaptiveCard(
             borderColor: row.state == .current ? tc.primary : tc.primary.opacity(0.15),
-            fillColor: tc.cardBackground
+            fillColor: tc.cardBackground,
+            isSelected: row.state == .current
         )
         .opacity(row.state == .upcoming ? 0.5 : 1.0)
     }
