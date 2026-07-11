@@ -279,7 +279,7 @@ struct LeaderboardSection: View {
         let metal = metalColor(position, hasData: entry.hasData)
         let row = HStack(alignment: .center, spacing: 13) {
             rankChip(position, hasData: entry.hasData, metal: metal)
-            avatar(initial: initial(for: entry), tint: entry.hasData ? erewhonRankMetal(forRR: entry.rr) : nil)
+            avatar(initial: initial(for: entry), tint: entry.hasData ? DesignSystem.Erewhon.rankMetal(forRR: entry.rr) : nil)
             who(entry)
             Spacer(minLength: DesignSystem.Spacing.sm)
             adherenceColumn(entry)
@@ -445,19 +445,5 @@ struct LeaderboardSection: View {
                 .foregroundColor(DesignSystem.Colors.danger)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-/// Rank-tier avatar metal from `rr`, using the Erewhon rank-metal tokens (never hardcoded
-/// hexes). `nil` → neutral fill. Only four metal tokens exist pre-R5/R6, so the top tiers
-/// share `rankGold`; this is a decorative wash, not a precise per-rank ladder colour.
-fileprivate func erewhonRankMetal(forRR rr: Int?) -> Color? {
-    guard let rr else { return nil }
-    switch Rank.getRank(from: rr) {
-    case .stone: return nil
-    case .copper: return DesignSystem.Erewhon.rankBronze
-    case .iron: return DesignSystem.Erewhon.rankIron
-    case .gold, .rankVII, .rankVIII, .rankIX: return DesignSystem.Erewhon.rankGold
-    case .platinum, .diamond: return DesignSystem.Erewhon.rankSilver
     }
 }

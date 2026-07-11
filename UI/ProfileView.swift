@@ -36,9 +36,6 @@ struct ProfileView: View {
     /// Show account management screen
     @State private var showingAccount = false
 
-    /// Show the guild screen (Guilds Prompt G1)
-    @State private var showingGuild = false
-
     /// Tools (calculators) — relocated off the tab bar into this Profile entry when
     /// Battle took the center tab slot (D1a).
     @State private var showingTools = false
@@ -126,13 +123,6 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showingTools) {
                 ToolsView(toolsViewModel: toolsViewModel)
-            }
-            .sheet(isPresented: $showingGuild) {
-                GuildView(
-                    coordinator: coordinator,
-                    authService: authService,
-                    onCreateAccount: onCreateAccount
-                )
             }
             .sheet(item: $selectedBadge) { badge in
                 BadgeDetailSheet(
@@ -507,15 +497,6 @@ struct ProfileView: View {
                     subtitle: "Update your goals and preferences",
                     iconColor: tc.primary,
                     action: { showingOnboarding = true }
-                )
-
-                // Guild — create or join a guild (shows a sign-in card for guests)
-                settingButton(
-                    icon: "person.3.fill",
-                    title: "Guild",
-                    subtitle: "Create or join a guild",
-                    iconColor: tc.primary,
-                    action: { showingGuild = true }
                 )
 
                 // Account button — hidden for guest users (requires a real account)
