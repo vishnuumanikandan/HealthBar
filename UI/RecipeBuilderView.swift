@@ -175,7 +175,7 @@ struct RecipeBuilderView: View {
 
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                 Text("Recipe Photo")
-                    .font(AppFont.bold(DesignSystem.FontSizes.footnote))
+                    .font(AppFont.display(DesignSystem.FontSizes.footnote))
                     .foregroundColor(tc.textSecondary)
                 Text("Optional — shows as thumbnail in My Recipes")
                     .font(AppFont.regular(DesignSystem.FontSizes.caption))
@@ -202,11 +202,11 @@ struct RecipeBuilderView: View {
             // Name
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                 Text("Recipe Name")
-                    .font(AppFont.bold(DesignSystem.FontSizes.footnote))
+                    .font(AppFont.display(DesignSystem.FontSizes.footnote))
                     .foregroundColor(tc.textSecondary)
                 TextField("e.g. Chicken Fried Rice", text: $recipeName)
                     .focused($nameFieldFocused)
-                    .font(.system(size: DesignSystem.FontSizes.body, weight: .medium))
+                    .font(AppFont.regular(DesignSystem.FontSizes.body))
                     .foregroundColor(tc.textPrimary)
                     .padding(DesignSystem.Spacing.md)
                     .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
@@ -216,7 +216,7 @@ struct RecipeBuilderView: View {
             HStack(spacing: DesignSystem.Spacing.md) {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                     Text("Servings this makes")
-                        .font(AppFont.bold(DesignSystem.FontSizes.footnote))
+                        .font(AppFont.display(DesignSystem.FontSizes.footnote))
                         .foregroundColor(tc.textSecondary)
                     HStack {
                         Button {
@@ -233,7 +233,7 @@ struct RecipeBuilderView: View {
                         TextField("1", text: $yieldText)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.center)
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .font(AppFont.display(22))
                             .foregroundColor(tc.textPrimary)
                             .frame(width: 60)
 
@@ -267,7 +267,7 @@ struct RecipeBuilderView: View {
             VStack(spacing: DesignSystem.Spacing.sm) {
                 HStack {
                     Text("Ingredients")
-                        .font(AppFont.bold(DesignSystem.FontSizes.footnote))
+                        .font(AppFont.display(DesignSystem.FontSizes.footnote))
                         .foregroundColor(tc.textSecondary)
                     Spacer()
                     Text("\(ingredients.count)")
@@ -285,13 +285,12 @@ struct RecipeBuilderView: View {
     private func ingredientRow(ingredient: SavedMealComponent, index: Int) -> some View {
         HStack(spacing: DesignSystem.Spacing.md) {
             ZStack {
-                AdaptivePillShapeStyle()
-                    .fill(DesignSystem.Colors.adaptiveGradientFrom(tc.primaryDark))
+                AdaptiveCardShapeStyle()
+                    .fill(tc.primaryDark.opacity(0.12))
                     .frame(width: 36, height: 36)
-                    .overlay(AdaptivePillShapeStyle().stroke(tc.primaryDark.adjustedBrightness(-0.2), lineWidth: 2))
                 Image(systemName: "leaf.fill")
                     .font(AppFont.bold(14))
-                    .foregroundColor(.white)
+                    .foregroundColor(tc.primaryDark)
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -378,7 +377,7 @@ struct RecipeBuilderView: View {
     private var customIngredientForm: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
             Text("New Custom Ingredient")
-                .font(AppFont.bold(DesignSystem.FontSizes.footnote))
+                .font(AppFont.display(DesignSystem.FontSizes.footnote))
                 .foregroundColor(tc.textSecondary)
 
             // Name field
@@ -387,7 +386,7 @@ struct RecipeBuilderView: View {
                     .font(AppFont.regular(DesignSystem.FontSizes.caption))
                     .foregroundColor(tc.textTertiary)
                 TextField("e.g. Almond Milk", text: $customName)
-                    .font(.system(size: DesignSystem.FontSizes.callout))
+                    .font(AppFont.regular(DesignSystem.FontSizes.callout))
                     .foregroundColor(tc.textPrimary)
                     .padding(DesignSystem.Spacing.md)
                     .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
@@ -411,7 +410,7 @@ struct RecipeBuilderView: View {
                     .font(AppFont.regular(DesignSystem.FontSizes.caption))
                     .foregroundColor(tc.textTertiary)
                 TextField("e.g. 1 cup, 100g, 1 scoop", text: $customServingSize)
-                    .font(.system(size: DesignSystem.FontSizes.callout))
+                    .font(AppFont.regular(DesignSystem.FontSizes.callout))
                     .foregroundColor(tc.textPrimary)
                     .padding(DesignSystem.Spacing.md)
                     .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
@@ -452,7 +451,7 @@ struct RecipeBuilderView: View {
                 .foregroundColor(tc.textTertiary)
             TextField(placeholder, text: text)
                 .keyboardType(.decimalPad)
-                .font(.system(size: DesignSystem.FontSizes.callout))
+                .font(AppFont.regular(DesignSystem.FontSizes.callout))
                 .foregroundColor(tc.textPrimary)
                 .padding(DesignSystem.Spacing.md)
                 .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
@@ -523,7 +522,7 @@ struct RecipeBuilderView: View {
             // Total
             VStack(spacing: DesignSystem.Spacing.xs) {
                 Text("Whole Recipe")
-                    .font(AppFont.bold(DesignSystem.FontSizes.footnote))
+                    .font(AppFont.display(DesignSystem.FontSizes.footnote))
                     .foregroundColor(tc.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -541,7 +540,7 @@ struct RecipeBuilderView: View {
             VStack(spacing: DesignSystem.Spacing.xs) {
                 HStack {
                     Text("Per Serving")
-                        .font(AppFont.bold(DesignSystem.FontSizes.footnote))
+                        .font(AppFont.display(DesignSystem.FontSizes.footnote))
                         .foregroundColor(tc.textSecondary)
                     Spacer()
                     Text("÷ \(yieldValue) servings")
@@ -563,7 +562,7 @@ struct RecipeBuilderView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Recipe Purity Score")
-                        .font(AppFont.bold(DesignSystem.FontSizes.footnote))
+                        .font(AppFont.display(DesignSystem.FontSizes.footnote))
                         .foregroundColor(tc.textSecondary)
                     Text("Calorie-weighted average across all ingredients")
                         .font(AppFont.regular(DesignSystem.FontSizes.caption))
@@ -571,7 +570,7 @@ struct RecipeBuilderView: View {
                 }
                 Spacer()
                 Text("\(recipePurityScore)")
-                    .font(AppFont.bold(DesignSystem.FontSizes.title2))
+                    .font(AppFont.display(DesignSystem.FontSizes.title2))
                     .foregroundColor(purityColor)
                 Text("/ 100")
                     .font(AppFont.regular(DesignSystem.FontSizes.caption))
@@ -585,7 +584,7 @@ struct RecipeBuilderView: View {
     private func macroCell(label: String, value: String, color: Color) -> some View {
         VStack(spacing: 3) {
             Text(value)
-                .font(AppFont.bold(DesignSystem.FontSizes.callout))
+                .font(AppFont.display(DesignSystem.FontSizes.callout))
                 .foregroundColor(color)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
@@ -617,15 +616,12 @@ struct RecipeBuilderView: View {
                     }
                 }
             }
-            .foregroundColor(.white)
+            .foregroundColor(DesignSystem.Erewhon.onAccent)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(DesignSystem.Spacing.md)
             .adaptiveCard(
-                borderColor: savedAsFood ? tc.textTertiary : tc.buttonBorder,
-                fillColor: savedAsFood ? tc.textTertiary : .clear,
-                fillGradient: savedAsFood
-                    ? nil
-                    : DesignSystem.Colors.adaptiveGradient(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)
+                borderColor: savedAsFood ? tc.textTertiary : tc.primary,
+                fillColor: savedAsFood ? tc.textTertiary : tc.primary
             )
         }
         .buttonStyle(PlainButtonStyle())

@@ -100,7 +100,7 @@ struct AddCustomFoodView: View {
             TextField("e.g. Mom's Pasta, Protein Smoothie", text: $name)
         } header: {
             Text("Food Name")
-                .font(AppFont.bold(14))
+                .font(AppFont.display(14))
         }
     }
 
@@ -128,7 +128,7 @@ struct AddCustomFoodView: View {
             }
         } header: {
             Text("Nutrition Per Serving")
-                .font(AppFont.bold(14))
+                .font(AppFont.display(14))
         }
     }
 
@@ -149,7 +149,7 @@ struct AddCustomFoodView: View {
             }
         } header: {
             Text("Serving Size")
-                .font(AppFont.bold(14))
+                .font(AppFont.display(14))
         } footer: {
             Text("The label describes one serving. The amount and unit are used to scale nutrition when you log different quantities.")
                 .font(AppFont.regular(12))
@@ -175,7 +175,7 @@ struct AddCustomFoodView: View {
             }
         } header: {
             Text("Advanced (Optional)")
-                .font(AppFont.bold(14))
+                .font(AppFont.display(14))
         }
     }
 
