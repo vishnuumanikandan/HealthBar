@@ -90,6 +90,18 @@ struct BattleView: View {
                 }
             }
         }
+        // R7a §4: the rank-up moment, over the whole tab. Deferred (never dropped) while
+        // anything is covering the Battle tab — see `canPresentRankUp`.
+        .overlay {
+            if let rankUp = viewModel.pendingRankUp, canPresentRankUp {
+                RankUpOverlay(from: rankUp.from, to: rankUp.to) {
+                    viewModel.dismissRankUp()
+                }
+                // The stored RR advances the moment it is SHOWN, not on dismiss: a kill
+                // mid-overlay must not replay forever, a kill before it must replay.
+                .onAppear { viewModel.markRankUpPresented() }
+            }
+        }
         .task {
             // Guests never load; load once per appearance (pull-to-refresh re-loads).
             guard !authService.isGuest else { return }
@@ -147,6 +159,19 @@ struct BattleView: View {
                 viewModel.toastMessage = nil
             }
         }
+    }
+
+    /// R7a §4 presentation precedence: the celebration only appears when the Battle tab is
+    /// frontmost with nothing covering it. Every sheet, dialog and pushed destination wins
+    /// first — the duel-resolution recap sheet above all. It is DEFERRED, not dropped:
+    /// `pendingRankUp` survives in the view model until it becomes presentable.
+    private var canPresentRankUp: Bool {
+        DuelUIState.shared.pendingResolutions.isEmpty
+            && !showingChallenge
+            && !showingMatchmaking
+            && !showMacroQTE
+            && duelToForfeit == nil
+            && arenaDuelId == nil
     }
 
     // MARK: - Guest State
@@ -214,10 +239,10 @@ struct BattleView: View {
         .contentMargins(.bottom, DesignSystem.Erewhon.tabBarContentHeight + 12, for: .scrollContent)
     }
 
-    // MARK: - Arena head (D3)
+    // MARK: - Arena head (D3) + rank block (R7a §3)
 
     /// Mockup `.arena-head`: eyebrow cap + display title. No season/subtitle — those
-    /// mockup stats don't exist in the app (D3).
+    /// mockup stats don't exist in the app (D3). R7a hangs the rank block beneath it.
     private var arenaHead: some View {
         VStack(spacing: 10) {
             Text("RANKED DUELS")
@@ -227,9 +252,85 @@ struct BattleView: View {
             Text("The Arena")
                 .font(AppFont.display(38))
                 .foregroundColor(tc.textPrimary)
+            rankBlock
+                .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 6)
+    }
+
+    /// R7a §3: my rank — plaque, tier name, RR figure, and progress within the CURRENT tier.
+    /// `myRR == nil` (the progress fetch failed) renders an em-dash skeleton with an empty
+    /// bar and no captions: a rank is never invented from nil, and no plaque is shown.
+    @ViewBuilder
+    private var rankBlock: some View {
+        if let rr = viewModel.myRR {
+            let progress = BattleViewModel.rankProgress(rr: rr)
+            VStack(spacing: 6) {
+                HStack(spacing: 12) {
+                    RankPlaque(rank: progress.tier.rank, size: 44)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(progress.tier.displayName.uppercased())
+                            .font(AppFont.display(26))
+                            .foregroundColor(tc.textPrimary)
+                        Text(progress.caption)
+                            .font(AppFont.regular(11))
+                            .foregroundColor(tc.textSecondary)
+                    }
+                    Spacer(minLength: 8)
+                    rrFigure("\(rr)")
+                }
+                rankTrack(fraction: progress.fraction)
+                HStack(spacing: 0) {
+                    Text("\(progress.floor)")
+                    Spacer()
+                    // No ceiling at the summit — there is nothing above it.
+                    if !progress.isTopRank { Text("\(progress.ceiling)") }
+                }
+                .font(AppFont.regular(10))
+                .foregroundColor(tc.textTertiary)
+            }
+        } else {
+            VStack(spacing: 6) {
+                HStack(spacing: 12) {
+                    Text("—")
+                        .font(AppFont.display(26))
+                        .foregroundColor(tc.textSecondary)
+                    Spacer(minLength: 8)
+                    rrFigure("—")
+                }
+                rankTrack(fraction: 0)
+            }
+        }
+    }
+
+    /// The right-aligned RR figure with its unit.
+    private func rrFigure(_ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 3) {
+            Text(value)
+                .font(AppFont.display(20))
+                .foregroundColor(tc.textPrimary)
+            Text("RR")
+                .font(AppFont.regular(11))
+                .foregroundColor(tc.textSecondary)
+        }
+    }
+
+    /// Sunk track + hairline, live-accent capsule fill. Animates on value change (the
+    /// ArenaView tug-of-war precedent).
+    private func rankTrack(fraction: Double) -> some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(tc.segBackground)
+                    .overlay(Capsule().stroke(DesignSystem.Erewhon.line, lineWidth: 1))
+                Capsule()
+                    .fill(tc.primary)
+                    .frame(width: max(0, geo.size.width * fraction))
+            }
+        }
+        .frame(height: 8)
+        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: fraction)
     }
 
     // MARK: - Featured versus card (D4)
@@ -815,6 +916,105 @@ struct BattleView: View {
             get: { DuelUIState.shared.pendingResolutions.first },
             set: { if $0 == nil { DuelUIState.shared.dequeueResolution() } }
         )
+    }
+}
+
+// MARK: - R7a §4: rank-up moment
+
+/// The rank-up celebration: the DESTINATION tier's plaque, two accent rings expanding out
+/// of it, "RANK UP", and the `from → to` caption. Auto-dismisses; a tap anywhere dismisses.
+///
+/// Reduce Motion renders the settled frame outright — no spring, no expansion, no rise —
+/// with the dismissal paths unchanged.
+///
+/// There is no demotion counterpart, by design. The ladder only celebrates upward.
+private struct RankUpOverlay: View {
+
+    let from: RankTier
+    let to: RankTier
+    let onDismiss: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
+    /// Motion constants (R7a §4).
+    private static let plaqueSize: CGFloat = 54
+    private static let plaqueFromScale: CGFloat = 0.8
+    private static let ringDuration: Double = 0.6
+    private static let titleRise: CGFloat = 8
+    private static let autoDismissAfter: Double = 2.5
+    /// Ring inset out from the plaque box, and its settled opacity.
+    private static let rings: [(inset: CGFloat, opacity: Double)] = [(10, 0.35), (18, 0.15)]
+
+    /// The scrim is dark in BOTH families, so the text on it is light in both — `tc.textPrimary`
+    /// would be near-black in Erewhon Light and vanish. Values from the mock's rank-up frame.
+    private static let onScrim = Color(hex: "#EDEFF3")
+    private static let onScrimSecondary = Color(hex: "#B6BCC6")
+
+    /// Drives every entrance property at once. Under Reduce Motion each animation below
+    /// resolves to `nil`, so flipping this snaps straight to the settled frame.
+    @State private var settled = false
+
+    /// The plaque springs; the rings and the title ease. Both are switched off entirely
+    /// under Reduce Motion — note an explicit `.animation(_:value:)` fires with or without
+    /// `withAnimation`, so the gate has to live in the animation itself, not at the call.
+    private var plaqueMotion: Animation? {
+        reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8)
+    }
+    private var entranceMotion: Animation? {
+        reduceMotion ? nil : DesignSystem.Erewhon.ease(Self.ringDuration)
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55).ignoresSafeArea()
+
+            VStack(spacing: 9) {
+                ZStack {
+                    // Two accent rings, expanding out of the plaque into their settled insets.
+                    ForEach(Array(Self.rings.enumerated()), id: \.offset) { _, ring in
+                        let diameter = Self.plaqueSize + ring.inset * 2
+                        Circle()
+                            .stroke(tc.primary, lineWidth: 1)
+                            .frame(width: diameter, height: diameter)
+                            .scaleEffect(settled ? 1 : Self.plaqueSize / diameter)
+                            .opacity(settled ? ring.opacity : 0)
+                    }
+                    .animation(entranceMotion, value: settled)
+
+                    RankPlaque(rank: to.rank, size: Self.plaqueSize)
+                        .scaleEffect(settled ? 1 : Self.plaqueFromScale)
+                        .animation(plaqueMotion, value: settled)
+                }
+
+                VStack(spacing: 5) {
+                    Text("RANK UP")
+                        .font(AppFont.display(28))
+                        .foregroundColor(Self.onScrim)
+
+                    HStack(spacing: 5) {
+                        Text(from.displayName)
+                        Text("→").foregroundColor(tc.primary)
+                        Text(to.displayName)
+                    }
+                    .font(AppFont.regular(12))
+                    .foregroundColor(Self.onScrimSecondary)
+                }
+                // Fades in with an 8pt rise, landing with the rings.
+                .opacity(settled ? 1 : 0)
+                .offset(y: settled ? 0 : Self.titleRise)
+                .animation(entranceMotion, value: settled)
+            }
+        }
+        // The scrim swallows every touch — nothing passes through to the tab beneath.
+        .contentShape(Rectangle())
+        .onTapGesture { onDismiss() }
+        .task {
+            settled = true
+            try? await Task.sleep(for: .seconds(Self.autoDismissAfter))
+            onDismiss()
+        }
     }
 }
 

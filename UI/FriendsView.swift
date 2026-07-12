@@ -356,7 +356,7 @@ struct FriendsView: View {
         case Rank.gold.rawValue: return DesignSystem.Colors.goldMid
         case Rank.platinum.rawValue: return Color(hex: "#5EEAD4")
         case Rank.diamond.rawValue: return Color(hex: "#38BDF8")
-        case Rank.rankVII.rawValue, Rank.rankVIII.rawValue, Rank.rankIX.rawValue:
+        case Rank.sentinel.rawValue, Rank.prismatic.rawValue, Rank.zenith.rawValue:
             return Color(hex: "#38BDF8") // TODO: replace placeholder styling before public launch
         case "bronze": return Color(hex: "#CD7F32") // retired pre-RR-0a legacy string
         case "silver": return Color(hex: "#9CA3AF") // retired pre-RR-0a legacy string

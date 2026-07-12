@@ -14,6 +14,7 @@
 		1111E13E2F285ECD006EF76F /* DailyGoalsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E13D2F285ECD006EF76F /* DailyGoalsViewModel.swift */; };
 		1111E1402F285EF3006EF76F /* AllQuestsCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E13F2F285EF3006EF76F /* AllQuestsCompleteView.swift */; };
 		1111E1442F285F10006EF76F /* UndoToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E1432F285F10006EF76F /* UndoToast.swift */; };
+		AACC7A022F500000000000A2 /* RankPlaque.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACC7A012F500000000000A1 /* RankPlaque.swift */; };
 		1111E1462F285F22006EF76F /* XPToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E1452F285F22006EF76F /* XPToast.swift */; };
 		1111E1892F29B0EE006EF76F /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E1882F29B0EE006EF76F /* SettingsManager.swift */; };
 		1111E18B2F29B117006EF76F /* AdvancedNutrientCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E18A2F29B117006EF76F /* AdvancedNutrientCard.swift */; };
@@ -213,6 +214,7 @@
 		1111E13D2F285ECD006EF76F /* DailyGoalsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyGoalsViewModel.swift; sourceTree = "<group>"; };
 		1111E13F2F285EF3006EF76F /* AllQuestsCompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllQuestsCompleteView.swift; sourceTree = "<group>"; };
 		1111E1432F285F10006EF76F /* UndoToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UndoToast.swift; sourceTree = "<group>"; };
+		AACC7A012F500000000000A1 /* RankPlaque.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankPlaque.swift; sourceTree = "<group>"; };
 		1111E1452F285F22006EF76F /* XPToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XPToast.swift; sourceTree = "<group>"; };
 		1111E1882F29B0EE006EF76F /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 		1111E18A2F29B117006EF76F /* AdvancedNutrientCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedNutrientCard.swift; sourceTree = "<group>"; };
@@ -607,6 +609,7 @@
 		AABB00002F282600000000A1 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				AACC7A012F500000000000A1 /* RankPlaque.swift */,
 				BEF96B5A2F88519800FB0F83 /* BadgeToast.swift */,
 				1111E1972F32DFEE006EF76F /* StreakMilestoneToast.swift */,
 				1111E1952F32DFE5006EF76F /* MealTypePill.swift */,
@@ -1000,6 +1003,7 @@
 				1111E18B2F29B117006EF76F /* AdvancedNutrientCard.swift in Sources */,
 				BEF969882F7B489800FB0F83 /* RecipeBuilderView.swift in Sources */,
 				1111E1442F285F10006EF76F /* UndoToast.swift in Sources */,
+				AACC7A022F500000000000A2 /* RankPlaque.swift in Sources */,
 				CC110AB12F300000000000B1 /* AuthService.swift in Sources */,
 				BEF9698C2F7B48AB00FB0F83 /* MiniFoodPickerView.swift in Sources */,
 				BEF969902F7B48BF00FB0F83 /* ServingSizePickerSheet.swift in Sources */,

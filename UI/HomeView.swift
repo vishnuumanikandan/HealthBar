@@ -1168,7 +1168,7 @@ struct HomeView: View {
             HStack(spacing: 0) {
                 resChip(icon: "shield", label: "Rank") {
                     Text(summary.currentRankTier.displayName)
-                        .font(AppFont.bold(17)).foregroundColor(tc.textPrimary)
+                        .font(AppFont.display(17)).foregroundColor(tc.textPrimary)
                 }
                 resDivider
                 resChip(icon: "bolt", label: "Total XP") {
