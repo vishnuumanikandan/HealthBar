@@ -642,7 +642,8 @@ struct AccountView: View {
                 content()
             }
             .padding(DesignSystem.Spacing.md)
-            .adaptiveCard(borderColor: borderColor ?? tc.primary, fillColor: tc.cardBackground)
+            // R6c: preserve retired heuristic — accent border when caller omits borderColor
+            .adaptiveCard(borderColor: borderColor ?? tc.primary, fillColor: tc.cardBackground, isSelected: borderColor == nil)
         }
     }
 
@@ -657,6 +658,6 @@ struct AccountView: View {
         }
         .padding(.horizontal, DesignSystem.Spacing.md)
         .padding(.vertical, DesignSystem.Spacing.sm)
-        .adaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground)
+        .adaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground, isSelected: true)  // R6c: preserved implicit-selection (review intent later)
     }
 }

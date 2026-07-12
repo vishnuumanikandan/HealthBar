@@ -122,7 +122,7 @@ struct AddFoodFormView: View {
                                                 .foregroundColor(DesignSystem.Erewhon.onAccent)
                                                 .padding(.horizontal, DesignSystem.Spacing.md)
                                                 .padding(.vertical, DesignSystem.Spacing.md)
-                                                .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary)
+                                                .adaptiveCard(borderColor: tc.primary, fillColor: tc.primary, isSelected: true)  // R6c: preserved implicit-selection (review intent later)
                                         }
                                     }
                                 }

@@ -479,7 +479,7 @@ struct DailyGoalsView: View {
             }
             .padding(.horizontal, DesignSystem.Spacing.lg)
             .padding(.vertical, DesignSystem.Spacing.md)
-            .adaptivePill(borderColor: tc.primary, fillColor: tc.primary)
+            .adaptivePill(borderColor: tc.primary, fillColor: tc.primary, isSelected: true)  // R6c: preserved implicit-selection (review intent later)
             .padding(.bottom, DesignSystem.Spacing.xl)
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))

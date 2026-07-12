@@ -230,7 +230,8 @@ struct ChallengeSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .adaptiveCard(
                 borderColor: isSelected ? tc.primary : tc.primary.opacity(0.2),
-                fillColor: tc.cardBackground
+                fillColor: tc.cardBackground,
+                isSelected: isSelected
             )
         }
         .buttonStyle(.plain)

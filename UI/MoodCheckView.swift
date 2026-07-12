@@ -71,7 +71,7 @@ struct MoodCheckView: View {
         .padding(DesignSystem.Spacing.xl)
         .padding(.vertical, DesignSystem.Spacing.lg)
         .frame(maxWidth: 360)
-        .adaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground)
+        .adaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground, isSelected: true)  // R6c: preserved implicit-selection (review intent later)
         .onAppear {
             // Animate in
             withAnimation(.easeOut(duration: 0.4)) {

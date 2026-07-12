@@ -298,7 +298,7 @@ struct ProfileView: View {
             }
             .padding(.horizontal, DesignSystem.Spacing.md)
             .padding(.vertical, DesignSystem.Spacing.sm)
-            .adaptivePill(borderColor: tc.primary, fillColor: tc.primary.opacity(0.15))
+            .adaptivePill(borderColor: tc.primary, fillColor: tc.primary.opacity(0.15), isSelected: true)  // R6c: preserved implicit-selection (review intent later)
         }
         .padding(.vertical, DesignSystem.Spacing.md)
     }

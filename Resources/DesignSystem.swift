@@ -1156,18 +1156,19 @@ extension View {
     /// Adaptive card: PixelCardShape in pixel themes, Erewhon flat card otherwise.
     /// (Erewhon branch ignores the passed `cornerRadius` in favor of `Erewhon.cardRadius`
     /// per D6; the param is retained for source compatibility with existing call sites.)
+    ///
+    /// Selection (R6c): caller-declared via `isSelected`. When true, the Erewhon branch
+    /// strokes the active accent at 1.5px so pickers read as selected; otherwise the
+    /// Erewhon hairline at 1px. `borderColor` no longer carries selection meaning in the
+    /// Erewhon branch — it remains the pixel-branch border. (Meaningful only in the
+    /// Erewhon branch; the pixel branch ignores `isSelected`.)
     func adaptiveCard(
         borderColor: Color = DesignSystem.Colors.primary,
         fillColor: Color = DesignSystem.Colors.cardBackground,
         fillGradient: LinearGradient? = nil,
-        cornerRadius: CGFloat = 16
+        cornerRadius: CGFloat = 16,
+        isSelected: Bool = false
     ) -> some View {
-        // Selection heuristic (D6): the app-wide selection signal is a caller passing
-        // exactly the active scheme's accent (tc.primary). When matched, stroke the accent
-        // at 1.5px so pickers still read as selected; otherwise use the Erewhon hairline.
-        // (Meaningful only in the Erewhon branch; the pixel branch runs under pixel themes,
-        // where accent never equals the default green borderColor.)
-        let isSelected = borderColor == SettingsManager.shared.activeColors.primary
         return Group {
             if SettingsManager.shared.isCleanUI {
                 self
@@ -1191,13 +1192,15 @@ extension View {
     }
 
     /// Adaptive pill: PixelPillShape in pixel themes, Erewhon flat capsule otherwise
-    /// (fill + hairline; selection heuristic mirrors adaptiveCard).
+    /// (fill + hairline). Selection is caller-declared via `isSelected` (mirrors
+    /// adaptiveCard); `borderColor` no longer carries selection meaning in the Erewhon
+    /// branch, and the pixel branch ignores `isSelected`.
     func adaptivePill(
         borderColor: Color = DesignSystem.Colors.primary,
         fillColor: Color = DesignSystem.Colors.cardBackground,
-        fillGradient: LinearGradient? = nil
+        fillGradient: LinearGradient? = nil,
+        isSelected: Bool = false
     ) -> some View {
-        let isSelected = borderColor == SettingsManager.shared.activeColors.primary
         return Group {
             if SettingsManager.shared.isCleanUI {
                 self
@@ -1221,19 +1224,21 @@ extension View {
 // MARK: - Adaptive Container Views
 
 /// Adaptive card container. PixelCard in RPG, rounded card in Clean.
+/// Selection (R6c): caller-declared via `isSelected`; `borderColor` no longer carries
+/// selection meaning in the Erewhon branch (the pixel branch ignores `isSelected`).
 struct AdaptiveCard<Content: View>: View {
     var borderColor: Color = DesignSystem.Colors.primary
     var fillColor: Color = DesignSystem.Colors.cardBackground
     var fillGradient: LinearGradient? = nil
     var cornerRadius: CGFloat = 16
+    var isSelected: Bool = false
     @ViewBuilder let content: () -> Content
 
     private var isClean: Bool { SettingsManager.shared.isCleanUI }
 
     var body: some View {
         // Erewhon flat treatment mirrors the .adaptiveCard(...) modifier (radius, hairline,
-        // shadow, selection heuristic) so container-form cards match modifier-form cards.
-        let isSelected = borderColor == SettingsManager.shared.activeColors.primary
+        // shadow, caller-declared isSelected) so container-form cards match modifier-form cards.
         if isClean {
             ZStack {
                 RoundedRectangle(cornerRadius: DesignSystem.Erewhon.cardRadius)
@@ -1257,15 +1262,17 @@ struct AdaptiveCard<Content: View>: View {
 }
 
 /// Adaptive pill container. PixelPill in RPG, capsule in Clean.
+/// Selection (R6c): caller-declared via `isSelected`; `borderColor` no longer carries
+/// selection meaning in the Erewhon branch (the pixel branch ignores `isSelected`).
 struct AdaptivePill<Content: View>: View {
     var borderColor: Color = DesignSystem.Colors.primary
     var fillColor: Color = DesignSystem.Colors.cardBackground
     var fillGradient: LinearGradient? = nil
+    var isSelected: Bool = false
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         // Erewhon flat capsule mirrors the .adaptivePill(...) modifier (fill + hairline).
-        let isSelected = borderColor == SettingsManager.shared.activeColors.primary
         if SettingsManager.shared.isCleanUI {
             ZStack {
                 Capsule()
