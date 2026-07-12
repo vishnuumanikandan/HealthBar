@@ -357,9 +357,14 @@ enum DesignSystem {
         static let rankSilver = Color(light: Color(hex: "#A6AEB9"), dark: Color(hex: "#A6AEB9"))
         static let rankIron = Color(light: Color(hex: "#7E8896"), dark: Color(hex: "#7E8896"))
         static let rankBronze = Color(light: Color(hex: "#B06A3C"), dark: Color(hex: "#C8814A"))
+        /// Single-Color representative for the prismatic top three (Sentinel/Prismatic/Zenith).
+        /// The plaques themselves sweep a full AngularGradient (see `RankPlaque`); this is the
+        /// flat stand-in for anywhere the ladder needs ONE colour per rank.
+        static let rankPrismatic = Color(light: Color(hex: "#8F7BE8"), dark: Color(hex: "#8F7BE8"))
 
         /// Rank-tier avatar metal from `rr`. `nil` → neutral fill. Bronze/iron/gold map to the
-        /// Erewhon metal tokens; platinum and diamond use the live accent (mockup `rk-diamond`).
+        /// Erewhon metal tokens; platinum and diamond use the live accent (mockup `rk-diamond`);
+        /// the top three (RR ≥ 1800) are prismatic violet (R7a).
         /// Decorative wash, not a precise per-rank ladder colour.
         static func rankMetal(forRR rr: Int?) -> Color? {
             guard let rr else { return nil }
@@ -367,8 +372,9 @@ enum DesignSystem {
             case .stone: return nil
             case .copper: return rankBronze
             case .iron: return rankIron
-            case .gold, .rankVII, .rankVIII, .rankIX: return rankGold
+            case .gold: return rankGold
             case .platinum, .diamond: return SettingsManager.shared.activeColors.primary
+            case .sentinel, .prismatic, .zenith: return rankPrismatic
             }
         }
 

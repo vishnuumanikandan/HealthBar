@@ -30,6 +30,23 @@ final class BattleViewModel {
     /// Transient banner shown when an action loses a race (permission-denied).
     var toastMessage: String?
 
+    /// My RR, fetched once per `load()` (R7a §3). `nil` ⇒ the progress fetch failed — the
+    /// rank block renders an em-dash skeleton and rank-up detection is skipped. A rank is
+    /// NEVER invented from nil.
+    private(set) var myRR: Int?
+
+    /// My streak, from the same single progress fetch (the matchup preview needs it, and
+    /// R7a folded its second `getUserProgress()` call into `load()`'s).
+    private var myStreak: Int = 0
+
+    /// The rank-up celebration currently owed to the user (R7a §4), destination tier last.
+    ///
+    /// A CACHE of the stored-RR vs current-RR tier-scalar comparison — never presentation
+    /// lifecycle state. A recreated view model re-derives it from the same comparison (the
+    /// stored RR only advances once the celebration is actually presented) and reaches the
+    /// same answer, so a celebration is never lost and never double-fires.
+    private(set) var pendingRankUp: (from: RankTier, to: RankTier)?
+
     init(coordinator: AppCoordinator, myUid: String) {
         self.coordinator = coordinator
         self.myUid = myUid
@@ -174,6 +191,92 @@ final class BattleViewModel {
     /// My record over the currently-loaded finished duels (D7).
     var historyStats: DuelHistoryStats { BattleViewModel.historyStats(from: finished, myUid: myUid) }
 
+    // MARK: - R7a: rank progress + rank-up detection (pure derivations, testable in isolation)
+
+    /// Progress within the CURRENT tier — everything the arena-head rank block displays (R7a §3).
+    struct RankProgress {
+        let tier: RankTier
+        /// RR at which this tier begins / the next one begins.
+        let floor: Int
+        let ceiling: Int
+        /// 0…1 within the tier. Pinned to 1 at the top of the ladder (no next tier to climb).
+        let fraction: Double
+        /// "80 RR to Copper 3", or "Top rank reached" at the summit.
+        let caption: String
+        let isTopRank: Bool
+    }
+
+    /// Where `rr` sits inside its tier. Pure (no coordinator) → verified by a standalone
+    /// matrix, including the design mock's own worked example (420 RR → Copper 2, 400–500,
+    /// 20%, "80 RR to Copper 3").
+    static func rankProgress(rr: Int) -> RankProgress {
+        let tier = Rank.rankTier(from: rr)
+        let floor = tier.rank.rrThreshold + (tier.tier - 1) * Rank.rrPerTier
+        let ceiling = floor + Rank.rrPerTier
+        // Top of the ladder (last rank, last tier): no next tier, so the bar reads full
+        // rather than restarting at 0. Derived from the ladder, never hardcoded to Zenith.
+        let isTopRank = tier.rank == Rank.allCases.last && tier.tier == Rank.tiersPerRank
+        let fraction = isTopRank
+            ? 1
+            : min(1, max(0, Double(rr - floor) / Double(Rank.rrPerTier)))
+        let caption = isTopRank
+            ? "Top rank reached"
+            : "\(ceiling - rr) RR to \(Rank.rankTier(from: ceiling).displayName)"
+        return RankProgress(tier: tier, floor: floor, ceiling: ceiling,
+                            fraction: fraction, caption: caption, isTopRank: isTopRank)
+    }
+
+    /// The tier's position on the 27-step ladder (Stone 1 = 0 … Zenith 3 = 26). Monotonic
+    /// non-decreasing in `rr`, which is what makes "scalar increased ⇒ rank-up" sound.
+    static func tierScalar(rr: Int) -> Int {
+        let tier = Rank.rankTier(from: rr)
+        let rankIndex = Rank.allCases.firstIndex(of: tier.rank) ?? 0
+        return rankIndex * Rank.tiersPerRank + (tier.tier - 1)
+    }
+
+    /// The last RR the user was SHOWN a celebration for. Local UI state, scoped per user —
+    /// never synced, never in Firestore. Sign-out → a different account reads a different
+    /// key, so no teardown is needed.
+    private var lastSeenRRKey: String { "hb.rank.lastSeenRR.\(myUid)" }
+
+    /// Observation-based rank-up detection (R7a §4): compares the STORED RR's tier scalar
+    /// against the current one. Independent of where RR actually mutates — duel resolution,
+    /// forfeit, matchmaking, a future backend reconciliation — because it only ever observes
+    /// the result at this chokepoint.
+    ///
+    /// The stored RR deliberately does NOT advance here: it advances when the celebration is
+    /// PRESENTED (`markRankUpPresented`). A kill before presentation replays it next launch;
+    /// a kill mid-overlay does not replay it forever.
+    private func detectRankChange() {
+        guard let rr = myRR else { return }  // nil progress → skip entirely; never invent a rank
+        let defaults = UserDefaults.standard
+
+        guard defaults.object(forKey: lastSeenRRKey) != nil else {
+            defaults.set(rr, forKey: lastSeenRRKey)  // first run / fresh install: seed silently
+            return
+        }
+
+        let storedRR = defaults.integer(forKey: lastSeenRRKey)
+        guard BattleViewModel.tierScalar(rr: rr) > BattleViewModel.tierScalar(rr: storedRR) else {
+            // Demotion or no change: store silently. There is NO demotion moment — ever.
+            defaults.set(rr, forKey: lastSeenRRKey)
+            return
+        }
+
+        // A multi-tier jump celebrates ONCE, from → to directly.
+        pendingRankUp = (from: Rank.rankTier(from: storedRR), to: Rank.rankTier(from: rr))
+    }
+
+    /// Called the moment the celebration actually appears — advances the stored RR so an app
+    /// kill mid-overlay doesn't replay it forever (R7a §4).
+    func markRankUpPresented() {
+        guard let rr = myRR else { return }
+        UserDefaults.standard.set(rr, forKey: lastSeenRRKey)
+    }
+
+    /// Dismissing the celebration clears it.
+    func dismissRankUp() { pendingRankUp = nil }
+
     // MARK: - D2: matchup preview (fills the featured slot when there is no active duel)
 
     /// A featured-slot matchup snapshot: me vs one random friend who has published stats, or a
@@ -214,9 +317,9 @@ final class BattleViewModel {
             matchupPreview = BattleViewModel.sampleMatchup()
             return
         }
-        // Per-side level/streak/rr: the friend from published stats, me from my own progress.
+        // Per-side level/streak/rr: the friend from published stats, me from `load()`'s single
+        // progress fetch (R7a §3 — this no longer fetches its own; same values, one read).
         let friendStats = await coordinator.fetchFriendStats()
-        let myProgress = try? await coordinator.getUserProgress()
         let theirStats = friendStats[pick.uid]
         let name = pick.displayName.isEmpty ? "@\(pick.username)" : pick.displayName
         matchupPreview = MatchupPreview(
@@ -224,11 +327,11 @@ final class BattleViewModel {
             opponentName: name,
             myInitial: "Y",
             theirInitial: BattleViewModel.initialLetter(name),
-            myRR: myProgress?.rr,
+            myRR: myRR,
             theirRR: theirStats?.rr,
             myDays: entries.first(where: { $0.isCurrentUser })?.weeklyGoalsMet ?? 0,
             theirDays: pick.weeklyGoalsMet,
-            myStreak: myProgress?.currentStreak ?? 0,
+            myStreak: myStreak,
             theirStreak: theirStats?.currentStreak ?? 0,
             candidate: DuelOpponentCandidate(uid: pick.uid, username: pick.username,
                                              displayName: pick.displayName, source: .friend)
@@ -256,6 +359,11 @@ final class BattleViewModel {
     func load() async {
         isLoading = true
         duels = await coordinator.loadMyDuels()
+        // R7a §3: ONE progress fetch per load. The arena-head rank block and the matchup
+        // preview both read the result (the preview used to fetch its own copy).
+        let progress = try? await coordinator.getUserProgress()
+        myRR = progress?.rr
+        myStreak = progress?.currentStreak ?? 0
         isLoading = false
         didLoadOnce = true
         // Viewing the Battle list clears the pulse + "since you looked" deltas. The recap
@@ -265,6 +373,8 @@ final class BattleViewModel {
         // (the active-duel featured card wins). Re-rolls once per load (each appear / refresh).
         if active.isEmpty { await loadMatchupPreview() }
         else { matchupPreview = nil }
+        // R7a §4: observe the RR that just landed. Pure observation — never mutates RR.
+        detectRankChange()
     }
 
     // MARK: - Actions
