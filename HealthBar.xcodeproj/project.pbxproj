@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BE7B0A022FE5000000000002 /* TopBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0A012FE5000000000001 /* TopBar.swift */; };
+		BE7B0B022FE5000000000004 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0B012FE5000000000003 /* SettingsView.swift */; };
+		BE7B0C022FE5000000000006 /* RankLadderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0C012FE5000000000005 /* RankLadderSheet.swift */; };
 		1111E0C82F248958006EF76F /* BarcodeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E0C72F248958006EF76F /* BarcodeService.swift */; };
 		1111E0CA2F248975006EF76F /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E0C92F248975006EF76F /* BarcodeScannerView.swift */; };
 		1111E13A2F285E98006EF76F /* EditMealView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E1372F285E98006EF76F /* EditMealView.swift */; };
@@ -206,6 +209,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		BE7B0A012FE5000000000001 /* TopBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopBar.swift; sourceTree = "<group>"; };
+		BE7B0B012FE5000000000003 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		BE7B0C012FE5000000000005 /* RankLadderSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankLadderSheet.swift; sourceTree = "<group>"; };
 		1111E0C12F24815D006EF76F /* --Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "--Info.plist"; sourceTree = "<group>"; };
 		1111E0C72F248958006EF76F /* BarcodeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeService.swift; sourceTree = "<group>"; };
 		1111E0C92F248975006EF76F /* BarcodeScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
@@ -489,6 +495,8 @@
 		1146B2612F1F37BD004767C9 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				BE7B0B012FE5000000000003 /* SettingsView.swift */,
+				BE7B0C012FE5000000000005 /* RankLadderSheet.swift */,
 				BED60B8E2FFCBB3800F9E190 /* GlobalLeaderboardViewModel.swift */,
 				BED60B8C2FFCBB3000F9E190 /* GlobalLeaderboardView.swift */,
 				BED60B6C2FFC614100F9E190 /* MatchmakingSheet.swift */,
@@ -609,6 +617,7 @@
 		AABB00002F282600000000A1 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				BE7B0A012FE5000000000001 /* TopBar.swift */,
 				AACC7A012F500000000000A1 /* RankPlaque.swift */,
 				BEF96B5A2F88519800FB0F83 /* BadgeToast.swift */,
 				1111E1972F32DFEE006EF76F /* StreakMilestoneToast.swift */,
@@ -889,6 +898,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BE7B0A022FE5000000000002 /* TopBar.swift in Sources */,
+				BE7B0B022FE5000000000004 /* SettingsView.swift in Sources */,
+				BE7B0C022FE5000000000006 /* RankLadderSheet.swift in Sources */,
 				BED60B4B2FFA31F400F9E190 /* DuelSeenStore.swift in Sources */,
 				BEF96D0D2FC8F4A700FB0F83 /* RecognizedFoodsReviewView.swift in Sources */,
 				1146B2ED2F234408004767C9 /* GamificationManager.swift in Sources */,

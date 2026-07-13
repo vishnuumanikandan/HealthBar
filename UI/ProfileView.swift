@@ -24,22 +24,9 @@ struct ProfileView: View {
     /// Coordinator for navigation
     private let coordinator: AppCoordinator
 
-    /// Show daily goals sheet
-    @State private var showingDailyGoals = false
-
-    /// Show accessibility settings sheet
-    @State private var showingAccessibility = false
-
-    /// Show onboarding / health profile editor
-    @State private var showingOnboarding = false
-
-    /// Show account management screen
-    @State private var showingAccount = false
-
-    /// Tools (calculators) — relocated off the tab bar into this Profile entry when
-    /// Battle took the center tab slot (D1a).
-    @State private var showingTools = false
-    @State private var toolsViewModel = ToolsViewModel()
+    /// R7b §2: presents the pushed SettingsView. The settings section moved off Profile behind
+    /// the toolbar gear; all the individual sheet/cover state moved into SettingsView with it.
+    @State private var showingSettings = false
 
     /// Selected badge for detail sheet
     @State private var selectedBadge: BadgeDefinition? = nil
@@ -61,9 +48,6 @@ struct ProfileView: View {
     /// Auth service reference — read-only, used only to check isGuest and isNewUser.
     /// ProfileView never calls methods on this directly.
     private let authService: any AuthService
-
-    /// True when the guest sign-out warning dialog should be shown.
-    @State private var showGuestSignOutWarning = false
 
     // MARK: - Initialization
 
@@ -104,6 +88,18 @@ struct ProfileView: View {
                         .font(AppFont.bold(20))
                         .foregroundColor(tc.textPrimary)
                 }
+                // R7b §2: the gear opens the pushed SettingsView (the settings section moved
+                // off Profile). Icon-only, so it carries an explicit accessibility label.
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(AppFont.regular(17))
+                            .foregroundColor(tc.textPrimary)
+                    }
+                    .accessibilityLabel("Settings")
+                }
             }
             .refreshable {
                 await viewModel.refresh()
@@ -112,59 +108,28 @@ struct ProfileView: View {
                 // Load data when view appears
                 await viewModel.loadUserData()
             }
-            .sheet(isPresented: $showingDailyGoals) {
-                DailyGoalsView(coordinator: coordinator)
-            }
-            .sheet(isPresented: $showingAccessibility) {
-                AccessibilitySettingsView()
-            }
-            .sheet(isPresented: $showingAccount) {
-                AccountView(coordinator: coordinator, authService: FirebaseAuthService.shared)
-            }
-            .sheet(isPresented: $showingTools) {
-                ToolsView(toolsViewModel: toolsViewModel)
-            }
             .sheet(item: $selectedBadge) { badge in
                 BadgeDetailSheet(
                     definition: badge,
                     progress: viewModel.badgeProgressList.first { $0.badgeId == badge.id }
                 )
             }
-            .fullScreenCover(isPresented: $showingOnboarding) {
-                OnboardingView(
+            // R7b §2: settings are a pushed screen now (FriendsView push precedent), inside
+            // Profile's existing NavigationStack.
+            .navigationDestination(isPresented: $showingSettings) {
+                SettingsView(
                     coordinator: coordinator,
-                    authService: FirebaseAuthService.shared,
+                    authService: authService,
+                    onLogout: onLogout,
                     existingProfile: viewModel.existingProfile
                 )
             }
-            .onChange(of: showingOnboarding) { _, isShowing in
-                if !isShowing {
+            // R7b §2: one on-return reload replaces the per-sheet reloads that moved into
+            // SettingsView — Daily Goals / Health Profile edits show once Profile reappears.
+            .onChange(of: showingSettings) { _, showing in
+                if !showing {
                     Task { await viewModel.loadUserData() }
                 }
-            }
-            .onChange(of: showingDailyGoals) { _, isShowing in
-                // Refresh data when returning from goals screen
-                if !isShowing {
-                    Task {
-                        await viewModel.loadUserData()
-                    }
-                }
-            }
-            // Guest sign-out warning: deleting local data is irreversible
-            .confirmationDialog(
-                "Sign Out of Guest Mode?",
-                isPresented: $showGuestSignOutWarning,
-                titleVisibility: .visible
-            ) {
-                Button("Sign Out & Delete Data", role: .destructive) {
-                    Task {
-                        try? await coordinator.deleteAllGuestData()
-                        onLogout()
-                    }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("You're using guest mode. Signing out will delete all local data. Create a free account first to save your progress.")
             }
         }
     }
@@ -227,7 +192,6 @@ struct ProfileView: View {
                 xpProgressSection
                 statsSection
                 badgesSection
-                settingsSection
             }
             .padding(DesignSystem.Spacing.lg)
         }
@@ -451,143 +415,6 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Settings Section
-
-    private var settingsSection: some View {
-        VStack(spacing: DesignSystem.Spacing.md) {
-            Text("Settings")
-                .font(AppFont.bold(22))
-                .foregroundColor(tc.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            VStack(spacing: DesignSystem.Spacing.sm) {
-                // Daily Goals button - navigates to goal editing
-                settingButton(
-                    icon: "target",
-                    title: "Daily Goals",
-                    subtitle: "Customize your targets",
-                    action: {
-                        showingDailyGoals = true
-                    }
-                )
-
-                // Accessibility button - navigates to accessibility settings
-                settingButton(
-                    icon: "accessibility",
-                    title: "Accessibility",
-                    subtitle: "Display & notification preferences",
-                    action: {
-                        showingAccessibility = true
-                    }
-                )
-
-                // Tools — calculators, relocated off the tab bar (D1a)
-                settingButton(
-                    icon: "wrench.and.screwdriver.fill",
-                    title: "Tools",
-                    subtitle: "Calculators & health tools",
-                    iconColor: tc.primary,
-                    action: { showingTools = true }
-                )
-
-                // Edit Health Profile — opens onboarding in edit mode
-                settingButton(
-                    icon: "person.crop.circle.badge.checkmark",
-                    title: "Edit Health Profile",
-                    subtitle: "Update your goals and preferences",
-                    iconColor: tc.primary,
-                    action: { showingOnboarding = true }
-                )
-
-                // Account button — hidden for guest users (requires a real account)
-                if !authService.isGuest {
-                    settingButton(
-                        icon: "person.circle",
-                        title: "Account",
-                        subtitle: "Manage username, display name, password",
-                        action: { showingAccount = true }
-                    )
-                }
-
-                // About button (placeholder)
-                settingButton(
-                    icon: "info.circle",
-                    title: "About",
-                    subtitle: "App version and info",
-                    action: {
-                        // Placeholder - will navigate to about screen later
-                    }
-                )
-
-                // Sign Out — for guests shows a warning before deleting local data
-                settingButton(
-                    icon: "rectangle.portrait.and.arrow.right",
-                    title: "Sign Out",
-                    subtitle: authService.isGuest
-                        ? "Delete local data and exit guest mode"
-                        : "Log out of your account",
-                    iconColor: DesignSystem.Colors.danger,
-                    isDanger: true,
-                    action: {
-                        if authService.isGuest {
-                            showGuestSignOutWarning = true
-                        } else {
-                            onLogout()
-                        }
-                    }
-                )
-            }
-        }
-    }
-
-    /// Reusable settings button component
-    private func settingButton(
-        icon: String,
-        title: String,
-        subtitle: String,
-        iconColor: Color = SettingsManager.shared.activeColors.primary,
-        isDanger: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: DesignSystem.Spacing.md) {
-                // Icon
-                Image(systemName: icon)
-                    .font(AppFont.bold(18))
-                    .foregroundColor(.white)
-                    .frame(width: DesignSystem.Sizes.iconCircle, height: DesignSystem.Sizes.iconCircle)
-                    .adaptivePill(
-                        borderColor: SettingsManager.shared.isCleanUI ? .clear : iconColor.adjustedBrightness(-0.2),
-                        fillColor: .clear,
-                        fillGradient: DesignSystem.Colors.adaptiveGradientFrom(iconColor)
-                    )
-
-                // Text
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                    Text(title)
-                        .font(AppFont.bold(16))
-                        .foregroundColor(tc.textPrimary)
-
-                    Text(subtitle)
-                        .font(AppFont.regular(12))
-                        .foregroundColor(tc.textSecondary)
-                }
-
-                Spacer()
-
-                // Chevron
-                Image(systemName: "chevron.right")
-                    .font(AppFont.bold(14))
-                    .foregroundColor(tc.textTertiary)
-            }
-            .padding(DesignSystem.Spacing.md)
-            .adaptiveCard(
-                borderColor: isDanger ? DesignSystem.Colors.danger : tc.primary.opacity(0.3),
-                fillColor: tc.cardBackground
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
 }
 
 // MARK: - BadgeDetailSheet

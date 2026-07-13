@@ -25,6 +25,9 @@ struct ContentView: View {
 
     @Environment(\.modelContext) private var modelContext
 
+    /// R7b §1: drives the persistent top bar's scenePhase → .active refresh.
+    @Environment(\.scenePhase) private var scenePhase
+
     // MARK: - Auth State
 
     /// Observable auth service singleton. Accessing `authService.isLoggedIn`
@@ -44,6 +47,12 @@ struct ContentView: View {
     /// Settings for theme-aware tab backgrounds.
     @State private var settings = SettingsManager.shared
     private var tc: ThemeColors { settings.activeColors }
+
+    /// R7b §1: the persistent top bar's view model. Optional + lazily built because its
+    /// coordinator needs `modelContext` (an @Environment value unavailable at `init`); it is
+    /// constructed once on first appear. Lifetime is local to ContentView — never promoted to
+    /// Environment, never threaded into a tab.
+    @State private var topBarViewModel: TopBarViewModel?
 
     // MARK: - Username Gate State
 
@@ -81,8 +90,18 @@ struct ContentView: View {
     var body: some View {
         Group {
             if authService.isLoggedIn {
-                mainTabView
-                    .transition(.opacity)
+                // R7b §1: the persistent top bar sits ABOVE the TabView (a VStack sibling), NOT
+                // as a TabView top safeAreaInset. A TabView-level top inset does not push the
+                // per-tab NavigationStack nav bars down, so the bar overlapped them — hiding the
+                // principal titles and, critically, the Profile Settings gear. Placed above the
+                // TabView, every tab's nav bar + content render below the bar, and it still
+                // persists across tab switches and over pushed destinations (those live inside
+                // the tabs' own NavigationStacks, which are inside this TabView).
+                VStack(spacing: 0) {
+                    PersistentTopBar(viewModel: topBarViewModel)
+                    mainTabView
+                }
+                .transition(.opacity)
             } else {
                 authFlow
                     .transition(.opacity)
@@ -173,6 +192,25 @@ struct ContentView: View {
             } else {
                 WoodenTabBar(selectedTab: $selectedTab)
             }
+        }
+        // R7b §1 refresh triggers (exactly three; no new infrastructure): first appear, tab
+        // switch, and scenePhase → .active. The VM (read by the top bar mounted above this
+        // TabView in `body`) is built lazily here because `modelContext` is available in
+        // `.task` but not at `init`. Known/accepted staleness: logging food while staying on one
+        // tab updates the bar on the next trigger, not instantly.
+        .task {
+            if topBarViewModel == nil {
+                topBarViewModel = TopBarViewModel(
+                    coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared)
+                )
+            }
+            await topBarViewModel?.load()
+        }
+        .onChange(of: selectedTab) { _, _ in
+            Task { await topBarViewModel?.load() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await topBarViewModel?.load() } }
         }
         // R2 §1 keyboard: a `.safeAreaInset` bottom bar otherwise rises with the keyboard.
         // Keep it anchored to the screen bottom (text entry lives in sheets/scroll views that
