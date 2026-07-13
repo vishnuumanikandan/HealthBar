@@ -276,10 +276,10 @@ struct LeaderboardSection: View {
     /// hairline-separated (D5).
     @ViewBuilder
     private func entryRowContent(_ entry: LeaderboardEntry, position: Int, isLast: Bool) -> some View {
-        let metal = metalColor(position, hasData: entry.hasData)
+        let metal = StandingsPieces.podiumMetal(position: position, hasData: entry.hasData)
         let row = HStack(alignment: .center, spacing: 13) {
-            rankChip(position, hasData: entry.hasData, metal: metal)
-            avatar(initial: initial(for: entry), tint: entry.hasData ? DesignSystem.Erewhon.rankMetal(forRR: entry.rr) : nil)
+            StandingsPieces.rankChip(position: position, hasData: entry.hasData, metal: metal)
+            StandingsPieces.avatar(initial: initial(for: entry), tint: entry.hasData ? DesignSystem.Erewhon.rankMetal(forRR: entry.rr) : nil)
             who(entry)
             Spacer(minLength: DesignSystem.Spacing.sm)
             adherenceColumn(entry)
@@ -301,39 +301,6 @@ struct LeaderboardSection: View {
                 }
             }
         }
-    }
-
-    /// Mockup `.pos`: a small rounded-square rank chip. Podium chips are metal-filled (white
-    /// numeral); off-podium chips are neutral. Crown kept above #1 (where it lives today).
-    private func rankChip(_ position: Int, hasData: Bool, metal: Color?) -> some View {
-        VStack(spacing: 1) {
-            if hasData && position == 1 {
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 10))
-                    .foregroundColor(metal ?? DesignSystem.Colors.goldMid)
-            }
-            Text(hasData ? "\(position)" : "–")
-                .font(AppFont.display(15))
-                .foregroundColor(metal != nil ? .white : (hasData ? tc.textSecondary : tc.textTertiary))
-                .monospacedDigit()
-                .frame(width: 26, height: 26)
-                .background(RoundedRectangle(cornerRadius: 8).fill(metal ?? tc.segBackground))
-        }
-        .frame(width: 30)
-    }
-
-    /// Mockup `.av`: 38×38 rounded-square initials avatar, rank-tinted (nil tint → neutral fill).
-    private func avatar(initial: String, tint: Color?) -> some View {
-        Text(initial)
-            .font(AppFont.bold(15))
-            .foregroundColor(tint != nil ? .white : tc.textPrimary)
-            .frame(width: 38, height: 38)
-            .background(RoundedRectangle(cornerRadius: 12).fill(tint ?? tc.segBackground))
-            .overlay(
-                RoundedRectangle(cornerRadius: 9)
-                    .stroke(tint != nil ? Color.white.opacity(0.22) : DesignSystem.Erewhon.line, lineWidth: 1)
-                    .padding(3)
-            )
     }
 
     /// Name (+ you-pill) and the tier/level sub-line.
@@ -415,22 +382,6 @@ struct LeaderboardSection: View {
                     .fill(i < count ? tc.primary : tc.segBackground)
                     .frame(width: 7, height: 3)
             }
-        }
-    }
-
-    // MARK: - Colors
-
-    /// Podium metals: gold, silver, bronze. nil off the podium or without data.
-    /// Flat (Erewhon) uses the shared rank-metal tokens; pixel keeps its original hexes so
-    /// pixel Home stays byte-identical (D7).
-    private func metalColor(_ position: Int, hasData: Bool) -> Color? {
-        guard hasData else { return nil }
-        let isClean = settings.isCleanUI
-        switch position {
-        case 1: return isClean ? DesignSystem.Erewhon.rankGold : DesignSystem.Colors.goldMid
-        case 2: return isClean ? DesignSystem.Erewhon.rankSilver : Color(hex: "#9CA3AF") // silver
-        case 3: return isClean ? DesignSystem.Erewhon.rankBronze : Color(hex: "#CD7F32") // bronze
-        default: return nil
         }
     }
 

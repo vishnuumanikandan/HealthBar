@@ -82,12 +82,9 @@ struct ProfileView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+            // R7c §4: the "Profile" title is gone (the in-content head is the header), but the gear
+            // remains — so this root keeps its nav bar rather than hiding it.
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Profile")
-                        .font(AppFont.bold(20))
-                        .foregroundColor(tc.textPrimary)
-                }
                 // R7b §2: the gear opens the pushed SettingsView (the settings section moved
                 // off Profile). Icon-only, so it carries an explicit accessibility label.
                 ToolbarItem(placement: .topBarTrailing) {

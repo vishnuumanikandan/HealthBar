@@ -29,8 +29,6 @@ struct GuildView: View {
     /// Triggers the existing guest → signup path (provided by ProfileView).
     private let onCreateAccount: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
-
     @State private var settings = SettingsManager.shared
     private var tc: ThemeColors { settings.activeColors }
 
@@ -72,17 +70,11 @@ struct GuildView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Guild")
-                        .font(AppFont.bold(20))
-                        .foregroundColor(tc.textPrimary)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                        .foregroundColor(tc.primary)
-                }
-            }
+            // R7c §4/§5: no nav-bar title on the tab root (the in-content head is the header), and
+            // the "Done" button is gone — it dismissed the pre-R6b Profile SHEET mount and did
+            // nothing at all in the tab mount. Nothing else lived in this toolbar, so the empty bar
+            // is hidden. Pushed destinations (chat, roster, leaderboard) keep their own bars.
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingCreate) {
                 CreateGuildSheet(coordinator: coordinator) {
                     Task { await viewModel.load() }

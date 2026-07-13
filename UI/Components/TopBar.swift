@@ -21,6 +21,11 @@ final class TopBarViewModel {
     /// Today's summary, or `nil` before the first successful load (placeholder chrome).
     private(set) var summary: TodaySummary?
 
+    /// R7c §3: first letter of the display name, for the top-bar avatar. `nil` when the profile
+    /// hasn't loaded, the fetch failed, or the name is empty — including guests, who have no
+    /// display name. The bar then renders the glyph avatar; still no error UI in chrome.
+    private(set) var initial: String?
+
     private let coordinator: AppCoordinator
 
     init(coordinator: AppCoordinator) {
@@ -33,6 +38,9 @@ final class TopBarViewModel {
         if let fresh = try? await coordinator.getTodaysSummary() {
             summary = fresh
         }
+        let profile = try? await coordinator.getUserProfile()
+        let name = profile?.displayName.trimmingCharacters(in: .whitespaces) ?? ""
+        initial = name.first.map { String($0).uppercased() }
     }
 }
 
@@ -76,9 +84,10 @@ struct PersistentTopBar: View {
         .background(barBackground)
     }
 
-    // MARK: Left — level eyebrow + number + slim XP capsule
+    // MARK: Left — avatar + level eyebrow/number + slim XP capsule
     private var leftCluster: some View {
         HStack(spacing: 10) {
+            avatar
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text("LV.")
                     .font(AppFont.regular(10))
@@ -89,6 +98,28 @@ struct PersistentTopBar: View {
             }
             xpCapsule
         }
+    }
+
+    /// R7c §3: initials avatar. Circular on purpose — this is identity chrome, not a rank surface
+    /// (the rounded square is the standings/rank shape). No display name — a guest, or a profile
+    /// that hasn't loaded — falls back to a neutral glyph on the same circle, so the bar's
+    /// geometry never shifts. Non-interactive, like the rest of the bar.
+    private var avatar: some View {
+        ZStack {
+            Circle().fill(tc.primary.opacity(0.16))
+            Circle().stroke(tc.primary.opacity(0.45), lineWidth: 1)
+
+            if let initial = viewModel?.initial {
+                Text(initial)
+                    .font(AppFont.bold(13))
+                    .foregroundColor(tc.primary)
+            } else {
+                Image(systemName: "person.fill")
+                    .font(AppFont.regular(12))
+                    .foregroundColor(tc.textTertiary)
+            }
+        }
+        .frame(width: 28, height: 28)
     }
 
     /// Slim XP capsule: segBackground track + Erewhon hairline + accent fill at `levelProgress`.

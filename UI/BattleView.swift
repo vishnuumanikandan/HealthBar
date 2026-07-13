@@ -78,13 +78,10 @@ struct BattleView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Battle")
-                        .font(AppFont.bold(20))
-                        .foregroundColor(tc.textPrimary)
-                }
-            }
+            // R7c §4: no nav-bar title on the tab root — "THE ARENA" in `arenaHead` is the header,
+            // and the root's toolbar held nothing else, so the empty bar is hidden rather than left
+            // reserving space. Root only: the pushed Arena keeps its own bar and back button.
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $arenaDuelId) { id in
                 if let duel = viewModel.duels.first(where: { $0.id == id }) {
                     ArenaView(coordinator: coordinator, myUid: authService.currentUserEmail ?? "", duel: duel)
@@ -1164,10 +1161,14 @@ private struct BattleStandingsBlock: View {
     }
 
     private func standingRow(_ s: Standing, isLast: Bool) -> some View {
-        let metal = s.position.flatMap { metalColor($0) }
+        // R7c §1: the shared standings pieces (this block's copies were their duplicates). A row
+        // with no position — my appended row on the wins/streak boards, which have no position
+        // API — is the canonical no-data chip.
+        let hasPosition = s.position != nil
+        let metal = StandingsPieces.podiumMetal(position: s.position ?? 0, hasData: hasPosition)
         let row = HStack(alignment: .center, spacing: 13) {
-            rankChip(s.position, metal: metal)
-            avatar(initial: initial(for: s.dto), tint: DesignSystem.Erewhon.rankMetal(forRR: s.dto.rr))
+            StandingsPieces.rankChip(position: s.position ?? 0, hasData: hasPosition, metal: metal)
+            StandingsPieces.avatar(initial: initial(for: s.dto), tint: DesignSystem.Erewhon.rankMetal(forRR: s.dto.rr))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     Text(s.dto.displayName.isEmpty ? "@\(s.dto.username)" : s.dto.displayName)
@@ -1197,35 +1198,6 @@ private struct BattleStandingsBlock: View {
         }
     }
 
-    private func rankChip(_ position: Int?, metal: Color?) -> some View {
-        VStack(spacing: 1) {
-            if position == 1 {
-                Image(systemName: "crown.fill").font(.system(size: 10))
-                    .foregroundColor(metal ?? DesignSystem.Colors.goldMid)
-            }
-            Text(position.map { "\($0)" } ?? "—")
-                .font(AppFont.display(15))
-                .foregroundColor(metal != nil ? .white : tc.textSecondary)
-                .monospacedDigit()
-                .frame(width: 26, height: 26)
-                .background(RoundedRectangle(cornerRadius: 8).fill(metal ?? tc.segBackground))
-        }
-        .frame(width: 30)
-    }
-
-    private func avatar(initial: String, tint: Color?) -> some View {
-        Text(initial)
-            .font(AppFont.bold(15))
-            .foregroundColor(tint != nil ? .white : tc.textPrimary)
-            .frame(width: 38, height: 38)
-            .background(RoundedRectangle(cornerRadius: 12).fill(tint ?? tc.segBackground))
-            .overlay(
-                RoundedRectangle(cornerRadius: 9)
-                    .stroke(tint != nil ? Color.white.opacity(0.22) : DesignSystem.Erewhon.line, lineWidth: 1)
-                    .padding(3)
-            )
-    }
-
     private var youPill: some View {
         Text("You")
             .font(AppFont.bold(9))
@@ -1253,16 +1225,6 @@ private struct BattleStandingsBlock: View {
     private func initial(for dto: GlobalLeaderboardDTO) -> String {
         let name = dto.displayName.isEmpty ? dto.username : dto.displayName
         return name.first.map { String($0).uppercased() } ?? "?"
-    }
-
-    /// Podium metals (D5): Erewhon rank-metal tokens for 1/2/3, nil off-podium.
-    private func metalColor(_ position: Int) -> Color? {
-        switch position {
-        case 1: return DesignSystem.Erewhon.rankGold
-        case 2: return DesignSystem.Erewhon.rankSilver
-        case 3: return DesignSystem.Erewhon.rankBronze
-        default: return nil
-        }
     }
 
 }

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BE7B0D022FE5000000000008 /* StandingsPieces.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0D012FE5000000000007 /* StandingsPieces.swift */; };
 		BE7B0A022FE5000000000002 /* TopBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0A012FE5000000000001 /* TopBar.swift */; };
 		BE7B0B022FE5000000000004 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0B012FE5000000000003 /* SettingsView.swift */; };
 		BE7B0C022FE5000000000006 /* RankLadderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0C012FE5000000000005 /* RankLadderSheet.swift */; };
@@ -209,6 +210,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		BE7B0D012FE5000000000007 /* StandingsPieces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StandingsPieces.swift; sourceTree = "<group>"; };
 		BE7B0A012FE5000000000001 /* TopBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopBar.swift; sourceTree = "<group>"; };
 		BE7B0B012FE5000000000003 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		BE7B0C012FE5000000000005 /* RankLadderSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankLadderSheet.swift; sourceTree = "<group>"; };
@@ -617,6 +619,7 @@
 		AABB00002F282600000000A1 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				BE7B0D012FE5000000000007 /* StandingsPieces.swift */,
 				BE7B0A012FE5000000000001 /* TopBar.swift */,
 				AACC7A012F500000000000A1 /* RankPlaque.swift */,
 				BEF96B5A2F88519800FB0F83 /* BadgeToast.swift */,
@@ -898,6 +901,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BE7B0D022FE5000000000008 /* StandingsPieces.swift in Sources */,
 				BE7B0A022FE5000000000002 /* TopBar.swift in Sources */,
 				BE7B0B022FE5000000000004 /* SettingsView.swift in Sources */,
 				BE7B0C022FE5000000000006 /* RankLadderSheet.swift in Sources */,

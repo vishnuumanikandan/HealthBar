@@ -256,69 +256,49 @@ struct FriendsView: View {
                     message: "Find someone by their @username in the Add tab."
                 )
             } else {
-                ForEach(viewModel.friends) { friend in
-                    friendRow(friend)
+                // R7c §2: the friends list IS a ladder, so it reads as one — a single
+                // hairline-separated standings section, not a stack of per-friend cards.
+                // Position is the row's index in the RR-sorted list (D3's implicit ladder; the
+                // sort lives in the view model and is untouched here).
+                VStack(spacing: 0) {
+                    ForEach(Array(viewModel.friends.enumerated()), id: \.element.id) { index, friend in
+                        friendRow(friend, position: index + 1, isLast: index == viewModel.friends.count - 1)
+                    }
                 }
             }
         }
     }
 
-    /// Detail-rich friend card (Friend System Phase 4): rank-tinted initials
-    /// avatar, identity, and published level/streak/rank. Tapping opens the
-    /// read-only profile sheet; removal lives in the long-press menu and the
-    /// profile sheet, keeping the card itself one clean tap target.
-    private func friendRow(_ friend: FriendsViewModel.FriendRow) -> some View {
-        let accent = friend.rank.map(rankColor) ?? tc.primary
+    /// Friend row in the standings anatomy (R7c §2 — the same bones as LeaderboardSection's
+    /// `entryRowContent`): rank chip · rank-metal avatar · identity · published stats. A friend who
+    /// hasn't published `rr` is a no-data row — dash chip, neutral avatar, dimmed — exactly as a
+    /// standings row renders one. Tapping opens the read-only profile sheet; removal lives in the
+    /// long-press menu and the profile sheet, keeping the row itself one clean tap target.
+    private func friendRow(_ friend: FriendsViewModel.FriendRow, position: Int, isLast: Bool) -> some View {
+        let hasData = friend.rr != nil
+        let metal = StandingsPieces.podiumMetal(position: position, hasData: hasData)
+        let row = HStack(alignment: .center, spacing: 13) {
+            StandingsPieces.rankChip(position: position, hasData: hasData, metal: metal)
+            StandingsPieces.avatar(
+                initial: initials(for: friend),
+                tint: hasData ? DesignSystem.Erewhon.rankMetal(forRR: friend.rr) : nil
+            )
+            who(friend)
+            Spacer(minLength: DesignSystem.Spacing.sm)
+            statsColumn(friend)
+        }
+        .padding(.vertical, 13)
+        .opacity(hasData ? 1.0 : 0.7)
+
         return Button {
             profileFriend = friend
         } label: {
-            HStack(spacing: DesignSystem.Spacing.md) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(accent.opacity(0.16))
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(accent.opacity(0.45), lineWidth: 1.5)
-                    Text(initials(for: friend))
-                        .font(AppFont.bold(16))
-                        .foregroundColor(accent)
+            VStack(spacing: 0) {
+                row.padding(.horizontal, 4)
+                if !isLast {
+                    Rectangle().fill(DesignSystem.Erewhon.lineSoft).frame(height: 1)
                 }
-                .frame(width: 44, height: 44)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(friend.displayName.isEmpty ? "@\(friend.username)" : friend.displayName)
-                        .font(AppFont.bold(16))
-                        .foregroundColor(tc.textPrimary)
-                        .lineLimit(1)
-
-                    if !friend.displayName.isEmpty {
-                        Text("@\(friend.username)")
-                            .font(AppFont.regular(11))
-                            .foregroundColor(tc.textSecondary)
-                    }
-
-                    if let level = friend.level, let streak = friend.currentStreak, let rank = friend.rank {
-                        HStack(spacing: DesignSystem.Spacing.sm) {
-                            statBadge(icon: "star.fill", text: "Lv \(level)", color: DesignSystem.Colors.growth)
-                            statBadge(icon: "flame.fill", text: "\(streak)", color: DesignSystem.Colors.energy)
-                            statBadge(icon: "shield.fill", text: Rank.displayString(rr: friend.rr, legacyRank: rank), color: rankColor(rank))
-                        }
-                        .padding(.top, 1)
-                    } else {
-                        Text("No stats shared yet")
-                            .font(AppFont.regular(11))
-                            .foregroundColor(tc.textTertiary)
-                            .padding(.top, 1)
-                    }
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(AppFont.bold(13))
-                    .foregroundColor(tc.textTertiary)
             }
-            .padding(DesignSystem.Spacing.md)
-            .adaptiveCard(borderColor: accent.opacity(0.35), fillColor: tc.cardBackground)
         }
         .buttonStyle(PlainButtonStyle())
         .contextMenu {
@@ -327,6 +307,47 @@ struct FriendsView: View {
             } label: {
                 Label("Remove Friend", systemImage: "person.badge.minus")
             }
+        }
+    }
+
+    /// Identity column: display name (or @username) over the @username sub-line.
+    private func who(_ friend: FriendsViewModel.FriendRow) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(friend.displayName.isEmpty ? "@\(friend.username)" : friend.displayName)
+                .font(AppFont.bold(16))
+                .foregroundColor(tc.textPrimary)
+                .lineLimit(1)
+
+            if !friend.displayName.isEmpty {
+                Text("@\(friend.username)")
+                    .font(AppFont.regular(11))
+                    .foregroundColor(tc.textSecondary)
+            }
+        }
+    }
+
+    /// Trailing column: the published stat badges — rank tier over level + streak — or the
+    /// unpublished note. The rank badge takes its colour from the shared rank metal; the hardcoded
+    /// per-rank hexes this screen used to carry are gone, tokens being the only source now.
+    @ViewBuilder
+    private func statsColumn(_ friend: FriendsViewModel.FriendRow) -> some View {
+        if let level = friend.level, let streak = friend.currentStreak, let rank = friend.rank {
+            VStack(alignment: .trailing, spacing: 5) {
+                statBadge(
+                    icon: "shield.fill",
+                    text: Rank.displayString(rr: friend.rr, legacyRank: rank),
+                    color: DesignSystem.Erewhon.rankMetal(forRR: friend.rr) ?? tc.textTertiary
+                )
+
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    statBadge(icon: "star.fill", text: "Lv \(level)", color: DesignSystem.Colors.growth)
+                    statBadge(icon: "flame.fill", text: "\(streak)", color: DesignSystem.Colors.energy)
+                }
+            }
+        } else {
+            Text("No stats shared yet")
+                .font(AppFont.regular(11))
+                .foregroundColor(tc.textTertiary)
         }
     }
 
@@ -345,22 +366,6 @@ struct FriendsView: View {
             Text(text)
                 .font(AppFont.bold(10))
                 .foregroundColor(tc.textSecondary)
-        }
-    }
-
-    private func rankColor(_ rank: String) -> Color {
-        switch rank {
-        case Rank.stone.rawValue: return Color(hex: "#A8A29E")
-        case Rank.copper.rawValue: return Color(hex: "#B87333")
-        case Rank.iron.rawValue: return tc.textTertiary
-        case Rank.gold.rawValue: return DesignSystem.Colors.goldMid
-        case Rank.platinum.rawValue: return Color(hex: "#5EEAD4")
-        case Rank.diamond.rawValue: return Color(hex: "#38BDF8")
-        case Rank.sentinel.rawValue, Rank.prismatic.rawValue, Rank.zenith.rawValue:
-            return Color(hex: "#38BDF8") // TODO: replace placeholder styling before public launch
-        case "bronze": return Color(hex: "#CD7F32") // retired pre-RR-0a legacy string
-        case "silver": return Color(hex: "#9CA3AF") // retired pre-RR-0a legacy string
-        default: return tc.textTertiary
         }
     }
 
