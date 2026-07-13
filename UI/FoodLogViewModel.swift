@@ -1733,9 +1733,11 @@ final class FoodLogViewModel {
 
     /// Logs the reviewed/edited recognized items through the existing addFoodEntry path.
     ///
-    /// Each included item becomes one `FoodEntry` with `toxinScore: 30` (default)
-    /// and `mealType` from `formMealType`. When a describe-meal photo was used,
-    /// it is attached to every entry created from this recognition.
+    /// Each included item becomes one `FoodEntry`. `toxinScore` is the AI's per-item
+    /// estimate (service-normalized, fallback 30), and the advanced micros
+    /// (fiber/sugar/sodium/saturatedFat/cholesterol/potassium) pass through when present
+    /// (`nil` stored as `nil`). `mealType` comes from `formMealType`. When a describe-meal
+    /// photo was used, it is attached to every entry created from this recognition.
     /// - Parameter items: The reviewed items to log.
     func logRecognizedItems(_ items: [RecognizedFoodItem]) async {
         guard !isSubmittingForm else { return }
@@ -1755,10 +1757,16 @@ final class FoodLogViewModel {
                     protein: item.protein,
                     carbs: item.carbs,
                     fat: item.fat,
-                    toxinScore: 30,
+                    toxinScore: item.toxinScore,
                     date: selectedDate,
                     photoData: mealPhoto,
-                    mealType: formMealType
+                    mealType: formMealType,
+                    fiber: item.fiber,
+                    sugar: item.sugar,
+                    sodium: item.sodium,
+                    saturatedFat: item.saturatedFat,
+                    cholesterol: item.cholesterol,
+                    potassium: item.potassium
                 )
                 totalXP += result.xpEarned
                 loggedCount += 1
