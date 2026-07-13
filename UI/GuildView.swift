@@ -121,6 +121,10 @@ struct GuildView: View {
         Binding(get: { viewModel.joinCode }, set: { viewModel.joinCode = $0 })
     }
 
+    private var directorySearchBinding: Binding<String> {
+        Binding(get: { viewModel.directorySearch }, set: { viewModel.directorySearch = $0 })
+    }
+
     private var notInGuildContent: some View {
         ScrollView {
             VStack(spacing: DesignSystem.Spacing.lg) {
@@ -182,10 +186,158 @@ struct GuildView: View {
                 }
                 .padding(DesignSystem.Spacing.md)
                 .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
+
+                // Browse (R7d)
+                directorySection
             }
             .padding(DesignSystem.Spacing.lg)
         }
         .refreshable { await viewModel.refresh() }
+    }
+
+    // MARK: - Directory (R7d)
+
+    /// The browsable directory of joinable guilds. `private` guilds are absent by
+    /// construction — the rules' `list` clause excludes them, so they never reach the client.
+    private var directorySection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            Text("OPEN GUILDS")
+                .font(AppFont.display(14))
+                .foregroundColor(tc.textSecondary)
+
+            AuthTextField(
+                label: "Browse",
+                placeholder: "Search guilds",
+                text: directorySearchBinding
+            )
+            .autocorrectionDisabled(true)
+
+            if let error = viewModel.directoryError {
+                inlineError(error)
+            }
+
+            directoryBody
+        }
+    }
+
+    @ViewBuilder
+    private var directoryBody: some View {
+        if viewModel.isLoadingDirectory {
+            HStack {
+                Spacer()
+                ProgressView()
+                Spacer()
+            }
+            .padding(DesignSystem.Spacing.lg)
+            .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
+        } else if viewModel.filteredGuildDirectory.isEmpty {
+            Text(viewModel.guildDirectory.isEmpty ? "No open guilds yet" : "No guilds match that search")
+                .font(AppFont.regular(13))
+                .foregroundColor(tc.textTertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(DesignSystem.Spacing.md)
+                .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
+        } else {
+            // One card, hairline-separated rows (the R4b ladder-row anatomy) — the directory
+            // is one list, not a stack of per-guild cards.
+            VStack(spacing: 0) {
+                let rows = viewModel.filteredGuildDirectory
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                    directoryRow(row, isLast: index == rows.count - 1)
+                }
+            }
+            .padding(.horizontal, DesignSystem.Spacing.md)
+            .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
+        }
+    }
+
+    private func directoryRow(_ row: GuildViewModel.GuildDirectoryRow, isLast: Bool) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: DesignSystem.Spacing.md) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(row.name)
+                        .font(AppFont.bold(16))
+                        .foregroundColor(tc.textPrimary)
+                        .lineLimit(1)
+
+                    if let description = row.description, !description.isEmpty {
+                        Text(description)
+                            .font(AppFont.regular(12))
+                            .foregroundColor(tc.textSecondary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                    }
+
+                    policyPill(row.joinPolicy)
+                }
+
+                Spacer(minLength: DesignSystem.Spacing.sm)
+
+                directoryAction(row)
+            }
+            .padding(.vertical, DesignSystem.Spacing.md)
+
+            if !isLast {
+                Rectangle().fill(DesignSystem.Erewhon.lineSoft).frame(height: 1)
+            }
+        }
+    }
+
+    /// Join (open) · Request (request-policy) · Requested (this session's pending request).
+    /// Every action is gated on the single `isJoining` flag — one join at a time.
+    @ViewBuilder
+    private func directoryAction(_ row: GuildViewModel.GuildDirectoryRow) -> some View {
+        if row.id == viewModel.pendingRequestCode {
+            Text("Requested")
+                .font(AppFont.bold(13))
+                .foregroundColor(tc.textTertiary)
+                .padding(.horizontal, DesignSystem.Spacing.md)
+                .padding(.vertical, DesignSystem.Spacing.sm)
+                .adaptivePill(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
+        } else {
+            Button {
+                Task { await viewModel.joinFromDirectory(row) }
+            } label: {
+                Text(row.isRequestPolicy ? "Request" : "Join")
+                    .font(AppFont.bold(13))
+                    .foregroundColor(row.isRequestPolicy ? tc.textSecondary : .white)
+                    .padding(.horizontal, DesignSystem.Spacing.md)
+                    .padding(.vertical, DesignSystem.Spacing.sm)
+                    .adaptivePill(
+                        borderColor: row.isRequestPolicy ? tc.primary.opacity(0.3) : tc.primaryDark,
+                        fillColor: row.isRequestPolicy ? tc.cardBackground : tc.primary
+                    )
+            }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(viewModel.isJoining)
+            .opacity(viewModel.isJoining ? 0.5 : 1.0)
+        }
+    }
+
+    /// The in-guild header badge's style, on a directory row. (`inlineError` is likewise
+    /// mirrored across these two structs — the file's existing convention.)
+    ///
+    /// Exhaustive over the three policies. `private` cannot appear here (the rules' `list`
+    /// clause excludes it), but it is mapped rather than folded into a default that would
+    /// silently label it "Request".
+    private func policyPill(_ joinPolicy: String) -> some View {
+        let icon: String
+        let label: String
+        switch joinPolicy {
+        case "open":     icon = "lock.open.fill";  label = "Open"
+        case "private":  icon = "lock.fill";       label = "Private"
+        default:         icon = "hand.raised.fill"; label = "Request"
+        }
+        return HStack(spacing: DesignSystem.Spacing.xs) {
+            Image(systemName: icon)
+                .font(.system(size: 10))
+            Text(label)
+                .font(AppFont.bold(11))
+        }
+        .foregroundColor(tc.textSecondary)
+        .padding(.horizontal, DesignSystem.Spacing.sm)
+        .padding(.vertical, DesignSystem.Spacing.xs)
+        .adaptivePill(borderColor: tc.primary.opacity(0.3), fillColor: tc.primary.opacity(0.08))
     }
 
     private func pendingRequestCard(code: String) -> some View {
@@ -351,12 +503,11 @@ struct GuildDetailView: View {
                 .foregroundColor(tc.textPrimary)
                 .multilineTextAlignment(.center)
 
-            // Join policy + member count
+            // Join policy + member count. R7d: exhaustive over the three policies — the
+            // binary ternary this replaced would have labelled a `private` guild
+            // "Request to join", which is the one thing it isn't.
             HStack(spacing: DesignSystem.Spacing.sm) {
-                metaPill(
-                    icon: guild.joinPolicy == "open" ? "lock.open.fill" : "hand.raised.fill",
-                    text: guild.joinPolicy == "open" ? "Open" : "Request to join"
-                )
+                metaPill(icon: policyIcon(guild.joinPolicy), text: policyLabel(guild.joinPolicy))
                 metaPill(
                     icon: "person.2.fill",
                     text: "\(viewModel.memberCount) member\(viewModel.memberCount == 1 ? "" : "s")"
@@ -415,6 +566,22 @@ struct GuildDetailView: View {
         .frame(maxWidth: .infinity)
         .padding(DesignSystem.Spacing.lg)
         .adaptiveCard(borderColor: tc.primary.opacity(0.4), fillColor: tc.cardBackground)
+    }
+
+    private func policyIcon(_ joinPolicy: String) -> String {
+        switch joinPolicy {
+        case "open":    return "lock.open.fill"
+        case "private": return "lock.fill"
+        default:        return "hand.raised.fill"
+        }
+    }
+
+    private func policyLabel(_ joinPolicy: String) -> String {
+        switch joinPolicy {
+        case "open":    return "Open"
+        case "private": return "Private"
+        default:        return "Request to join"
+        }
     }
 
     private func metaPill(icon: String, text: String) -> some View {

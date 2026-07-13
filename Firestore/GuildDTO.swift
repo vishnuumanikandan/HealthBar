@@ -20,6 +20,14 @@ import Foundation
 /// written with the server-timestamp sentinel and decoded with `.estimate` so a
 /// just-written (still-pending) value still decodes.
 
+/// Guild-wide constants (R7d).
+enum GuildConstants {
+    /// Cap on the browsable directory fetch. The query is unpaginated (the known
+    /// directory-reads debt class); beyond this, guilds are silently truncated and
+    /// only the fetched set is searchable.
+    static let directoryFetchCap = 100
+}
+
 /// A guild document at `guilds/{guildCode}`.
 ///
 /// `id` is the Firestore document ID (= the shareable guild code). It is NOT a
@@ -31,7 +39,11 @@ struct GuildDTO: Codable {
     var id: String?
     var name: String
     var ownerUid: String
-    /// `"open"` or `"request"`.
+    /// `"open"`, `"request"`, or `"private"` (R7d).
+    ///
+    /// `open` and `request` are listed in the browsable directory; `private` is
+    /// hidden from it (enforced by the rules' `list` clause, not just the client)
+    /// and joins by code exactly like an `open` guild.
     var joinPolicy: String
     var description: String?
     var createdAt: Date

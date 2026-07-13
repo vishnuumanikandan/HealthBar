@@ -24,6 +24,14 @@
         { "fieldPath": "claimedBy", "order": "ASCENDING" },
         { "fieldPath": "rr", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "guilds",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "joinPolicy", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

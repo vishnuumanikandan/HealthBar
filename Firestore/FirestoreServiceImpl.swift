@@ -1162,6 +1162,27 @@ final class FirestoreServiceImpl: FirestoreService {
         return dto
     }
 
+    /// R7d — the browsable directory. Equality-in filter + order-by on a different field, so it
+    /// needs the composite index (guilds: joinPolicy ASC, name ASC) in firestore.indexes.json.
+    ///
+    /// The `whereField(in:)` constraint is what makes this query PROVABLE under the rules' `list`
+    /// clause (`resource.data.joinPolicy != 'private'`): Firestore permits a list only when the
+    /// query cannot possibly return a denied document. Dropping the constraint and filtering
+    /// client-side would make the whole query permission-denied, not merely slower.
+    func fetchGuildDirectory() async throws -> [GuildDTO] {
+        let snapshot = try await db.collection("guilds")
+            .whereField("joinPolicy", in: ["open", "request"])
+            .order(by: "name")
+            .limit(to: GuildConstants.directoryFetchCap)
+            .getDocuments()
+        // Same decode as fetchGuild: the code is the doc id, not a stored field.
+        return snapshot.documents.compactMap { doc in
+            guard var dto = try? doc.data(as: GuildDTO.self, with: .estimate) else { return nil }
+            dto.id = doc.documentID
+            return dto
+        }
+    }
+
     func fetchMyGuild(uid: String) async throws -> GuildDTO? {
         let snapshot = try await guildMembershipDocument(for: uid).getDocument()
         guard snapshot.exists else { return nil }

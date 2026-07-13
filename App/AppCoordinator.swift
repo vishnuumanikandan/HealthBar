@@ -889,6 +889,7 @@ final class AppCoordinator {
         try await dataManager.createGuild(name: name, joinPolicy: joinPolicy, description: description)
     }
     func myGuild() async -> GuildDTO? { await dataManager.myGuild() }
+    func fetchGuildDirectory() async throws -> [GuildDTO] { try await dataManager.fetchGuildDirectory() }
     func guildMembers(code: String) async -> [GuildMemberDTO] { await dataManager.guildMembers(code: code) }
     func joinRequests(code: String) async -> [GuildJoinRequestDTO] { await dataManager.joinRequests(code: code) }
     func joinGuild(code: String) async throws { try await dataManager.joinGuild(code: code) }
