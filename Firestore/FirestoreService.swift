@@ -380,6 +380,14 @@ protocol FirestoreService {
     /// Read a guild by code (for the join screen). nil if not found.
     func fetchGuild(code: String) async throws -> GuildDTO?
 
+    /// The browsable guild directory (R7d): the joinable, non-`private` guilds, name-ordered
+    /// and capped at `GuildConstants.directoryFetchCap`. Read-only; no listener.
+    ///
+    /// The `joinPolicy in ['open','request']` constraint is load-bearing, NOT a convenience
+    /// filter: the rules' `list` clause denies any query that could return a `private` guild,
+    /// so an unconstrained fetch is permission-denied. Do not relax it.
+    func fetchGuildDirectory() async throws -> [GuildDTO]
+
     /// The current user's guild via an O(1) read of guildMemberships/{uid} → its guildCode →
     /// fetchGuild(code:). Returns nil if the lock doc is absent (not in a guild). No collectionGroup.
     func fetchMyGuild(uid: String) async throws -> GuildDTO?

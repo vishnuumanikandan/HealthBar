@@ -3025,7 +3025,10 @@ final class DataManager {
         guard !trimmedName.isEmpty, trimmedName.count <= 30 else {
             throw GuildError.network("Guild name must be 1–30 characters.")
         }
-        guard joinPolicy == "open" || joinPolicy == "request" else {
+        // R7d: "private" joins the enum — joinable by code like an open guild, but
+        // hidden from the browsable directory. Kept in lockstep with the rules'
+        // `joinPolicy in ['open','request','private']` on guild create/update.
+        guard joinPolicy == "open" || joinPolicy == "request" || joinPolicy == "private" else {
             throw GuildError.network("Invalid join policy.")
         }
         let trimmedDesc = description?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -3091,6 +3094,15 @@ final class DataManager {
         return try? await firestoreService.fetchMyGuild(uid: me)
     }
 
+    /// The browsable directory of joinable guilds (R7d): open + request policies only,
+    /// name-ordered, capped. Empty for guests (D5) and on failure — the view model
+    /// surfaces the error separately via the throwing path it wraps.
+    func fetchGuildDirectory() async throws -> [GuildDTO] {
+        guard !isGuest else { return [] }
+        do { return try await firestoreService.fetchGuildDirectory() }
+        catch { throw GuildError.network(error.localizedDescription) }
+    }
+
     /// The roster for a guild. Readable by members (and the owner); empty for guests
     /// or when the caller is not permitted to read it.
     func guildMembers(code: String) async -> [GuildMemberDTO] {
@@ -3130,7 +3142,11 @@ final class DataManager {
         }
 
         let identity = try await fetchMyFriendIdentity(userId: me)
-        if guild.joinPolicy == "open" {
+        // R7d D2: "private" routes like "open" — a direct join. Private guilds are hidden
+        // from the directory, not harder to join once you hold the code; the members-create
+        // rule mirrors this (`joinPolicy in ['open','private']`). Only "request" defers to
+        // an approval. Without this branch a valid private code would error.
+        if guild.joinPolicy == "open" || guild.joinPolicy == "private" {
             try await firestoreService.joinOpenGuild(code: guildCode, uid: me,
                                                      username: identity.username, displayName: identity.displayName)
         } else {

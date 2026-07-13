@@ -234,7 +234,10 @@ private struct GuildFormContent: View {
                     .font(AppFont.bold(14))
                     .foregroundColor(tc.textPrimary)
 
-                HStack(spacing: DesignSystem.Spacing.sm) {
+                // R7d: three policies. Stacked rather than side-by-side — a third column
+                // squeezes each option to ~a third of the width and wraps the subtitles into
+                // unreadable slivers. Each option keeps the existing card treatment exactly.
+                VStack(spacing: DesignSystem.Spacing.sm) {
                     policyOption(
                         value: "open",
                         title: "Open",
@@ -246,6 +249,12 @@ private struct GuildFormContent: View {
                         title: "Request",
                         subtitle: "You approve each member",
                         icon: "hand.raised.fill"
+                    )
+                    policyOption(
+                        value: "private",
+                        title: "Private",
+                        subtitle: "Joinable by code only — hidden from the guild list",
+                        icon: "lock.fill"
                     )
                 }
             }

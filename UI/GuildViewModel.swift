@@ -51,6 +51,19 @@ final class GuildViewModel {
         var title: String { displayName.isEmpty ? "@\(username)" : displayName }
     }
 
+    /// A row in the browsable guild directory (R7d). `id` is the guild code — the only
+    /// key the join path needs, so the row carries no server state beyond what it renders.
+    /// `private` guilds never appear here: the rules' `list` clause excludes them.
+    struct GuildDirectoryRow: Identifiable, Equatable {
+        let id: String          // guild code
+        let name: String
+        let description: String?
+        let joinPolicy: String
+
+        /// Request-policy guilds send an approval request rather than joining directly.
+        var isRequestPolicy: Bool { joinPolicy == "request" }
+    }
+
     // MARK: - Dependencies
 
     private let coordinator: AppCoordinator
@@ -74,7 +87,30 @@ final class GuildViewModel {
 
     /// Set after a successful request-to-join (session-local). Drives the
     /// "Request sent" pending banner; cleared on cancel or once we are a member.
+    ///
+    /// D4: session-local by contract. A request made in a PREVIOUS session renders as a
+    /// plain "Request" button again; re-tapping surfaces the existing duplicate/lost-race
+    /// error path. Not persisted — that is the shipped G-series behavior, not a new bug.
     var pendingRequestCode: String? = nil
+
+    // MARK: - Directory (not-in-guild) State — R7d
+
+    /// The browsable directory: joinable, non-`private` guilds, name-ordered.
+    var guildDirectory: [GuildDirectoryRow] = []
+    var directoryError: String? = nil
+    /// Client-side search over the fetched set only (the fetch is capped, not paginated).
+    var directorySearch: String = ""
+    /// True during the FIRST directory fetch — distinguishes "still loading" from
+    /// "loaded, and there genuinely are no open guilds".
+    var isLoadingDirectory: Bool = false
+
+    /// The directory filtered by `directorySearch`. Empty (or whitespace-only) input = all.
+    /// Case-insensitive substring match on the guild name; never on the description.
+    var filteredGuildDirectory: [GuildDirectoryRow] {
+        let q = directorySearch.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return guildDirectory }
+        return guildDirectory.filter { $0.name.lowercased().contains(q) }
+    }
 
     // MARK: - Action State (in-guild)
 
@@ -106,6 +142,10 @@ final class GuildViewModel {
         guard let g = await coordinator.myGuild(), let code = g.id else {
             resetGuildState()
             stage = .notInGuild
+            // R7d: the directory is the not-in-guild stage's content, so it loads with the
+            // stage (fetch-on-view). refresh() reaches it through load() unchanged; guests
+            // returned above and never get here (D5).
+            await loadGuildDirectory()
             return
         }
 
@@ -155,16 +195,53 @@ final class GuildViewModel {
         isOwner = false
     }
 
+    // MARK: - Directory (R7d)
+
+    /// Fetches the browsable directory. Guest-gated at the DataManager entry point (D5);
+    /// on failure the previously fetched rows stay put behind the error banner rather than
+    /// blanking the list into a misleading "no open guilds" empty state.
+    func loadGuildDirectory() async {
+        isLoadingDirectory = guildDirectory.isEmpty
+        directoryError = nil
+        defer { isLoadingDirectory = false }
+        do {
+            let dtos = try await coordinator.fetchGuildDirectory()
+            // A guild with no code is unjoinable — drop it rather than render a dead row.
+            guildDirectory = dtos.compactMap { dto in
+                guard let code = dto.id else { return nil }
+                return GuildDirectoryRow(id: code, name: dto.name,
+                                         description: dto.description, joinPolicy: dto.joinPolicy)
+            }
+        } catch {
+            directoryError = friendlyMessage(for: error)
+        }
+    }
+
     // MARK: - Join Flow
 
-    /// Joins (open) or requests to join (request-policy) the entered code.
+    /// Joins (open/private) or requests to join (request-policy) the code in the entry field.
     func join() async {
+        // The in-flight guard stays AHEAD of the empty-code check, as before — a join in
+        // flight must not repaint the field's validation error.
         guard !isJoining else { return }
         let code = joinCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !code.isEmpty else {
             joinError = "Enter a guild code."
             return
         }
+        await performJoin(code: code)
+    }
+
+    /// Joins (or requests) straight from a directory row — the row's id IS the guild code,
+    /// so it needs no normalization. Same core, same single in-flight flag as the code path.
+    func joinFromDirectory(_ row: GuildDirectoryRow) async {
+        await performJoin(code: row.id, fromDirectory: true)
+    }
+
+    /// The shared join core. `isJoining` is the ONE in-flight flag: it disables the
+    /// code-entry button and EVERY directory row action, so only one join runs at a time.
+    private func performJoin(code: String, fromDirectory: Bool = false) async {
+        guard !isJoining else { return }
         isJoining = true
         joinError = nil
         defer { isJoining = false }
@@ -181,6 +258,9 @@ final class GuildViewModel {
             }
         } catch {
             joinError = friendlyMessage(for: error)
+            // A row can go stale between fetch and tap (disbanded, or switched to private).
+            // Re-fetch so the dead row disappears with the error rather than lingering.
+            if fromDirectory { await loadGuildDirectory() }
         }
     }
 
