@@ -64,13 +64,10 @@ struct FoodLogView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Food Log")
-                        .font(AppFont.bold(20))
-                        .foregroundColor(tc.textPrimary)
-                }
-            }
+            // R7c §4: no nav-bar title on the tab root — the in-content head is the header, and the
+            // root's toolbar held nothing else (the date nav lives in the content, not the bar), so
+            // the empty bar is hidden. The sheets below keep their own principal titles.
+            .toolbar(.hidden, for: .navigationBar)
             // Add Food 3-choice sheet
             .sheet(isPresented: $viewModel.showingAddFoodChoice) {
                 AddFoodChoiceSheet(viewModel: viewModel)
