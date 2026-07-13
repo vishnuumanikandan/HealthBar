@@ -42,6 +42,9 @@ struct BattleView: View {
     @State private var showMacroQTE = false
     @State private var macroGuessPlayedToday = false
 
+    /// R7b §4b: presents the full ranked ladder from the tappable rank block in arenaHead.
+    @State private var showingRankLadder = false
+
     // MARK: - Init
 
     init(
@@ -136,6 +139,10 @@ struct BattleView: View {
                 Task { macroGuessPlayedToday = (await coordinator.todayQTEState())?.macroGuessPlayed ?? false }
             }
         }
+        // R7b §4b: the ranked ladder, opened by tapping the rank block in arenaHead.
+        .sheet(isPresented: $showingRankLadder) {
+            RankLadderSheet(currentRR: viewModel.myRR)
+        }
         .confirmationDialog(
             "Forfeit this duel?",
             isPresented: Binding(
@@ -170,6 +177,7 @@ struct BattleView: View {
             && !showingChallenge
             && !showingMatchmaking
             && !showMacroQTE
+            && !showingRankLadder   // R7b §4b: the celebration waits behind the ladder sheet too.
             && duelToForfeit == nil
             && arenaDuelId == nil
     }
@@ -252,8 +260,18 @@ struct BattleView: View {
             Text("The Arena")
                 .font(AppFont.display(38))
                 .foregroundColor(tc.textPrimary)
-            rankBlock
-                .padding(.top, 4)
+            // R7b §4b: the whole rank block is one tap target → the ranked-ladder sheet.
+            // `.contentShape` makes the full frame (well over 44pt) tappable; the explicit
+            // label replaces the block's inner figures for VoiceOver.
+            Button {
+                showingRankLadder = true
+            } label: {
+                rankBlock
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .accessibilityLabel("View the ranked ladder")
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 6)

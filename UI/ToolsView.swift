@@ -20,6 +20,15 @@ final class ToolsViewModel {
 
 // MARK: - ToolsView
 
+/// PARTIALLY RETIRED (R7b §2): the Tools row was removed from ProfileView's settings. R7b's
+/// plan treated Profile as ToolsView's last entry point — but it is NOT. FoodLogView's
+/// date-navigator still presents this view (its "wrench" button → `showingTools`), an R5a/D2
+/// entry point the plan overlooked. So ToolsView remains REACHABLE from the Food tab and is
+/// kept as-is (GlobalLeaderboardView-style retirement note); the calculators
+/// (`CalculatorViews.swift`) are likewise still reachable through it. Fully retiring this view
+/// is blocked on that FoodLogView entry point, which is out of R7b's scope — do not delete.
+///
+/// `ToolsViewModel` above is unaffected: it is still constructed by both FoodLogView and this view.
 struct ToolsView: View {
 
     let toolsViewModel: ToolsViewModel

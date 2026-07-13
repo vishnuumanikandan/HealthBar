@@ -996,31 +996,28 @@ struct HomeView: View {
                     resourceRow(summary)
                         .padding(.top, 20)
                         .modifier(EntranceReveal(index: 1, isRevealed: hasRevealed, reduceMotion: reduceMotion))
-                    xpLine(summary)
-                        .padding(.top, 14)
-                        .modifier(EntranceReveal(index: 2, isRevealed: hasRevealed, reduceMotion: reduceMotion))
                     calorieHero(summary)
                         .padding(.top, 28)
-                        .modifier(EntranceReveal(index: 3, isRevealed: hasRevealed, reduceMotion: reduceMotion))
+                        .modifier(EntranceReveal(index: 2, isRevealed: hasRevealed, reduceMotion: reduceMotion))
                 }
 
                 jumpCards(proxy)
                     .padding(.top, 18)
-                    .modifier(EntranceReveal(index: 4, isRevealed: hasRevealed, reduceMotion: reduceMotion))
+                    .modifier(EntranceReveal(index: 3, isRevealed: hasRevealed, reduceMotion: reduceMotion))
 
                 if let summary = viewModel.summary {
                     purityBlock(summary)
                         .padding(.top, 26)
-                        .modifier(EntranceReveal(index: 5, isRevealed: hasRevealed, reduceMotion: reduceMotion))
+                        .modifier(EntranceReveal(index: 4, isRevealed: hasRevealed, reduceMotion: reduceMotion))
                 }
 
                 // Daily Spark (kept) — renders nothing unless a mid-duel non-guest hasn't played.
                 sparkQTECard
-                    .modifier(EntranceReveal(index: 6, isRevealed: hasRevealed, reduceMotion: reduceMotion))
+                    .modifier(EntranceReveal(index: 5, isRevealed: hasRevealed, reduceMotion: reduceMotion))
 
                 // Active duels (kept), recontainerized into the block + sec-head language.
                 cleanDuelsBlock
-                    .modifier(EntranceReveal(index: 7, isRevealed: hasRevealed, reduceMotion: reduceMotion))
+                    .modifier(EntranceReveal(index: 6, isRevealed: hasRevealed, reduceMotion: reduceMotion))
             }
 
             Group {
@@ -1031,35 +1028,35 @@ struct HomeView: View {
                         macrosCard(summary)
                     }
                     .padding(.top, 30)
-                    .modifier(EntranceReveal(index: 8, isRevealed: hasRevealed, reduceMotion: reduceMotion))
+                    .modifier(EntranceReveal(index: 7, isRevealed: hasRevealed, reduceMotion: reduceMotion))
                 }
 
                 actionsRow
                     .padding(.top, 24)
-                    .modifier(EntranceReveal(index: 9, isRevealed: hasRevealed, reduceMotion: reduceMotion))
+                    .modifier(EntranceReveal(index: 8, isRevealed: hasRevealed, reduceMotion: reduceMotion))
 
                 // Insights (kept) — position unchanged relative to the quests block.
                 if insightsShown, let insights = viewModel.dailyInsights {
                     insightsCard(insights)
                         .padding(.top, 30)
-                        .modifier(EntranceReveal(index: 10, isRevealed: hasRevealed, reduceMotion: reduceMotion))
+                        .modifier(EntranceReveal(index: 9, isRevealed: hasRevealed, reduceMotion: reduceMotion))
                 }
 
                 questsBlockClean
                     .padding(.top, insightsShown ? 16 : 30)
                     .id(Self.questsAnchorID)
-                    .modifier(EntranceReveal(index: 11, isRevealed: hasRevealed, reduceMotion: reduceMotion))
+                    .modifier(EntranceReveal(index: 10, isRevealed: hasRevealed, reduceMotion: reduceMotion))
 
                 mealsBlockClean
                     .padding(.top, 30)
-                    .modifier(EntranceReveal(index: 12, isRevealed: hasRevealed, reduceMotion: reduceMotion))
+                    .modifier(EntranceReveal(index: 11, isRevealed: hasRevealed, reduceMotion: reduceMotion))
 
                 VStack(spacing: 0) {
                     secHead("Weekly summary", nil)
                     weeklyContent
                 }
                 .padding(.top, 30)
-                .modifier(EntranceReveal(index: 13, isRevealed: hasRevealed, reduceMotion: reduceMotion))
+                .modifier(EntranceReveal(index: 12, isRevealed: hasRevealed, reduceMotion: reduceMotion))
 
                 LeaderboardSection(
                     viewModel: leaderboardViewModel,
@@ -1068,7 +1065,7 @@ struct HomeView: View {
                     onAddFriends: { showFriends = true }
                 )
                 .padding(.top, 30)
-                .modifier(EntranceReveal(index: 14, isRevealed: hasRevealed, reduceMotion: reduceMotion))
+                .modifier(EntranceReveal(index: 13, isRevealed: hasRevealed, reduceMotion: reduceMotion))
             }
         }
         .padding(.horizontal, 22)
@@ -1162,11 +1159,37 @@ struct HomeView: View {
         .padding(.horizontal, 14)
     }
 
-    /// Mockup `.resource`: Rank / Total XP / Streak chips in one hairlined surface card.
+    /// R7b §4a: icon-slot overload of `resChip` — identical chip layout, but the leading glyph
+    /// is caller-supplied (the Rank chip routes its RankPlaque through here). The 20×20 icon
+    /// frame + padding match the `icon: String` sibling so the row stays aligned.
+    private func resChip<Icon: View, V: View>(
+        @ViewBuilder icon: () -> Icon,
+        label: String,
+        @ViewBuilder value: () -> V
+    ) -> some View {
+        HStack(spacing: 10) {
+            icon()
+                .frame(width: 20, height: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(AppFont.regular(10))
+                    .foregroundColor(tc.textTertiary)
+                value()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 13)
+        .padding(.horizontal, 14)
+    }
+
+    /// Mockup `.resource`, R7b §3: Rank | Total XP (the Streak chip moved to the persistent top
+    /// bar). R7b §4a: the Rank chip shows the shared RankPlaque instead of an SF glyph.
     private func resourceRow(_ summary: TodaySummary) -> some View {
         flatCard {
             HStack(spacing: 0) {
-                resChip(icon: "shield", label: "Rank") {
+                resChip(icon: {
+                    RankPlaque(rank: summary.currentRankTier.rank, size: 22)
+                }, label: "Rank") {
                     Text(summary.currentRankTier.displayName)
                         .font(AppFont.display(17)).foregroundColor(tc.textPrimary)
                 }
@@ -1175,39 +1198,7 @@ struct HomeView: View {
                     Text(summary.totalXP.formatted())
                         .font(AppFont.display(17)).foregroundColor(tc.textPrimary)
                 }
-                resDivider
-                resChip(icon: "flame", label: "Streak") {
-                    HStack(alignment: .firstTextBaseline, spacing: 0) {
-                        Text("\(summary.currentStreak)")
-                            .font(AppFont.display(17)).foregroundColor(tc.textPrimary)
-                        Text(" days")
-                            .font(AppFont.regular(10)).foregroundColor(tc.textSecondary)
-                    }
-                }
             }
-        }
-    }
-
-    /// Mockup `.xpline`: level + XP-to-next over an accent-filled track (D1.3).
-    private func xpLine(_ summary: TodaySummary) -> some View {
-        VStack(spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Level \(summary.currentLevel)")
-                    .font(AppFont.bold(12))
-                    .foregroundColor(tc.textPrimary)
-                Spacer()
-                Text("\(summary.xpForNextLevel) XP to next")
-                    .font(AppFont.bold(11))
-                    .foregroundColor(tc.primary)
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(tc.segBackground)
-                    Capsule().fill(tc.primary)
-                        .frame(width: geo.size.width * min(max(viewModel.levelProgressPercentage, 0), 1))
-                }
-            }
-            .frame(height: 7)
         }
     }
 

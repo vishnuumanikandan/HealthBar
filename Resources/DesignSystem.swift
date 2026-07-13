@@ -420,6 +420,11 @@ enum DesignSystem {
         /// includes the home-indicator region, which safeAreaInset supplies automatically).
         static let tabBarContentHeight: CGFloat = 64
 
+        /// Persistent top-bar content height below the top safe area (R7b §1). Mirror of
+        /// `tabBarContentHeight`: the status-bar region is supplied automatically by the
+        /// top `safeAreaInset`, so this is the chrome's own height (level/XP · streak).
+        static let topBarContentHeight: CGFloat = 52
+
         /// Subtle raised-element shadow (mockup --shadow-1 approximation).
         static let subtleShadow: (color: Color, radius: CGFloat, y: CGFloat) =
             (Color.black.opacity(0.06), 7, 3)
