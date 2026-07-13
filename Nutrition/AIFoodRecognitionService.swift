@@ -84,6 +84,13 @@ final class AIFoodRecognitionService {
             let protein: Double?
             let carbs: Double?
             let fat: Double?
+            let toxinScore: Int?
+            let fiber: Double?
+            let sugar: Double?
+            let sodium: Double?
+            let saturatedFat: Double?
+            let cholesterol: Double?
+            let potassium: Double?
             let confidence: String?
             let confidenceReason: String?
         }
@@ -109,7 +116,7 @@ final class AIFoodRecognitionService {
 
     private static let apiURL = URL(string: "https://api.anthropic.com/v1/messages")!
     private static let model = "claude-sonnet-4-6"
-    private static let maxTokens = 1024
+    private static let maxTokens = 4096
     private static let maxInputLength = 500
     private static let maxItems = 20
     private static let maxClarificationsTotal = 3
@@ -117,13 +124,18 @@ final class AIFoodRecognitionService {
     private static let minImportance = 0.15
     private static let maxDeltaCalories = 2000
     private static let maxDeltaMacro = 250.0
+    private static let fallbackToxinScore = 30
+    private static let maxMicroGrams = 500.0         // fiber, sugar, saturatedFat
+    private static let maxMicroMilligrams = 10_000.0 // sodium, cholesterol, potassium
 
     private static let systemPromptBase = """
     Return ONLY a JSON object, no prose, no markdown fences. Schema:\
-    {"items":[{"name":String,"quantity":String,"calories":Int,"protein":Number,"carbs":Number,"fat":Number,"confidence":"high"|"medium"|"low","confidenceReason":String|null}],\
+    {"items":[{"name":String,"quantity":String,"calories":Int,"protein":Number,"carbs":Number,"fat":Number,"toxinScore":Int,"fiber":Number|null,"sugar":Number|null,"sodium":Number|null,"saturatedFat":Number|null,"cholesterol":Number|null,"potassium":Number|null,"confidence":"high"|"medium"|"low","confidenceReason":String|null}],\
     "clarification":String|null,\
     "clarifications":[{"itemIndex":Int,"question":String,"importance":Number,"defaultOptionIndex":Int,"options":[{"label":String,"dCalories":Int,"dProtein":Number,"dCarbs":Number,"dFat":Number}]}]}\
-    Example: "2 scrambled eggs, toast" → {"items":[{"name":"Scrambled Eggs","quantity":"2 eggs","calories":182,"protein":12.6,"carbs":1.6,"fat":13.6,"confidence":"high","confidenceReason":null},{"name":"Toast","quantity":"1 slice","calories":79,"protein":2.7,"carbs":14.7,"fat":1.0,"confidence":"medium","confidenceReason":null}],"clarification":null,"clarifications":[]}\
+    Example: "2 scrambled eggs, toast" → {"items":[{"name":"Scrambled Eggs","quantity":"2 eggs","calories":182,"protein":12.6,"carbs":1.6,"fat":13.6,"toxinScore":10,"fiber":0,"sugar":0.6,"sodium":180,"saturatedFat":4.1,"cholesterol":372,"potassium":176,"confidence":"high","confidenceReason":null},{"name":"Toast","quantity":"1 slice","calories":79,"protein":2.7,"carbs":14.7,"fat":1.0,"toxinScore":40,"fiber":1.9,"sugar":1.5,"sodium":150,"saturatedFat":0.2,"cholesterol":0,"potassium":50,"confidence":"medium","confidenceReason":null}],"clarification":null,"clarifications":[]}\
+    Units: fiber/sugar/saturatedFat in grams; sodium/cholesterol/potassium in milligrams. Omit (null) any micronutrient you cannot reasonably estimate for this specific food — never guess sodium/cholesterol/potassium for foods where it is highly variable.\
+    toxinScore rates how processed/unhealthy the item is, 0–100: 0–15 whole unprocessed foods (fruits, vegetables, plain meats, eggs, plain grains); 16–35 lightly processed (plain yogurt, whole-grain bread, cheese, home-cooked mixed dishes); 36–60 moderately processed (white bread, deli meat, granola bars, restaurant meals with unknown oils); 61–85 ultra-processed (chips, candy, soda, fast food); 86–100 extreme (energy drinks with candy, deep-fried ultra-processed combinations). Score the item as described, not a worst-case version of it.\
     Set confidence:"low" when portion or identity is uncertain. If input is too vague to estimate any items, return {"items":[],"clarification":"<your question>","clarifications":[]}.\
     Emit clarifications ONLY for genuinely ambiguous items — unknown portion, likely-hidden added fats (oil/butter/dressing/sauce), or ambiguous size. High-confidence items get none.\
     Max 3 clarifications total; max 4 options each; options mutually exclusive; labels ≤14 chars.\
@@ -374,6 +386,31 @@ final class AIFoodRecognitionService {
                 reason = String(rawReason.prefix(40))
             }
 
+            // Toxin score: missing → fallback; present → clamped into 0...100 (never swapped for fallback).
+            let toxin = clamp(raw.toxinScore ?? Self.fallbackToxinScore, 0...100)
+
+            // Advanced micros — range clamps (nil-preserving; negatives clamp to 0, not nil).
+            var fiber = raw.fiber.map { clamp($0, 0...Self.maxMicroGrams) }
+            var sugar = raw.sugar.map { clamp($0, 0...Self.maxMicroGrams) }
+            let sodium = raw.sodium.map { clamp($0, 0...Self.maxMicroMilligrams) }
+            var saturatedFat = raw.saturatedFat.map { clamp($0, 0...Self.maxMicroGrams) }
+            let cholesterol = raw.cholesterol.map { clamp($0, 0...Self.maxMicroMilligrams) }
+            let potassium = raw.potassium.map { clamp($0, 0...Self.maxMicroMilligrams) }
+
+            // Consistency clamps (after range clamps, using final macros): a component can't exceed its parent.
+            if let sf = saturatedFat, sf > fat {
+                print("[AIFoodRecognition] Clamped saturatedFat for '\(clampedName)': \(sf) → \(fat)")
+                saturatedFat = fat
+            }
+            if let sg = sugar, sg > carbs {
+                print("[AIFoodRecognition] Clamped sugar for '\(clampedName)': \(sg) → \(carbs)")
+                sugar = carbs
+            }
+            if let fb = fiber, fb > carbs {
+                print("[AIFoodRecognition] Clamped fiber for '\(clampedName)': \(fb) → \(carbs)")
+                fiber = carbs
+            }
+
             results.append(RecognizedFoodItem(
                 id: UUID(),
                 name: clampedName,
@@ -383,6 +420,13 @@ final class AIFoodRecognitionService {
                 carbs: carbs,
                 fat: fat,
                 confidence: confidence,
+                toxinScore: toxin,
+                fiber: fiber,
+                sugar: sugar,
+                sodium: sodium,
+                saturatedFat: saturatedFat,
+                cholesterol: cholesterol,
+                potassium: potassium,
                 baselineCalories: calories,
                 baselineProtein: protein,
                 baselineCarbs: carbs,

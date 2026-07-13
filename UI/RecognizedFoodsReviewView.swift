@@ -481,6 +481,15 @@ private struct DraftItem: Identifiable {
     let baselineCarbs: Double
     let baselineFat: Double
 
+    /// Advanced nutrition carried through the review round-trip unedited (not shown/editable here).
+    let toxinScore: Int
+    let fiber: Double?
+    let sugar: Double?
+    let sodium: Double?
+    let saturatedFat: Double?
+    let cholesterol: Double?
+    let potassium: Double?
+
     var confidenceReason: String?
     var clarifications: [FoodClarification]
     var manualEditLocked: Bool = false
@@ -508,6 +517,13 @@ private struct DraftItem: Identifiable {
         self.baselineProtein = item.baselineProtein
         self.baselineCarbs = item.baselineCarbs
         self.baselineFat = item.baselineFat
+        self.toxinScore = item.toxinScore
+        self.fiber = item.fiber
+        self.sugar = item.sugar
+        self.sodium = item.sodium
+        self.saturatedFat = item.saturatedFat
+        self.cholesterol = item.cholesterol
+        self.potassium = item.potassium
         self.confidenceReason = item.confidenceReason
         self.clarifications = item.clarifications
     }
@@ -531,7 +547,14 @@ private struct DraftItem: Identifiable {
             protein: p,
             carbs: c,
             fat: f,
-            confidence: confidence
+            confidence: confidence,
+            toxinScore: toxinScore,
+            fiber: fiber,
+            sugar: sugar,
+            sodium: sodium,
+            saturatedFat: saturatedFat,
+            cholesterol: cholesterol,
+            potassium: potassium
         )
     }
 

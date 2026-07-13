@@ -38,6 +38,18 @@ struct RecognizedFoodItem: Identifiable, Equatable {
     /// How confident the AI is in this estimate.
     var confidence: Confidence
 
+    /// AI-estimated processing/toxin score (0–100). Service-normalized, never absent.
+    var toxinScore: Int
+
+    /// Advanced micronutrients — `nil` when the AI could not reasonably estimate the field.
+    /// Units: fiber/sugar/saturatedFat in grams; sodium/cholesterol/potassium in milligrams.
+    var fiber: Double?
+    var sugar: Double?
+    var sodium: Double?
+    var saturatedFat: Double?
+    var cholesterol: Double?
+    var potassium: Double?
+
     /// Immutable baseline macro snapshot captured at decode (= the AI's initial values).
     let baselineCalories: Int
     let baselineProtein: Double
@@ -65,6 +77,13 @@ struct RecognizedFoodItem: Identifiable, Equatable {
         carbs: Double,
         fat: Double,
         confidence: Confidence,
+        toxinScore: Int = 30,
+        fiber: Double? = nil,
+        sugar: Double? = nil,
+        sodium: Double? = nil,
+        saturatedFat: Double? = nil,
+        cholesterol: Double? = nil,
+        potassium: Double? = nil,
         baselineCalories: Int? = nil,
         baselineProtein: Double? = nil,
         baselineCarbs: Double? = nil,
@@ -80,6 +99,13 @@ struct RecognizedFoodItem: Identifiable, Equatable {
         self.carbs = carbs
         self.fat = fat
         self.confidence = confidence
+        self.toxinScore = toxinScore
+        self.fiber = fiber
+        self.sugar = sugar
+        self.sodium = sodium
+        self.saturatedFat = saturatedFat
+        self.cholesterol = cholesterol
+        self.potassium = potassium
         self.baselineCalories = baselineCalories ?? calories
         self.baselineProtein = baselineProtein ?? protein
         self.baselineCarbs = baselineCarbs ?? carbs
