@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<!--
+  welcome-mockup.html — B1 ground truth (Overheal first-launch welcome screen).
+
+  Two approved deltas are baked in here and are specified in the B1 prompt:
+    1. WORDMARK is OVER / HEAL (stacked), not HEALTH / BAR.
+    2. The hero bar uses the "overheal" MOTIF — the fill sweeps the FULL track and the
+       segment PAST the 72% cap notch renders brighter (the health-bar-beyond-max look),
+       rather than stopping the fill at 72%.
+
+  This screen is FIXED Erewhon-Dark + Erewhon fonts regardless of the user's theme
+  (incl. pixel themes). The hex literals below are ILLUSTRATIVE: wherever a
+  DesignSystem.Erewhon / ThemeColors.erewhonDark token exists, the TOKEN wins in the
+  Swift implementation (rank-plaques precedent). Tokens > hex.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>Overheal — welcome</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+/* Fixed Erewhon-Dark tokens (mirror of ThemeColors.erewhonDark / DesignSystem.Erewhon dark). */
+:root{
+  --font:'Hanken Grotesk',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --display:'Bebas Neue','Hanken Grotesk',system-ui,sans-serif;
+
+  --bg:#0D0F13;            /* primaryBackground */
+  --surface:#161A22;       /* cardBackground */
+  --sunk:#222838;          /* xpTrackBackground (bar track) */
+
+  --ink:#E8EBF2;           /* textPrimary */
+  --muted:#8B94A8;         /* textSecondary */
+  --faint:#55607A;         /* textTertiary */
+
+  --accent:#4882FF;        /* primary */
+  --accent-deep:#2B62EF;   /* primaryDark */
+  --overheal:#8FB4FF;      /* brighter accent past the cap notch */
+  --on-accent:#060A1A;     /* Erewhon.onAccent (dark) */
+
+  --line:color-mix(in oklab, #E8EBF2 13%, transparent);      /* Erewhon.line (dark) */
+  --line-soft:color-mix(in oklab, #E8EBF2 6%, transparent);  /* Erewhon.lineSoft (dark) */
+
+  --btn-radius:14px;       /* Erewhon.buttonRadius */
+  --ease:cubic-bezier(0.16,1,0.3,1);   /* Erewhon.ease */
+}
+
+html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{
+  font-family:var(--font);
+  min-height:100dvh;
+  display:flex; align-items:center; justify-content:center;
+  padding:40px 20px;
+  color:var(--ink);
+  background:#05070B;
+}
+
+/* Phone frame */
+.phone{
+  width:390px; max-width:100%;
+  aspect-ratio:390/844;
+  border-radius:52px;
+  background:var(--bg);
+  box-shadow:0 2px 8px rgba(0,0,0,0.6), 0 50px 110px -24px rgba(0,0,0,0.92);
+  outline:10px solid #14161C;
+  overflow:hidden;
+  position:relative;
+  display:flex; flex-direction:column;
+}
+
+/* Status bar spacer */
+.statusbar{height:54px; flex:0 0 auto}
+
+.screen{
+  flex:1 1 auto;
+  display:flex; flex-direction:column;
+  padding:8px 28px 0;
+  overflow:hidden;
+}
+
+/* Scroll region above the pinned CTA */
+.scroll{ flex:1 1 auto; display:flex; flex-direction:column; }
+
+/* ---- Hero ---- */
+.eyebrow{
+  font-family:var(--display); font-size:15px; letter-spacing:3px;
+  color:var(--accent);
+}
+.wordmark{
+  font-family:var(--display); font-size:88px; line-height:0.82;
+  margin-top:8px;
+}
+.wordmark .over{color:var(--ink); display:block}
+.wordmark .heal{color:var(--accent); display:block}
+.tagline{
+  margin-top:14px; font-size:16px; line-height:1.4; color:var(--muted); max-width:20em;
+}
+
+/* ---- Overheal bar ---- */
+.bar-block{ margin-top:34px }
+.bar-labels{
+  display:flex; justify-content:space-between; align-items:baseline;
+  font-family:var(--display); letter-spacing:1.4px; font-size:15px;
+}
+.bar-labels .quest{color:var(--muted)}
+.bar-labels .lv{color:var(--accent)}
+.bar{
+  position:relative; height:14px; margin-top:11px;
+  border-radius:999px; background:var(--sunk);
+}
+.bar-fill{
+  position:absolute; inset:0; border-radius:999px; width:100%;
+  background:linear-gradient(90deg, var(--accent) 0 72%, var(--overheal) 72% 100%);
+  box-shadow:0 0 10px color-mix(in oklab, var(--accent) 45%, transparent);
+  animation:fill 1.6s var(--ease) 0.4s both;
+}
+@keyframes fill{
+  from{ clip-path:inset(0 100% 0 0 round 999px); }
+  to{ clip-path:inset(0 0 0 0 round 999px); }
+}
+/* Cap notch at 72% — 1px hairline, above the fill. */
+.bar-notch{
+  position:absolute; top:0; bottom:0; left:72%;
+  width:1px; background:color-mix(in oklab, var(--ink) 60%, transparent);
+}
+.bar-caption{ margin-top:11px; font-size:13px; color:var(--muted) }
+
+/* ---- Value props ---- */
+.props{ margin-top:38px }
+.prop{
+  display:flex; align-items:center; gap:14px;
+  padding:16px 0;
+  border-top:1px solid var(--line-soft);
+}
+.tile{
+  flex:0 0 auto; width:38px; height:38px; border-radius:11px;
+  background:color-mix(in oklab, var(--accent) 12%, transparent);
+  border:1px solid color-mix(in oklab, var(--accent) 25%, transparent);
+  display:flex; align-items:center; justify-content:center;
+  color:var(--accent);
+}
+.tile svg{ width:19px; height:19px; stroke:var(--accent); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round }
+.tile svg.filled{ fill:var(--accent); stroke:none }
+.prop-title{ font-family:var(--display); font-size:19px; letter-spacing:0.5px; color:var(--ink) }
+.prop-sub{ font-size:13px; color:var(--muted); margin-top:2px }
+
+/* ---- CTA stack (pinned footer) ---- */
+.cta{
+  flex:0 0 auto;
+  padding:14px 0 22px;
+  border-top:1px solid var(--line-soft);
+  background:var(--bg);
+}
+.btn-primary{
+  height:56px; border-radius:var(--btn-radius); border:0;
+  width:100%; background:var(--accent); color:var(--on-accent);
+  font-family:var(--font); font-weight:600; font-size:16px;
+  cursor:pointer;
+}
+.btn-ghost{
+  width:100%; min-height:44px; margin-top:14px;
+  background:none; border:0; cursor:pointer; font-size:15px;
+}
+.btn-ghost .lead{ color:var(--muted) }
+.btn-ghost .login{ color:var(--ink); font-weight:600 }
+
+@media (prefers-reduced-motion: reduce){
+  .bar-fill{ animation:none }
+}
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="statusbar"></div>
+    <div class="screen">
+      <div class="scroll">
+        <!-- Hero -->
+        <div class="eyebrow">WELCOME TO</div>
+        <h1 class="wordmark"><span class="over">OVER</span><span class="heal">HEAL</span></h1>
+        <p class="tagline">Log your meals. Level up your life. Your health quest begins here.</p>
+
+        <!-- Overheal bar -->
+        <div class="bar-block">
+          <div class="bar-labels"><span class="quest">FIRST QUEST</span><span class="lv">LV 1</span></div>
+          <div class="bar">
+            <div class="bar-fill"></div>
+            <div class="bar-notch"></div>
+          </div>
+          <div class="bar-caption">Heal past your limits. Every meal you log earns XP.</div>
+        </div>
+
+        <!-- Value props -->
+        <div class="props">
+          <div class="prop">
+            <div class="tile">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.6" class="filled"/></svg>
+            </div>
+            <div>
+              <div class="prop-title">TRACK EFFORTLESSLY</div>
+              <div class="prop-sub">Describe or photograph a meal — AI logs the rest.</div>
+            </div>
+          </div>
+          <div class="prop">
+            <div class="tile">
+              <svg viewBox="0 0 24 24" class="filled"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
+            </div>
+            <div>
+              <div class="prop-title">BATTLE FRIENDS</div>
+              <div class="prop-sub">Duel head-to-head on real nutrition, not just streaks.</div>
+            </div>
+          </div>
+          <div class="prop">
+            <div class="tile">
+              <svg viewBox="0 0 24 24"><path d="M6 13l6-6 6 6"/><path d="M6 18l6-6 6 6"/></svg>
+            </div>
+            <div>
+              <div class="prop-title">CLIMB THE RANKS</div>
+              <div class="prop-sub">Nine ranks from Stone to Zenith. Earn every one.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CTA stack -->
+      <div class="cta">
+        <button class="btn-primary">Get Started</button>
+        <button class="btn-ghost"><span class="lead">Already have an account? </span><span class="login">Log In</span></button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

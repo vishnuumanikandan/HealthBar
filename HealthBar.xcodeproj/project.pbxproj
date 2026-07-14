@@ -37,6 +37,7 @@
 		1146B2ED2F234408004767C9 /* GamificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2EC2F234408004767C9 /* GamificationManager.swift */; };
 		1146B2EF2F234414004767C9 /* DataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2EE2F234414004767C9 /* DataManager.swift */; };
 		1146B2F02F234452004767C9 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2B32F233BE6004767C9 /* HomeView.swift */; };
+		BE1030F02F40FEED0000B101 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1030F12F40FEED0000B102 /* WelcomeView.swift */; };
 		1146B2F12F234466004767C9 /* FoodLogViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2BA2F233CD5004767C9 /* FoodLogViewModel.swift */; };
 		1146B2F22F23446A004767C9 /* HomeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2BB2F233CD5004767C9 /* HomeViewModel.swift */; };
 		1146B2F32F23446E004767C9 /* AddFoodFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2B12F233BE6004767C9 /* AddFoodFormView.swift */; };
@@ -242,6 +243,7 @@
 		1146B2B12F233BE6004767C9 /* AddFoodFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddFoodFormView.swift; sourceTree = "<group>"; };
 		1146B2B22F233BE6004767C9 /* FoodLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodLogView.swift; sourceTree = "<group>"; };
 		1146B2B32F233BE6004767C9 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		BE1030F12F40FEED0000B102 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		1146B2B92F233CD5004767C9 /* AddFoodViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddFoodViewModel.swift; sourceTree = "<group>"; };
 		1146B2BA2F233CD5004767C9 /* FoodLogViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodLogViewModel.swift; sourceTree = "<group>"; };
 		1146B2BB2F233CD5004767C9 /* HomeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewModel.swift; sourceTree = "<group>"; };
@@ -568,6 +570,7 @@
 				1146B2B12F233BE6004767C9 /* AddFoodFormView.swift */,
 				1146B2B22F233BE6004767C9 /* FoodLogView.swift */,
 				1146B2B32F233BE6004767C9 /* HomeView.swift */,
+				BE1030F12F40FEED0000B102 /* WelcomeView.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -1011,6 +1014,7 @@
 				1111E1462F285F22006EF76F /* XPToast.swift in Sources */,
 				1111E1962F32DFE5006EF76F /* MealTypePill.swift in Sources */,
 				1146B2F02F234452004767C9 /* HomeView.swift in Sources */,
+				BE1030F02F40FEED0000B101 /* WelcomeView.swift in Sources */,
 				BEF96AC12F7CC83F00FB0F83 /* APIConfig.swift in Sources */,
 				BEF969082F77A7F900FB0F83 /* AddFoodChoiceSheet.swift in Sources */,
 				1146B2F42F234473004767C9 /* FoodLogView.swift in Sources */,
@@ -1225,7 +1229,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "--Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = HealthBar;
+				INFOPLIST_KEY_CFBundleDisplayName = Overheal;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSCameraUsageDescription = "HealthBar needs camera access to photograph your meals and scan product barcodes for quick nutrition logging.";
@@ -1280,7 +1284,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "--Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = HealthBar;
+				INFOPLIST_KEY_CFBundleDisplayName = Overheal;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSCameraUsageDescription = "HealthBar needs camera access to photograph your meals and scan product barcodes for quick nutrition logging.";
