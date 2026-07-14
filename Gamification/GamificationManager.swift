@@ -251,8 +251,7 @@ final class GamificationManager {
             return totalProtein >= goal.proteinTarget
 
         case "Maintain Purity":
-            let totalToxins = entries.reduce(0) { $0 + $1.toxinScore }
-            return totalToxins <= goal.purityTarget
+            return NutritionManager.dailyToxinScore(from: entries) <= goal.purityTarget
 
         case "Capture All Meals":
             return !entries.isEmpty && entries.allSatisfy { $0.photoData != nil }
@@ -279,10 +278,10 @@ final class GamificationManager {
         case "Complete Your Day":
             let totalCalories = entries.reduce(0) { $0 + $1.calories }
             let totalProtein = entries.reduce(0.0) { $0 + $1.protein }
-            let totalToxins = entries.reduce(0) { $0 + $1.toxinScore }
+            let dailyToxin = NutritionManager.dailyToxinScore(from: entries)
             return totalCalories <= goal.calorieTarget &&
                    totalProtein >= goal.proteinTarget &&
-                   totalToxins <= goal.purityTarget
+                   dailyToxin <= goal.purityTarget
 
         default:
             return false

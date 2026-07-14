@@ -1331,7 +1331,7 @@ struct HomeView: View {
 
     /// Mockup `.purity`: horizontal bar with the target notch at `target/100` (D1.6).
     private func purityBlock(_ summary: TodaySummary) -> some View {
-        let score = summary.totalToxinScore
+        let score = summary.dailyToxinScore
         let target = summary.goal.purityTarget
         let band = purityBand(score)
         let fillFrac = min(max(Double(score) / 100.0, 0), 1)
@@ -1807,7 +1807,7 @@ struct HomeView: View {
             // Purity bar (1fr)
             AdaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground, isSelected: true) {  // R6c: preserved implicit-selection (review intent later)
                 PurityVerticalBar(
-                    score: viewModel.summary?.totalToxinScore ?? 0,
+                    score: viewModel.summary?.dailyToxinScore ?? 0,
                     borderColor: tc.primary,
                     trackColor: tc.ringEmpty,
                     band1: tc.purityBand1,

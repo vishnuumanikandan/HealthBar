@@ -15,7 +15,8 @@ struct DaySummary: Identifiable {
     let date: Date
     let calories: Int
     let protein: Double
-    let purityScore: Int
+    /// Calorie-weighted average toxin score for the day (0–100). See NutritionManager.dailyToxinScore.
+    let dailyToxinScore: Int
     let mealCount: Int
 
     var isToday: Bool {
@@ -52,9 +53,13 @@ struct WeeklySummary {
         return days.reduce(0.0) { $0 + $1.protein } / Double(days.count)
     }
 
-    var avgPurity: Int {
-        guard !days.isEmpty else { return 0 }
-        return days.reduce(0) { $0 + $1.purityScore } / days.count
+    /// Mean of the LOGGED days' daily toxin scores (0–100). Unlogged days — future days and
+    /// days with no entries — score 0 and would drag the average toward "clean", so they are
+    /// excluded rather than counted as perfect.
+    var avgDailyToxinScore: Int {
+        let logged = days.filter { $0.mealCount > 0 }
+        guard !logged.isEmpty else { return 0 }
+        return logged.reduce(0) { $0 + $1.dailyToxinScore } / logged.count
     }
 
     var daysLogged: Int {
@@ -499,7 +504,7 @@ struct WeeklySummaryView: View {
         switch selectedMetric {
         case .calories: return "Goal: \(summary.calorieGoal) cal/day"
         case .protein: return "Goal: \(Int(summary.proteinGoal)) g/day"
-        case .purity: return "Goal: \(summary.purityGoal)+ purity"
+        case .purity: return "Goal: under \(summary.purityGoal)"
         }
     }
 }
@@ -525,7 +530,7 @@ enum WeeklyMetric: String, CaseIterable, Identifiable {
         switch self {
         case .calories: return Double(day.calories)
         case .protein: return day.protein
-        case .purity: return Double(day.purityScore)
+        case .purity: return Double(day.dailyToxinScore)
         }
     }
 }
@@ -542,7 +547,7 @@ enum WeeklyMetric: String, CaseIterable, Identifiable {
             date: date,
             calories: dayOffset == 6 ? 1800 : Int.random(in: 1500...2200),
             protein: dayOffset == 6 ? 130 : Double.random(in: 80...160),
-            purityScore: dayOffset == 6 ? 25 : Int.random(in: 15...45),
+            dailyToxinScore: dayOffset == 6 ? 25 : Int.random(in: 15...45),
             mealCount: dayOffset == 6 ? 3 : Int.random(in: 2...5)
         )
     }

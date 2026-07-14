@@ -87,6 +87,11 @@ struct PurityScoreInfoSheet: View {
                 .foregroundColor(tc.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            Text("Your daily score is the calorie-weighted average toxin of everything you ate — also 0-100, so it never grows just because you logged more meals. Stay under your purity target.")
+                .font(AppFont.regular(DesignSystem.FontSizes.body))
+                .foregroundColor(tc.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
             // Score ranges
             VStack(spacing: DesignSystem.Spacing.sm) {
                 scoreRangeRow(range: "0-20", label: "Clean", description: "Unprocessed whole foods", color: tc.primary)

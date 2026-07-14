@@ -33,7 +33,8 @@ final class DailyGoal {
     /// Target fat intake in grams
     var fatTarget: Double
 
-    /// Maximum allowed toxin score for the day (sum of all food toxin scores)
+    /// Maximum allowed toxin score for the day (0-100), compared against the day's
+    /// calorie-weighted average toxin score — see NutritionManager.dailyToxinScore.
     /// Lower targets encourage cleaner eating
     var purityTarget: Int
 

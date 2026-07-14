@@ -38,11 +38,39 @@ final class NutritionManager {
         return (protein: protein, carbs: carbs, fat: fat)
     }
 
-    /// Calculates total toxin score from a list of food entries
-    /// - Parameter entries: Array of FoodEntry objects
-    /// - Returns: Total toxin score (sum of all entries)
-    func calculateTotalToxinScore(from entries: [FoodEntry]) -> Int {
-        return entries.reduce(0) { $0 + $1.toxinScore }
+    /// The day's toxin score: the calorie-weighted average of the entries' per-item
+    /// toxin scores. Always 0–100, the same scale as a per-item score and as
+    /// `DailyGoal.purityTarget` — lower is cleaner.
+    ///
+    ///     dailyToxinScore = round( Σ(toxinᵢ × caloriesᵢ) / Σ(caloriesᵢ) )
+    ///
+    /// This is the ONE place a day's `toxinScore` values are aggregated. It is static so
+    /// callers (GamificationManager, AppCoordinator, DataManager) share it without holding
+    /// a NutritionManager instance.
+    ///
+    /// Weighting by calories is what makes the number a diet-quality measure rather than a
+    /// meal counter: a zero-calorie entry carries zero weight, so a diet soda cannot move a
+    /// 2000-calorie day's score.
+    ///
+    /// Two fallbacks:
+    /// - No entries → `0`.
+    /// - Entries exist but `Σcalories == 0` (e.g. a day of black coffee) → the *unweighted*
+    ///   mean of their toxin scores, so the day still scores rather than dividing by zero.
+    ///
+    /// - Parameter entries: A single day's FoodEntry objects
+    /// - Returns: Weighted-average toxin score for the day (0–100)
+    static func dailyToxinScore(from entries: [FoodEntry]) -> Int {
+        guard !entries.isEmpty else { return 0 }
+
+        let totalCalories = entries.reduce(0) { $0 + $1.calories }
+
+        guard totalCalories > 0 else {
+            let sum = entries.reduce(0) { $0 + $1.toxinScore }
+            return Int((Double(sum) / Double(entries.count)).rounded())
+        }
+
+        let weighted = entries.reduce(0.0) { $0 + Double($1.toxinScore) * Double($1.calories) }
+        return Int((weighted / Double(totalCalories)).rounded())
     }
 
     // MARK: - Goal Checking
@@ -58,11 +86,11 @@ final class NutritionManager {
     /// - Protein >= proteinTarget
     /// - Carbs within reasonable range (optional flexibility)
     /// - Fat within reasonable range (optional flexibility)
-    /// - Toxin score <= purityTarget
+    /// - Weighted-average toxin score <= purityTarget
     func didMeetGoals(entries: [FoodEntry], goal: DailyGoal) -> Bool {
         let totalCalories = calculateTotalCalories(from: entries)
         let macros = calculateTotalMacros(from: entries)
-        let toxinScore = calculateTotalToxinScore(from: entries)
+        let toxinScore = NutritionManager.dailyToxinScore(from: entries)
 
         // Check each goal
         let metCalorieGoal = totalCalories <= goal.calorieTarget
@@ -97,9 +125,9 @@ final class NutritionManager {
     /// - Parameters:
     ///   - entries: Food entries to check
     ///   - goal: Daily goal
-    /// - Returns: True if toxin score is at or below target
+    /// - Returns: True if the weighted-average toxin score is at or below target
     func didMeetPurityGoal(entries: [FoodEntry], goal: DailyGoal) -> Bool {
-        let toxinScore = calculateTotalToxinScore(from: entries)
+        let toxinScore = NutritionManager.dailyToxinScore(from: entries)
         return toxinScore <= goal.purityTarget
     }
 

@@ -1721,28 +1721,35 @@ final class DataManager {
         // fetchEntriesForDateRange is already userId-scoped
         let entries = try await fetchEntriesForDateRange(start: fourWeeksAgo, end: today)
 
-        var entriesByDayOfWeek: [Int: [(calories: Int, purity: Int)]] = [:]
+        // Calories: per-entry mean, pooled by weekday (semantics unchanged).
+        var caloriesByDayOfWeek: [Int: [Int]] = [:]
+        // Purity: a DAILY metric, so each calendar date is scored ONCE via the canonical
+        // weighted average and the baseline averages those daily scores. Pooling raw
+        // per-entry toxin scores would let a 5-meal day outweigh a 1-meal day 5:1.
+        var entriesByDate: [Date: [FoodEntry]] = [:]
 
         for entry in entries {
             let dayOfWeek = calendar.component(.weekday, from: entry.date)
-            if entriesByDayOfWeek[dayOfWeek] == nil {
-                entriesByDayOfWeek[dayOfWeek] = []
-            }
-            entriesByDayOfWeek[dayOfWeek]?.append((calories: entry.calories, purity: entry.toxinScore))
+            caloriesByDayOfWeek[dayOfWeek, default: []].append(entry.calories)
+            entriesByDate[calendar.startOfDay(for: entry.date), default: []].append(entry)
+        }
+
+        var dailyToxinByDayOfWeek: [Int: [Int]] = [:]
+        for (date, dayEntries) in entriesByDate {
+            let dayOfWeek = calendar.component(.weekday, from: date)
+            dailyToxinByDayOfWeek[dayOfWeek, default: []]
+                .append(NutritionManager.dailyToxinScore(from: dayEntries))
         }
 
         for dayOfWeek in 1...7 {
-            guard let dayEntries = entriesByDayOfWeek[dayOfWeek], !dayEntries.isEmpty else { continue }
+            guard let dayCalories = caloriesByDayOfWeek[dayOfWeek], !dayCalories.isEmpty,
+                  let dailyToxins = dailyToxinByDayOfWeek[dayOfWeek], !dailyToxins.isEmpty else { continue }
 
-            let totalCalories = dayEntries.reduce(0) { $0 + $1.calories }
-            let totalPurity = dayEntries.reduce(0) { $0 + $1.purity }
-            let entryCount = dayEntries.count
-
-            let avgCalories = Double(totalCalories) / Double(entryCount)
-            let avgPurity = Double(totalPurity) / Double(entryCount)
+            let avgCalories = Double(dayCalories.reduce(0, +)) / Double(dayCalories.count)
+            let avgDailyToxin = Double(dailyToxins.reduce(0, +)) / Double(dailyToxins.count)
 
             // updateBaseline is already userId-scoped
-            try await updateBaseline(dayOfWeek: dayOfWeek, calories: avgCalories, purity: avgPurity)
+            try await updateBaseline(dayOfWeek: dayOfWeek, calories: avgCalories, purity: avgDailyToxin)
         }
     }
 
@@ -4059,7 +4066,7 @@ final class DataManager {
 
         let totalCalories = nutritionManager.calculateTotalCalories(from: entries)
         let totalProtein = nutritionManager.calculateTotalMacros(from: entries).protein
-        let totalToxin = nutritionManager.calculateTotalToxinScore(from: entries)
+        let dailyToxin = NutritionManager.dailyToxinScore(from: entries)
 
         // Calories — up to caloriePoints; over penalized harder than under.
         let diff = totalCalories - goal.calorieTarget
@@ -4080,12 +4087,12 @@ final class DataManager {
         // Purity — up to purityPoints; LOWER toxin is better (linear to 0 at double the target).
         let purityPts: Double
         if goal.purityTarget <= 0 {
-            purityPts = totalToxin == 0 ? DuelConstants.purityPoints : 0
-        } else if totalToxin <= goal.purityTarget {
+            purityPts = dailyToxin == 0 ? DuelConstants.purityPoints : 0
+        } else if dailyToxin <= goal.purityTarget {
             purityPts = DuelConstants.purityPoints
         } else {
             let target = Double(goal.purityTarget)
-            purityPts = DuelConstants.purityPoints * max(0, (2 * target - Double(totalToxin)) / target)
+            purityPts = DuelConstants.purityPoints * max(0, (2 * target - Double(dailyToxin)) / target)
         }
 
         // Quests — up to questPoints; 0 if no quests exist that day.

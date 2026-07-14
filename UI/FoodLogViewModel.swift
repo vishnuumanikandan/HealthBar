@@ -76,9 +76,10 @@ final class FoodLogViewModel {
         displayedEntries.reduce(0.0) { $0 + $1.fat }
     }
 
-    /// Total toxin score for the currently viewed date
-    var totalToxinScore: Int {
-        displayedEntries.reduce(0) { $0 + $1.toxinScore }
+    /// Toxin score for the currently viewed date: the calorie-weighted average of its
+    /// entries (0–100). See NutritionManager.dailyToxinScore.
+    var dailyToxinScore: Int {
+        NutritionManager.dailyToxinScore(from: displayedEntries)
     }
 
     // MARK: - Progress Calculations
