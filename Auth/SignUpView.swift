@@ -33,6 +33,9 @@ struct SignUpView: View {
 
     @State private var showLogin = false
 
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
     // MARK: - Focus Routing
 
     private enum Field: Hashable {
@@ -49,7 +52,7 @@ struct SignUpView: View {
     var body: some View {
         ZStack {
             // Full-bleed background
-            DesignSystem.Colors.primaryBackground
+            tc.primaryBackground
                 .ignoresSafeArea()
 
             ScrollView {
@@ -80,7 +83,7 @@ struct SignUpView: View {
             ToolbarItem(placement: .principal) {
                 Text("Create Account")
                     .font(AppFont.bold(20))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .foregroundColor(tc.textPrimary)
             }
         }
         .navigationDestination(isPresented: $showLogin) {
@@ -91,40 +94,29 @@ struct SignUpView: View {
     // MARK: - Header
 
     private var headerSection: some View {
-        VStack(spacing: DesignSystem.Spacing.md) {
-            // App icon mark
-            ZStack {
-                AdaptiveCardShapeStyle()
-                    .fill(
-                        DesignSystem.Colors.adaptiveGradient(
-                            light: Color(hex: "#34D399"),
-                            mid: Color(hex: "#10B981"),
-                            dark: Color(hex: "#059669")
-                        )
-                    )
-                    .frame(width: 72, height: 72)
-                    .overlay(
-                        AdaptiveCardShapeStyle()
-                            .stroke(SettingsManager.shared.isCleanUI ? Color.clear : Color(hex: "#047857"), lineWidth: SettingsManager.shared.isCleanUI ? 0 : 2)
-                    )
+        VStack(spacing: 0) {
+            // Eyebrow
+            Text("START YOUR QUEST")
+                .font(AppFont.display(14))
+                .tracking(3)
+                .foregroundColor(tc.primary)
 
-                Image(systemName: "heart.fill")
-                    .font(.system(size: 32, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            .accessibilityHidden(true)
-
-            Text("Overheal")
-                .font(AppFont.bold(28))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+            // Wordmark — the display face carries its own leading, so the gap above is tight.
+            Text("OVERHEAL")
+                .font(AppFont.display(32))
+                .foregroundColor(tc.textPrimary)
+                .padding(.top, DesignSystem.Spacing.xs)
                 .accessibilityAddTraits(.isHeader)
 
             Text("Start your journey today.")
                 .font(AppFont.regular(16))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .foregroundColor(tc.textSecondary)
                 .multilineTextAlignment(.center)
+                .padding(.top, DesignSystem.Spacing.sm)
         }
-        .padding(.bottom, DesignSystem.Spacing.sm)
+        // Absorbs the vertical space the retired icon mark occupied.
+        .padding(.top, DesignSystem.Spacing.md)
+        .padding(.bottom, DesignSystem.Spacing.md)
     }
 
     // MARK: - Fields
@@ -149,6 +141,7 @@ struct SignUpView: View {
                 placeholder: "you@example.com",
                 text: $viewModel.email,
                 isSecure: false,
+                isEmailField: true,
                 errorMessage: viewModel.emailError,
                 submitLabel: .next,
                 onSubmit: { focusedField = .password }
@@ -235,11 +228,11 @@ struct SignUpView: View {
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     Text("Already have an account?")
                         .font(AppFont.regular(16))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .foregroundColor(tc.textSecondary)
 
                     Text("Log In")
                         .font(AppFont.bold(16))
-                        .foregroundColor(DesignSystem.Colors.primary)
+                        .foregroundColor(tc.primary)
                 }
             }
             .frame(minHeight: 44)

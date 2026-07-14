@@ -818,6 +818,11 @@ struct AuthTextField: View {
     /// When `true`, renders a `SecureField` with a reveal toggle.
     var isSecure: Bool = false
 
+    /// When `true`, the field takes the email keyboard and never autocapitalizes.
+    /// When `false` (the default), it takes the standard keyboard with word
+    /// autocapitalization — correct for names and free text. Secure fields ignore this.
+    var isEmailField: Bool = false
+
     /// Per-field validation error message. When non-nil, the field border turns
     /// red and the message appears beneath the field.
     var errorMessage: String? = nil
@@ -834,6 +839,9 @@ struct AuthTextField: View {
     /// Whether the secure field is currently showing plain text.
     @State private var isRevealed: Bool = false
 
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
     // MARK: - Body
 
     var body: some View {
@@ -841,7 +849,7 @@ struct AuthTextField: View {
             // Field label
             Text(label)
                 .font(AppFont.regular(14))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .foregroundColor(tc.textSecondary)
 
             // Input field + optional reveal toggle
             ZStack(alignment: .trailing) {
@@ -850,26 +858,28 @@ struct AuthTextField: View {
                         SecureField(placeholder, text: $text)
                     } else {
                         TextField(placeholder, text: $text)
-                            .keyboardType(isSecure ? .default : .emailAddress)
-                            .textInputAutocapitalization(.never)
+                            .keyboardType(isEmailField ? .emailAddress : .default)
+                            // A revealed password takes the secure path's keyboard, so it
+                            // must never autocapitalize regardless of `isEmailField`.
+                            .textInputAutocapitalization(isEmailField || isSecure ? .never : .words)
                             .autocorrectionDisabled()
                     }
                 }
                 .font(AppFont.regular(DesignSystem.FontSizes.body))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .foregroundColor(tc.textPrimary)
                 // Indent right edge when the reveal toggle is present to avoid overlap
                 .padding(.leading, DesignSystem.Spacing.md)
                 .padding(.trailing, isSecure ? 52 : DesignSystem.Spacing.md)
                 .padding(.vertical, DesignSystem.Spacing.md)
                 .frame(minHeight: 52)
-                .background(DesignSystem.Colors.cardBackground)
+                .background(tc.cardBackground)
                 .clipShape(AdaptiveCardShapeStyle())
                 .overlay(
                     AdaptiveCardShapeStyle()
                         .stroke(
                             errorMessage != nil
                                 ? DesignSystem.Colors.danger
-                                : DesignSystem.Colors.border,
+                                : tc.primary.opacity(0.3),
                             lineWidth: errorMessage != nil ? 2 : 1
                         )
                 )
@@ -884,7 +894,7 @@ struct AuthTextField: View {
                     } label: {
                         Image(systemName: isRevealed ? "eye.slash.fill" : "eye.fill")
                             .font(.system(size: 16, weight: .regular))
-                            .foregroundColor(DesignSystem.Colors.textTertiary)
+                            .foregroundColor(tc.textTertiary)
                             // 44×44 pt minimum tap target (HIG requirement)
                             .frame(width: 44, height: 44)
                     }
