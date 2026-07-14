@@ -313,6 +313,31 @@ final class FoodLogViewModel {
     /// Timestamp of the last recognition request start (for rate limiting)
     private var lastRecognitionStart: Date? = nil
 
+    // MARK: - One-Round Detail Escalation State
+
+    /// The model's single targeted question, when it needs one more detail. Non-nil ⇒ the
+    /// describe-meal sheet shows the Q&A state instead of the composer.
+    var detailRequestQuestion: String? = nil
+
+    /// The user's free-text answer to `detailRequestQuestion`
+    var detailAnswerInput: String = ""
+
+    /// Whether the one allowed escalation round has been spent. At most one round per
+    /// recognition session; only `openDescribeMeal()` resets it.
+    var escalationUsed: Bool = false
+
+    /// Round-1 items parked while a detail request is pending, so "Skip — use estimates"
+    /// can fall back to them.
+    ///
+    /// Exists ONLY while a detail request is pending; cleared on skip/answer/cancel/open.
+    /// This is never persistent state and is never read outside the escalation flow —
+    /// views observe it through `canSkipDetailRequest`.
+    private var heldRound1Items: [RecognizedFoodItem] = []
+
+    /// Whether there are round-1 items to fall back on, i.e. whether the Q&A state offers
+    /// "Skip — use estimates" (vs. "Edit description" for the empty-items reroute).
+    var canSkipDetailRequest: Bool { !heldRound1Items.isEmpty }
+
     // MARK: - Describe Meal Photo State (isolated from manual AddFoodForm photo)
 
     /// Finalized JPEG data for the describe-meal photo (ready for API + persistence)
@@ -1557,6 +1582,8 @@ final class FoodLogViewModel {
         recognitionTask = nil
         describeMealPhotoData = nil
         isAttachingDescribeMealPhoto = false
+        clearDetailRequestState()
+        escalationUsed = false
         showingDescribeMeal = true
     }
 
@@ -1596,7 +1623,7 @@ final class FoodLogViewModel {
             }
 
             do {
-                let items = try await aiService.recognize(
+                let result = try await aiService.recognize(
                     description: hasText ? trimmed : nil,
                     imageData: imageData
                 )
@@ -1604,7 +1631,19 @@ final class FoodLogViewModel {
                 // Guard: only apply results if not cancelled and sheet still open
                 guard !Task.isCancelled, showingDescribeMeal else { return }
 
-                recognizedItems = items
+                // Escalate only when the model asked AND the items it returned still carry
+                // real uncertainty. A question about all-high-confidence items buys nothing.
+                if let question = result.detailRequest, !escalationUsed, !result.items.isEmpty {
+                    if result.items.contains(where: { $0.confidence != .high }) {
+                        heldRound1Items = result.items
+                        detailRequestQuestion = question
+                        print("[AIFoodRecognition] Escalation offered — \(question)")
+                        return
+                    }
+                    print("[AIFoodRecognition] Escalation ignored — all items high confidence")
+                }
+
+                recognizedItems = result.items
 
                 // Close input sheet, then open review after animation
                 showingDescribeMeal = false
@@ -1615,6 +1654,18 @@ final class FoodLogViewModel {
 
             } catch is CancellationError {
                 print("[AIFoodRecognition] Request cancelled")
+            } catch AIFoodRecognitionError.needsClarification(let question) {
+                guard !Task.isCancelled, showingDescribeMeal else { return }
+
+                // Too vague to estimate anything: route into the same Q&A state rather than
+                // flattening the model's question into an error string. Nothing to skip to.
+                guard !escalationUsed else {
+                    recognitionError = question
+                    return
+                }
+                heldRound1Items = []
+                detailRequestQuestion = question
+                print("[AIFoodRecognition] Escalation offered (no items) — \(question)")
             } catch let error as AIFoodRecognitionError {
                 guard !Task.isCancelled, showingDescribeMeal else { return }
                 recognitionError = error.userMessage
@@ -1633,6 +1684,124 @@ final class FoodLogViewModel {
         recognitionTask = nil
         isRecognizing = false
         describeMealPhotoData = nil
+        clearDetailRequestState()
+    }
+
+    // MARK: - One-Round Detail Escalation
+
+    /// Answers the model's detail request and re-recognizes (round 2 of at most 2).
+    ///
+    /// Same request lifecycle as `recognizeMeal()`: rate gate, cancel-prior, one in flight.
+    /// Round 2 is final, so its result always goes to review. If it fails, we degrade to
+    /// round 1 — the held items survive and Skip stays live.
+    func submitDetailAnswer() async {
+        let answer = detailAnswerInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !answer.isEmpty, let question = detailRequestQuestion else { return }
+
+        // Rate gate: ignore if less than 1s since last start
+        if let lastStart = lastRecognitionStart, Date().timeIntervalSince(lastStart) < 1.0 {
+            return
+        }
+
+        // Cancel any prior in-flight request
+        recognitionTask?.cancel()
+
+        lastRecognitionStart = Date()
+        isRecognizing = true
+        recognitionError = nil
+        escalationUsed = true
+
+        // Round 2 replays the ORIGINAL description (the answer refines it, never replaces it)
+        // and re-sends the photo.
+        let trimmed = mealDescriptionInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasText = !trimmed.isEmpty
+        let imageData = describeMealPhotoData
+
+        print("[AIFoodRecognition] Escalation answered — \(answer)")
+
+        let task = Task {
+            defer {
+                if !Task.isCancelled {
+                    isRecognizing = false
+                }
+                recognitionTask = nil
+            }
+
+            do {
+                let result = try await aiService.recognize(
+                    description: hasText ? trimmed : nil,
+                    imageData: imageData,
+                    followUp: FollowUpContext(question: question, answer: answer)
+                )
+
+                guard !Task.isCancelled, showingDescribeMeal else { return }
+
+                // No escalation branch here: round 2's detailRequest is nil by construction.
+                recognizedItems = result.items
+                clearDetailRequestState()
+
+                // Close input sheet, then open review after animation
+                showingDescribeMeal = false
+                try await Task.sleep(for: .milliseconds(400))
+
+                guard !Task.isCancelled else { return }
+                showingRecognitionReview = true
+
+            } catch is CancellationError {
+                print("[AIFoodRecognition] Request cancelled")
+            } catch let error as AIFoodRecognitionError {
+                guard !Task.isCancelled, showingDescribeMeal else { return }
+                degradeToRound1(with: error.userMessage)
+            } catch {
+                guard !Task.isCancelled, showingDescribeMeal else { return }
+                degradeToRound1(with: "Something went wrong. Try again or add food manually.")
+            }
+        }
+
+        recognitionTask = task
+    }
+
+    /// Declines the detail request and reviews the round-1 items as estimated.
+    func skipDetailRequest() {
+        guard !heldRound1Items.isEmpty else { return }
+
+        print("[AIFoodRecognition] Escalation skipped — reviewing \(heldRound1Items.count) round-1 item(s)")
+
+        recognizedItems = heldRound1Items
+        clearDetailRequestState()
+
+        // Close input sheet, then open review after animation. Deliberately NOT assigned to
+        // `recognitionTask`: the sheet's onDisappear calls cancelRecognition(), which would
+        // cancel the sleep before the review could open.
+        Task {
+            showingDescribeMeal = false
+            try? await Task.sleep(for: .milliseconds(400))
+            showingRecognitionReview = true
+        }
+    }
+
+    /// Returns from the Q&A state to the composer, keeping the typed description and photo.
+    func editDescriptionFromDetailRequest() {
+        clearDetailRequestState()
+    }
+
+    /// Round-2 failure: keep the held round-1 items and stay in the Q&A state so Skip
+    /// remains live. With nothing to skip to, fall back to the composer and show the error.
+    private func degradeToRound1(with message: String) {
+        recognitionError = message
+        if heldRound1Items.isEmpty {
+            clearDetailRequestState()
+        }
+    }
+
+    /// Clears the pending Q&A (question, answer draft, held items).
+    ///
+    /// Deliberately does NOT reset `escalationUsed`: that is per recognition session and
+    /// resets only in `openDescribeMeal()`, which is what enforces "at most one round".
+    private func clearDetailRequestState() {
+        detailRequestQuestion = nil
+        detailAnswerInput = ""
+        heldRound1Items = []
     }
 
     // MARK: - Describe Meal Photo Handling
