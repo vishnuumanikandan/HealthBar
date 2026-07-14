@@ -7,6 +7,23 @@
 
 import Foundation
 
+// MARK: - Public Types
+
+/// One recognition round's output.
+struct RecognitionResult {
+    let items: [RecognizedFoodItem]
+
+    /// A single targeted question the model needs answered to estimate well.
+    /// Non-nil only on round 1 — round 2 is the final round and always returns nil here.
+    let detailRequest: String?
+}
+
+/// The model's question and the user's free-text answer, replayed into round 2.
+struct FollowUpContext {
+    let question: String
+    let answer: String
+}
+
 /// Sends a natural-language meal description (with optional photo) to the Claude API
 /// and returns structured `[RecognizedFoodItem]`.
 ///
@@ -76,6 +93,7 @@ final class AIFoodRecognitionService {
         let items: [RawItem]?
         let clarification: String?
         let clarifications: [RawClarification]?
+        let detailRequest: String?
 
         struct RawItem: Decodable {
             let name: String?
@@ -127,13 +145,18 @@ final class AIFoodRecognitionService {
     private static let fallbackToxinScore = 30
     private static let maxMicroGrams = 500.0         // fiber, sugar, saturatedFat
     private static let maxMicroMilligrams = 10_000.0 // sodium, cholesterol, potassium
+    private static let maxAnswerLength = 200
+    private static let maxDetailRequestLength = 160
+
+    private static let imageOnlyPrompt = "Identify the foods in this image and estimate their nutrition."
 
     private static let systemPromptBase = """
     Return ONLY a JSON object, no prose, no markdown fences. Schema:\
     {"items":[{"name":String,"quantity":String,"calories":Int,"protein":Number,"carbs":Number,"fat":Number,"toxinScore":Int,"fiber":Number|null,"sugar":Number|null,"sodium":Number|null,"saturatedFat":Number|null,"cholesterol":Number|null,"potassium":Number|null,"confidence":"high"|"medium"|"low","confidenceReason":String|null}],\
     "clarification":String|null,\
-    "clarifications":[{"itemIndex":Int,"question":String,"importance":Number,"defaultOptionIndex":Int,"options":[{"label":String,"dCalories":Int,"dProtein":Number,"dCarbs":Number,"dFat":Number}]}]}\
-    Example: "2 scrambled eggs, toast" → {"items":[{"name":"Scrambled Eggs","quantity":"2 eggs","calories":182,"protein":12.6,"carbs":1.6,"fat":13.6,"toxinScore":10,"fiber":0,"sugar":0.6,"sodium":180,"saturatedFat":4.1,"cholesterol":372,"potassium":176,"confidence":"high","confidenceReason":null},{"name":"Toast","quantity":"1 slice","calories":79,"protein":2.7,"carbs":14.7,"fat":1.0,"toxinScore":40,"fiber":1.9,"sugar":1.5,"sodium":150,"saturatedFat":0.2,"cholesterol":0,"potassium":50,"confidence":"medium","confidenceReason":null}],"clarification":null,"clarifications":[]}\
+    "clarifications":[{"itemIndex":Int,"question":String,"importance":Number,"defaultOptionIndex":Int,"options":[{"label":String,"dCalories":Int,"dProtein":Number,"dCarbs":Number,"dFat":Number}]}],\
+    "detailRequest":String|null}\
+    Example: "2 scrambled eggs, toast" → {"items":[{"name":"Scrambled Eggs","quantity":"2 eggs","calories":182,"protein":12.6,"carbs":1.6,"fat":13.6,"toxinScore":10,"fiber":0,"sugar":0.6,"sodium":180,"saturatedFat":4.1,"cholesterol":372,"potassium":176,"confidence":"high","confidenceReason":null},{"name":"Toast","quantity":"1 slice","calories":79,"protein":2.7,"carbs":14.7,"fat":1.0,"toxinScore":40,"fiber":1.9,"sugar":1.5,"sodium":150,"saturatedFat":0.2,"cholesterol":0,"potassium":50,"confidence":"medium","confidenceReason":null}],"clarification":null,"clarifications":[],"detailRequest":null}\
     Units: fiber/sugar/saturatedFat in grams; sodium/cholesterol/potassium in milligrams. Omit (null) any micronutrient you cannot reasonably estimate for this specific food — never guess sodium/cholesterol/potassium for foods where it is highly variable.\
     toxinScore rates how processed/unhealthy the item is, 0–100: 0–15 whole unprocessed foods (fruits, vegetables, plain meats, eggs, plain grains); 16–35 lightly processed (plain yogurt, whole-grain bread, cheese, home-cooked mixed dishes); 36–60 moderately processed (white bread, deli meat, granola bars, restaurant meals with unknown oils); 61–85 ultra-processed (chips, candy, soda, fast food); 86–100 extreme (energy drinks with candy, deep-fried ultra-processed combinations). Score the item as described, not a worst-case version of it.\
     Set confidence:"low" when portion or identity is uncertain. If input is too vague to estimate any items, return {"items":[],"clarification":"<your question>","clarifications":[]}.\
@@ -143,7 +166,8 @@ final class AIFoodRecognitionService {
     Set importance per clarification by expected calorie swing: portion of staples, added oil/butter, dressing, sauce score high; herbs, lettuce, spices, garnishes score low.\
     Provide confidenceReason for every non-high-confidence item — the single biggest source of uncertainty.\
     Each option's deltas must stay within ±2000 calories and ±250g per macro.\
-    Option deltas must be nutritionally plausible: calorie delta ≈ P·4 + C·4 + F·9. Do not return calorie-only deltas with zero macro change.
+    Option deltas must be nutritionally plausible: calorie delta ≈ P·4 + C·4 + F·9. Do not return calorie-only deltas with zero macro change.\
+    Set detailRequest ONLY when, even after your clarifications, the calorie estimate could plausibly be off by more than ~40% because of missing food identity or portion information that fixed options cannot capture (e.g. "a sandwich", "some snacks", "a bowl of stuff"). It must be exactly ONE specific question, ≤120 characters. Otherwise null.
     """
 
     private static let imageReconciliationRule = """
@@ -168,12 +192,22 @@ final class AIFoodRecognitionService {
     /// When both are present, a multimodal request is sent; when only text, a text-only request.
     /// `imageData` must be finalized JPEG bytes (caller's responsibility).
     ///
+    /// One-round detail escalation: round 1 may return a `detailRequest` — a single targeted
+    /// question. The caller may answer it and call again with `followUp`, which replays the
+    /// original input plus the Q&A. Round 2 is the final round: its result's `detailRequest`
+    /// is always nil, whatever the model returns.
+    ///
     /// - Parameters:
     ///   - description: The user's meal description (e.g. "two eggs, toast, black coffee"). May be nil or empty if image present.
     ///   - imageData: Optional JPEG image data. Must be < 1MB, longest edge ≤ 1568px.
-    /// - Returns: An array of recognized food items with estimated macros.
+    ///   - followUp: The question the model asked and the user's answer. Non-nil ⇒ this is round 2.
+    /// - Returns: The recognized items, plus at most one request for more detail.
     /// - Throws: `AIFoodRecognitionError` on failure.
-    func recognize(description: String?, imageData: Data? = nil) async throws -> [RecognizedFoodItem] {
+    func recognize(
+        description: String?,
+        imageData: Data? = nil,
+        followUp: FollowUpContext? = nil
+    ) async throws -> RecognitionResult {
         // Validate API key
         let key = APIConfig.claudeAPIKey
         guard !key.isEmpty else {
@@ -192,7 +226,14 @@ final class AIFoodRecognitionService {
         // Truncate text to max length
         let input = String(trimmed.prefix(Self.maxInputLength))
 
-        print("[AIFoodRecognition] Request started — text: \(hasText), image: \(hasImage)\(hasImage ? ", imageBytes: \(imageData!.count)" : "")")
+        // What the model saw in round 1. On round 2 it leads the composed input verbatim —
+        // the user's answer refines it, never replaces it.
+        let originalInput = hasText ? input : Self.imageOnlyPrompt
+        let userContent = followUp.map {
+            Self.composeFollowUpInput(originalInput: originalInput, followUp: $0)
+        } ?? originalInput
+
+        print("[AIFoodRecognition] Request started — round: \(followUp == nil ? 1 : 2), text: \(hasText), image: \(hasImage)\(hasImage ? ", imageBytes: \(imageData!.count)" : "")")
 
         // Build request body
         let bodyData: Data
@@ -201,11 +242,9 @@ final class AIFoodRecognitionService {
             // Multimodal request: image + text content blocks
             let systemPrompt = Self.systemPromptBase + Self.imageReconciliationRule
 
-            let textContent = hasText ? input : "Identify the foods in this image and estimate their nutrition."
-
             let contentBlocks: [APIRequestMultimodal.ContentBlock] = [
                 .image(.init(source: .init(data: imageData.base64EncodedString()))),
-                .text(.init(text: textContent))
+                .text(.init(text: userContent))
             ]
 
             let requestBody = APIRequestMultimodal(
@@ -225,7 +264,7 @@ final class AIFoodRecognitionService {
                 model: Self.model,
                 max_tokens: Self.maxTokens,
                 system: Self.systemPromptBase,
-                messages: [.init(role: "user", content: input)]
+                messages: [.init(role: "user", content: userContent)]
             )
 
             guard let encoded = try? JSONEncoder().encode(requestBody) else {
@@ -290,6 +329,14 @@ final class AIFoodRecognitionService {
                 print("[AIFoodRecognition] Needs clarification: \(clarification)")
                 throw AIFoodRecognitionError.needsClarification(clarification)
             }
+            // With nothing estimable the model asks its question in EITHER field — observed
+            // live using `clarification` for "food" and `detailRequest` for "a sandwich and
+            // some snacks". Both mean "ask the user", so both must reach the Q&A state;
+            // reading only `clarification` here would discard the question as noFoodFound.
+            if let detail = Self.normalizeDetailRequest(recognitionResponse.detailRequest) {
+                print("[AIFoodRecognition] Needs clarification (via detailRequest): \(detail)")
+                throw AIFoodRecognitionError.needsClarification(detail)
+            }
             print("[AIFoodRecognition] Empty recognition result")
             throw AIFoodRecognitionError.noFoodFound
         }
@@ -299,8 +346,55 @@ final class AIFoodRecognitionService {
             attachClarifications(rawClarifications, to: &items)
         }
 
+        // Round 2 is the final round — the client allows exactly one escalation, so a
+        // detail request there could never be answered. Drop it whatever the model returned.
+        var detailRequest: String? = nil
+        if followUp == nil {
+            detailRequest = Self.normalizeDetailRequest(recognitionResponse.detailRequest)
+            if let detailRequest {
+                print("[AIFoodRecognition] Detail requested: \(detailRequest)")
+            }
+        } else if recognitionResponse.detailRequest != nil {
+            print("[AIFoodRecognition] Ignoring detailRequest on round 2 (final round)")
+        }
+
         print("[AIFoodRecognition] Recognized \(items.count) item(s)")
-        return items
+        return RecognitionResult(items: items, detailRequest: detailRequest)
+    }
+
+    // MARK: - One-Round Escalation (pure)
+
+    /// Normalizes the model's `detailRequest`: trimmed, empty → nil, hard-truncated.
+    ///
+    /// The schema instructs the model to keep the question ≤120 characters;
+    /// `maxDetailRequestLength` (160) is the client's guard against a model that ignores
+    /// that. The two numbers are deliberately different — do not unify them.
+    static func normalizeDetailRequest(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return String(trimmed.prefix(Self.maxDetailRequestLength))
+    }
+
+    /// Composes round 2's user content: the original input verbatim, then the Q&A, then the
+    /// final-round instruction. The answer refines the original description — it never
+    /// replaces it — so `originalInput` always leads.
+    ///
+    /// The final-round instruction lives here, in the user content, so the system prompt
+    /// stays static across both rounds.
+    static func composeFollowUpInput(originalInput: String, followUp: FollowUpContext) -> String {
+        let answer = String(
+            followUp.answer
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .prefix(Self.maxAnswerLength)
+        )
+
+        return """
+        \(originalInput)
+        You previously asked: "\(followUp.question)"
+        User's answer: \(answer)
+        Combine the original description with the answer — the answer refines it, it does not replace it. This is the final round — do not request more detail; provide best estimates with confidence and clarifications as usual.
+        """
     }
 
     // MARK: - JSON Parsing
