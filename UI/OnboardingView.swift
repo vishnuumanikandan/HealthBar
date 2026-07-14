@@ -24,6 +24,9 @@ struct OnboardingView: View {
     // Controls the step-jump sheet (edit mode only)
     @State private var showStepPicker: Bool = false
 
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
     // MARK: - Init
 
     init(
@@ -51,7 +54,7 @@ struct OnboardingView: View {
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 26))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .foregroundColor(tc.textSecondary)
                     }
                     .accessibilityLabel("Close profile editor")
                     .padding(.trailing, DesignSystem.Spacing.md)
@@ -71,9 +74,9 @@ struct OnboardingView: View {
                         } label: {
                             Image(systemName: "list.bullet")
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                .foregroundColor(tc.textSecondary)
                                 .padding(7)
-                                .background(DesignSystem.Colors.cardBackground)
+                                .background(tc.cardBackground)
                                 .clipShape(AdaptivePillShapeStyle())
                         }
                         .accessibilityLabel("Jump to a different step")
@@ -107,7 +110,7 @@ struct OnboardingView: View {
                     .padding(.bottom, DesignSystem.Spacing.lg)
             }
         }
-        .background(DesignSystem.Colors.primaryBackground.ignoresSafeArea())
+        .background(tc.primaryBackground.ignoresSafeArea())
         .onChange(of: viewModel.authService.currentUserEmail) { _, _ in
             viewModel.resetForNewUser()
         }
@@ -129,11 +132,11 @@ struct OnboardingView: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(DesignSystem.Colors.border)
+                    .fill(tc.segBackground)
                     .frame(height: 6)
 
                 Capsule()
-                    .fill(DesignSystem.Colors.primary)
+                    .fill(tc.primary)
                     .frame(
                         width: geo.size.width * progressFraction,
                         height: 6
@@ -157,6 +160,7 @@ struct OnboardingView: View {
         return viewModel.currentStep > last
     }
 
+    // Already AppButton-based (Back .secondary / Next .primary) — B2b converts tokens only.
     private var navigationButtons: some View {
         HStack(spacing: DesignSystem.Spacing.md) {
             // Back button
@@ -243,51 +247,44 @@ struct OnboardingView: View {
 private struct WelcomeStep: View {
     let onGetStarted: () -> Void
 
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
     var body: some View {
         VStack(spacing: DesignSystem.Spacing.xl) {
             Spacer()
 
-            // App icon / logo area
+            // App icon / logo area — R5b tinted icon-box (gradient mark retired)
             ZStack {
                 AdaptiveCardShapeStyle()
-                    .fill(
-                        DesignSystem.Colors.adaptiveGradient(
-                            light: Color(hex: "#34D399"),
-                            mid: Color(hex: "#10B981"),
-                            dark: Color(hex: "#059669")
-                        )
-                    )
+                    .fill(tc.primary.opacity(0.14))
                     .frame(width: 110, height: 110)
-                    .overlay(
-                        AdaptiveCardShapeStyle()
-                            .stroke(Color(hex: "#047857"), lineWidth: 2)
-                    )
 
                 Image(systemName: "heart.fill")
                     .font(.system(size: 52, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(tc.primary)
             }
 
             VStack(spacing: DesignSystem.Spacing.sm) {
                 Text("Overheal")
                     .font(AppFont.bold(34))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .foregroundColor(tc.textPrimary)
 
                 Text("Your AI-powered nutrition journey")
                     .font(AppFont.regular(16))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .foregroundColor(tc.textSecondary)
                     .multilineTextAlignment(.center)
             }
 
             VStack(spacing: DesignSystem.Spacing.sm) {
                 Text("Let's build your health profile")
                     .font(AppFont.bold(22))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .foregroundColor(tc.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text("Answer a few questions and our AI will create personalized calorie and macro targets just for you.")
                     .font(AppFont.regular(16))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .foregroundColor(tc.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DesignSystem.Spacing.lg)
             }
@@ -331,6 +328,9 @@ private struct SexStep: View {
 private struct AgeStep: View {
     @Binding var age: Int
 
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
     var body: some View {
         OnboardingStepContainer(
             title: "Your Age",
@@ -339,7 +339,7 @@ private struct AgeStep: View {
             VStack(spacing: DesignSystem.Spacing.lg) {
                 Text("\(age)")
                     .font(AppFont.bold(64))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .foregroundColor(tc.primary)
                     .accessibilityLabel("Age: \(age) years")
 
                 Stepper(
@@ -421,6 +421,9 @@ private struct GoalWeightStep: View {
     @Binding var goalWeightInput: String
     let directionLabel: String
 
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
     var body: some View {
         OnboardingStepContainer(
             title: "Goal Weight",
@@ -437,10 +440,10 @@ private struct GoalWeightStep: View {
                 if !directionLabel.isEmpty {
                     Text(directionLabel)
                         .font(AppFont.regular(16))
-                        .foregroundColor(DesignSystem.Colors.primary)
+                        .foregroundColor(tc.primary)
                         .padding(.horizontal, DesignSystem.Spacing.md)
                         .padding(.vertical, DesignSystem.Spacing.sm)
-                        .background(DesignSystem.Colors.primary.opacity(0.1))
+                        .background(tc.primary.opacity(0.1))
                         .clipShape(AdaptiveCardShapeStyle())
                         .accessibilityLabel(directionLabel)
                 }
@@ -454,6 +457,9 @@ private struct GoalWeightStep: View {
 private struct WeeklyPaceStep: View {
     @Binding var pace: Double
     private let options: [Double] = [0.5, 1.0, 1.5, 2.0]
+
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
 
     var body: some View {
         OnboardingStepContainer(
@@ -470,21 +476,23 @@ private struct WeeklyPaceStep: View {
                             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                                 Text("\(option, specifier: "%.1f") lbs / week")
                                     .font(isSelected ? AppFont.bold(16) : AppFont.regular(16))
-                                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                                    .foregroundColor(tc.textPrimary)
                                 Text(paceDescription(option))
                                     .font(AppFont.regular(13))
-                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                                    .foregroundColor(tc.textSecondary)
                             }
                             Spacer()
                             if isSelected {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(DesignSystem.Colors.primary)
+                                    .foregroundColor(tc.primary)
                             }
                         }
                         .padding(DesignSystem.Spacing.md)
+                        // R2 selection convention (isSelected drives the accent stroke; R6c)
                         .adaptiveCard(
-                            borderColor: isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.border,
-                            fillColor: isSelected ? DesignSystem.Colors.primary.opacity(0.1) : DesignSystem.Colors.cardBackground
+                            borderColor: isSelected ? tc.primary : tc.primary.opacity(0.2),
+                            fillColor: tc.cardBackground,
+                            isSelected: isSelected
                         )
                     }
                     .buttonStyle(.plain)
@@ -511,6 +519,9 @@ private struct WeeklyPaceStep: View {
 private struct ActivityLevelStep: View {
     @Binding var activityLevel: String
 
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
     private let levels: [(id: String, icon: String, title: String, description: String)] = [
         ("sedentary",  "chair.lounge.fill",            "Sedentary",          "Desk job, little or no exercise"),
         ("light",      "figure.walk",                   "Lightly Active",     "Light exercise 1–3 days/week"),
@@ -531,39 +542,32 @@ private struct ActivityLevelStep: View {
                         activityLevel = level.id
                     } label: {
                         HStack(spacing: DesignSystem.Spacing.md) {
+                            // R5b tinted icon-box (green/gray gradient pair retired)
                             Image(systemName: level.icon)
-                                .foregroundColor(.white)
+                                .foregroundColor(tc.primary)
                                 .frame(width: 36, height: 36)
-                                .background(
-                                    DesignSystem.Colors.adaptiveGradient(
-                                        light: isSelected ? Color(hex: "#34D399") : Color(hex: "#D1D5DB"),
-                                        mid: isSelected ? Color(hex: "#10B981") : Color(hex: "#9CA3AF"),
-                                        dark: isSelected ? Color(hex: "#059669") : Color(hex: "#6B7280")
-                                    )
-                                )
+                                .background(tc.primary.opacity(0.14))
                                 .clipShape(AdaptivePillShapeStyle())
-                                .overlay(AdaptivePillShapeStyle().stroke(
-                                    isSelected ? Color(hex: "#047857") : Color(hex: "#6B7280"),
-                                    lineWidth: 2
-                                ))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(level.title)
                                     .font(isSelected ? AppFont.bold(16) : AppFont.regular(16))
-                                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                                    .foregroundColor(tc.textPrimary)
                                 Text(level.description)
                                     .font(AppFont.regular(13))
-                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                                    .foregroundColor(tc.textSecondary)
                             }
                             Spacer()
                             if isSelected {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(DesignSystem.Colors.primary)
+                                    .foregroundColor(tc.primary)
                             }
                         }
                         .padding(DesignSystem.Spacing.md)
+                        // R2 selection convention (isSelected drives the accent stroke; R6c)
                         .adaptiveCard(
-                            borderColor: isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.border,
-                            fillColor: isSelected ? DesignSystem.Colors.primary.opacity(0.1) : DesignSystem.Colors.cardBackground
+                            borderColor: isSelected ? tc.primary : tc.primary.opacity(0.2),
+                            fillColor: tc.cardBackground,
+                            isSelected: isSelected
                         )
                     }
                     .buttonStyle(.plain)
@@ -579,6 +583,9 @@ private struct ActivityLevelStep: View {
 
 private struct DietStyleStep: View {
     @Binding var dietStyle: String
+
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
 
     private let styles: [(id: String, icon: String, title: String, description: String)] = [
         ("standard",      "fork.knife",   "Standard",
@@ -609,40 +616,33 @@ private struct DietStyleStep: View {
                         }
                     } label: {
                         HStack(spacing: DesignSystem.Spacing.md) {
+                            // R5b tinted icon-box (green/gray gradient pair retired)
                             Image(systemName: style.icon)
-                                .foregroundColor(.white)
+                                .foregroundColor(tc.primary)
                                 .frame(width: 36, height: 36)
-                                .background(
-                                    DesignSystem.Colors.adaptiveGradient(
-                                        light: isSelected ? Color(hex: "#34D399") : Color(hex: "#D1D5DB"),
-                                        mid: isSelected ? Color(hex: "#10B981") : Color(hex: "#9CA3AF"),
-                                        dark: isSelected ? Color(hex: "#059669") : Color(hex: "#6B7280")
-                                    )
-                                )
+                                .background(tc.primary.opacity(0.14))
                                 .clipShape(AdaptivePillShapeStyle())
-                                .overlay(AdaptivePillShapeStyle().stroke(
-                                    isSelected ? Color(hex: "#047857") : Color(hex: "#6B7280"),
-                                    lineWidth: 2
-                                ))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(style.title)
                                     .font(isSelected ? AppFont.bold(16) : AppFont.regular(16))
-                                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                                    .foregroundColor(tc.textPrimary)
                                 Text(style.description)
                                     .font(AppFont.regular(13))
-                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                                    .foregroundColor(tc.textSecondary)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer(minLength: 0)
                             if isSelected {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(DesignSystem.Colors.primary)
+                                    .foregroundColor(tc.primary)
                             }
                         }
                         .padding(DesignSystem.Spacing.md)
+                        // R2 selection convention (isSelected drives the accent stroke; R6c)
                         .adaptiveCard(
-                            borderColor: isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.border,
-                            fillColor: isSelected ? DesignSystem.Colors.primary.opacity(0.1) : DesignSystem.Colors.cardBackground
+                            borderColor: isSelected ? tc.primary : tc.primary.opacity(0.2),
+                            fillColor: tc.cardBackground,
+                            isSelected: isSelected
                         )
                         .scaleEffect(isSelected ? 1.02 : 1.0)
                     }
@@ -660,6 +660,9 @@ private struct DietStyleStep: View {
 private struct MealsPerDayStep: View {
     @Binding var mealsPerDay: Int
 
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
     var body: some View {
         OnboardingStepContainer(
             title: "Meals Per Day",
@@ -668,7 +671,7 @@ private struct MealsPerDayStep: View {
             VStack(spacing: DesignSystem.Spacing.lg) {
                 Text("\(mealsPerDay)")
                     .font(AppFont.bold(64))
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .foregroundColor(tc.primary)
                     .accessibilityLabel("\(mealsPerDay) meals per day")
 
                 Stepper(
@@ -680,8 +683,8 @@ private struct MealsPerDayStep: View {
                 .accessibilityLabel("Adjust meals per day, current value \(mealsPerDay)")
 
                 Text("2–5 meals per day")
-                    .font(.system(size: DesignSystem.FontSizes.caption))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .font(AppFont.regular(DesignSystem.FontSizes.caption))
+                    .foregroundColor(tc.textTertiary)
             }
         }
     }
@@ -691,6 +694,9 @@ private struct MealsPerDayStep: View {
 
 private struct AllergiesStep: View {
     @Binding var allergies: [String]
+
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
 
     private let options = ["gluten", "dairy", "nuts", "soy", "eggs"]
     private let labels  = ["Gluten", "Dairy", "Nuts", "Soy", "Eggs"]
@@ -716,12 +722,14 @@ private struct AllergiesStep: View {
                 } label: {
                     Text("None")
                         .font(allergies.isEmpty ? AppFont.bold(16) : AppFont.regular(16))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .foregroundColor(tc.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(DesignSystem.Spacing.md)
+                        // R2 selection convention (isSelected drives the accent stroke; R6c)
                         .adaptiveCard(
-                            borderColor: allergies.isEmpty ? DesignSystem.Colors.primary : DesignSystem.Colors.border,
-                            fillColor: allergies.isEmpty ? DesignSystem.Colors.primary.opacity(0.1) : DesignSystem.Colors.cardBackground
+                            borderColor: allergies.isEmpty ? tc.primary : tc.primary.opacity(0.2),
+                            fillColor: tc.cardBackground,
+                            isSelected: allergies.isEmpty
                         )
                 }
                 .buttonStyle(.plain)
@@ -742,12 +750,14 @@ private struct AllergiesStep: View {
         } label: {
             Text(label)
                 .font(isSelected ? AppFont.bold(16) : AppFont.regular(16))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .foregroundColor(tc.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, DesignSystem.Spacing.md)
+                // R2 selection convention (isSelected drives the accent stroke; R6c)
                 .adaptiveCard(
-                    borderColor: isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.border,
-                    fillColor: isSelected ? DesignSystem.Colors.primary.opacity(0.1) : DesignSystem.Colors.cardBackground
+                    borderColor: isSelected ? tc.primary : tc.primary.opacity(0.2),
+                    fillColor: tc.cardBackground,
+                    isSelected: isSelected
                 )
         }
         .buttonStyle(.plain)
@@ -760,6 +770,9 @@ private struct AllergiesStep: View {
 
 private struct SleepQualityStep: View {
     @Binding var sleepQuality: String
+
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
 
     private let options: [(id: String, icon: String, title: String, description: String)] = [
         ("poor", "moon.zzz.fill", "Poor",  "Often restless or under 6 hrs"),
@@ -774,7 +787,7 @@ private struct SleepQualityStep: View {
         ) {
             VStack(spacing: DesignSystem.Spacing.sm) {
                 ForEach(options, id: \.id) { option in
-                    qualityCard(option: option, binding: $sleepQuality)
+                    qualityCard(option: option, binding: $sleepQuality, tc: tc)
                 }
             }
         }
@@ -786,6 +799,9 @@ private struct SleepQualityStep: View {
 private struct StressLevelStep: View {
     @Binding var stressLevel: String
     let onNext: () -> Void
+
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
 
     private let options: [(id: String, icon: String, title: String, description: String)] = [
         ("low",      "leaf.fill",    "Low",      "Mostly calm, rarely overwhelmed"),
@@ -800,7 +816,7 @@ private struct StressLevelStep: View {
         ) {
             VStack(spacing: DesignSystem.Spacing.md) {
                 ForEach(options, id: \.id) { option in
-                    qualityCard(option: option, binding: $stressLevel)
+                    qualityCard(option: option, binding: $stressLevel, tc: tc)
                 }
 
                 // Explicit CTA on final data step
@@ -819,46 +835,40 @@ private struct StressLevelStep: View {
 /// Shared card row for Sleep Quality and Stress Level steps.
 private func qualityCard(
     option: (id: String, icon: String, title: String, description: String),
-    binding: Binding<String>
+    binding: Binding<String>,
+    tc: ThemeColors
 ) -> some View {
     let isSelected = binding.wrappedValue == option.id
     return Button {
         binding.wrappedValue = option.id
     } label: {
         HStack(spacing: DesignSystem.Spacing.md) {
+            // R5b tinted icon-box (green/gray gradient pair retired)
             Image(systemName: option.icon)
-                .foregroundColor(.white)
+                .foregroundColor(tc.primary)
                 .frame(width: 36, height: 36)
-                .background(
-                    DesignSystem.Colors.adaptiveGradient(
-                        light: isSelected ? Color(hex: "#34D399") : Color(hex: "#D1D5DB"),
-                        mid: isSelected ? Color(hex: "#10B981") : Color(hex: "#9CA3AF"),
-                        dark: isSelected ? Color(hex: "#059669") : Color(hex: "#6B7280")
-                    )
-                )
+                .background(tc.primary.opacity(0.14))
                 .clipShape(AdaptivePillShapeStyle())
-                .overlay(AdaptivePillShapeStyle().stroke(
-                    isSelected ? Color(hex: "#047857") : Color(hex: "#6B7280"),
-                    lineWidth: 2
-                ))
             VStack(alignment: .leading, spacing: 2) {
                 Text(option.title)
                     .font(isSelected ? AppFont.bold(16) : AppFont.regular(16))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .foregroundColor(tc.textPrimary)
                 Text(option.description)
                     .font(AppFont.regular(13))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .foregroundColor(tc.textSecondary)
             }
             Spacer()
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(DesignSystem.Colors.primary)
+                    .foregroundColor(tc.primary)
             }
         }
         .padding(DesignSystem.Spacing.md)
+        // R2 selection convention (isSelected drives the accent stroke; R6c)
         .adaptiveCard(
-            borderColor: isSelected ? DesignSystem.Colors.primary : DesignSystem.Colors.border,
-            fillColor: isSelected ? DesignSystem.Colors.primary.opacity(0.1) : DesignSystem.Colors.cardBackground
+            borderColor: isSelected ? tc.primary : tc.primary.opacity(0.2),
+            fillColor: tc.cardBackground,
+            isSelected: isSelected
         )
     }
     .buttonStyle(.plain)
@@ -871,27 +881,30 @@ private func qualityCard(
 private struct CalculatingStep: View {
     let viewModel: OnboardingViewModel
 
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
     var body: some View {
         VStack(spacing: DesignSystem.Spacing.xl) {
             Spacer()
 
             ZStack {
                 AdaptiveCardShapeStyle()
-                    .fill(DesignSystem.Colors.primary.opacity(0.1))
+                    .fill(tc.primary.opacity(0.1))
                     .frame(width: 120, height: 120)
                 ProgressView()
                     .scaleEffect(2.0)
-                    .tint(DesignSystem.Colors.primary)
+                    .tint(tc.primary)
             }
 
             VStack(spacing: DesignSystem.Spacing.sm) {
                 Text("Building Your Plan")
                     .font(AppFont.bold(22))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .foregroundColor(tc.textPrimary)
 
                 Text("Personalizing your plan with AI...")
                     .font(AppFont.regular(16))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .foregroundColor(tc.textSecondary)
                     .multilineTextAlignment(.center)
             }
 
@@ -911,6 +924,9 @@ private struct ResultsStep: View {
     let viewModel: OnboardingViewModel
     let onDone: () -> Void
 
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
     var body: some View {
         ScrollView {
             VStack(spacing: DesignSystem.Spacing.lg) {
@@ -918,15 +934,15 @@ private struct ResultsStep: View {
                 VStack(spacing: DesignSystem.Spacing.sm) {
                     Image(systemName: "checkmark.seal.fill")
                         .font(.system(size: 56, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.primary)
+                        .foregroundColor(tc.primary)
 
                     Text("Your Plan is Ready")
                         .font(AppFont.bold(28))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .foregroundColor(tc.textPrimary)
 
                     Text("AI-personalized for your goals and lifestyle")
                         .font(AppFont.regular(16))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .foregroundColor(tc.textSecondary)
                         .multilineTextAlignment(.center)
                 }
                 .padding(.top, DesignSystem.Spacing.xl)
@@ -935,58 +951,53 @@ private struct ResultsStep: View {
                 VStack(spacing: DesignSystem.Spacing.sm) {
                     Text("Daily Calories")
                         .font(AppFont.regular(14))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .foregroundColor(tc.textSecondary)
 
                     Text("\(viewModel.calculatedCalories)")
                         .font(AppFont.bold(52))
-                        .foregroundStyle(DesignSystem.Colors.primaryGradient)
+                        .foregroundColor(tc.primary)
                         .accessibilityLabel("\(viewModel.calculatedCalories) calories per day")
 
                     Text("kcal / day")
                         .font(AppFont.regular(16))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .foregroundColor(tc.textTertiary)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(DesignSystem.Spacing.lg)
-                .adaptiveCard(borderColor: DesignSystem.Colors.primary, fillColor: DesignSystem.Colors.cardBackground)
+                // Accent-bordered emphasis card (R6c: isSelected drives the accent stroke)
+                .adaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground, isSelected: true)
 
                 // Macro grid
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
                           spacing: DesignSystem.Spacing.md) {
-                    macroCard(title: "Protein", value: "\(viewModel.calculatedProtein)g", color: .blue)
-                    macroCard(title: "Carbs",   value: "\(viewModel.calculatedCarbs)g",   color: .orange)
-                    macroCard(title: "Fat",     value: "\(viewModel.calculatedFat)g",     color: DesignSystem.Colors.energy)
+                    macroCard(title: "Protein", value: "\(viewModel.calculatedProtein)g", color: tc.macroBarProtein)
+                    macroCard(title: "Carbs",   value: "\(viewModel.calculatedCarbs)g",   color: tc.macroBarCarbs)
+                    macroCard(title: "Fat",     value: "\(viewModel.calculatedFat)g",     color: tc.macroBarFat)
                 }
 
                 // AI Tip
                 if !viewModel.aiTip.isEmpty {
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
                         HStack(spacing: DesignSystem.Spacing.sm) {
+                            // R5b tinted icon-box (gradient mark retired)
                             Image(systemName: "sparkles")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(tc.primary)
                                 .frame(width: 28, height: 28)
-                                .background(
-                                    DesignSystem.Colors.adaptiveGradient(
-                                        light: Color(hex: "#34D399"),
-                                        mid: Color(hex: "#10B981"),
-                                        dark: Color(hex: "#059669")
-                                    )
-                                )
+                                .background(tc.primary.opacity(0.14))
                                 .clipShape(AdaptivePillShapeStyle())
-                                .overlay(AdaptivePillShapeStyle().stroke(Color(hex: "#047857"), lineWidth: 2))
                             Text("Your Coaching Tip")
                                 .font(AppFont.bold(17))
-                                .foregroundColor(DesignSystem.Colors.textPrimary)
+                                .foregroundColor(tc.textPrimary)
                         }
                         Text(viewModel.aiTip)
                             .font(AppFont.regular(16))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .foregroundColor(tc.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(DesignSystem.Spacing.md)
-                    .adaptiveCard(borderColor: DesignSystem.Colors.primary.opacity(0.3), fillColor: DesignSystem.Colors.primary.opacity(0.08))
+                    .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.primary.opacity(0.08))
                     .accessibilityLabel("Coaching tip: \(viewModel.aiTip)")
                 }
 
@@ -1021,11 +1032,11 @@ private struct ResultsStep: View {
                 .accessibilityLabel("\(title): \(value)")
             Text(title)
                 .font(AppFont.regular(12))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .foregroundColor(tc.textSecondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DesignSystem.Spacing.md)
-        .adaptiveCard(borderColor: color.opacity(0.5), fillColor: DesignSystem.Colors.cardBackground)
+        .adaptiveCard(borderColor: color.opacity(0.5), fillColor: tc.cardBackground)
     }
 }
 
@@ -1037,17 +1048,20 @@ private struct OnboardingStepContainer<Content: View>: View {
     let subtitle: String
     @ViewBuilder let content: () -> Content
 
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xl) {
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
                     Text(title)
                         .font(AppFont.bold(28))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .foregroundColor(tc.textPrimary)
 
                     Text(subtitle)
                         .font(AppFont.regular(16))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .foregroundColor(tc.textSecondary)
                 }
 
                 content()
@@ -1067,22 +1081,25 @@ private struct OnboardingTextField: View {
     @Binding var text: String
     var keyboardType: UIKeyboardType = .default
 
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
             Text(label)
                 .font(AppFont.regular(14))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .foregroundColor(tc.textSecondary)
 
             TextField(placeholder, text: $text)
                 .keyboardType(keyboardType)
-                .font(.system(size: DesignSystem.FontSizes.body, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .font(AppFont.regular(DesignSystem.FontSizes.body))
+                .foregroundColor(tc.textPrimary)
                 .padding(DesignSystem.Spacing.md)
-                .background(DesignSystem.Colors.cardBackground)
+                .background(tc.cardBackground)
                 .clipShape(AdaptiveCardShapeStyle())
                 .overlay(
                     AdaptiveCardShapeStyle()
-                        .stroke(DesignSystem.Colors.border, lineWidth: 1)
+                        .stroke(tc.primary.opacity(0.3), lineWidth: 1)
                 )
                 .accessibilityLabel(label)
         }
@@ -1097,6 +1114,9 @@ private struct StepPickerSheet: View {
     let currentStep: Int
     let onSelect: (Int) -> Void
     @Environment(\.dismiss) private var dismiss
+
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
 
     private let steps: [(step: Int, title: String)] = [
         (1,  "Biological Sex"),
@@ -1120,16 +1140,15 @@ private struct StepPickerSheet: View {
                 } label: {
                     HStack {
                         Text(item.title)
-                            .font(.system(
-                                size: DesignSystem.FontSizes.body,
-                                weight: item.step == currentStep ? .semibold : .regular
-                            ))
-                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                            .font(item.step == currentStep
+                                  ? AppFont.bold(DesignSystem.FontSizes.body)
+                                  : AppFont.regular(DesignSystem.FontSizes.body))
+                            .foregroundColor(tc.textPrimary)
                         Spacer()
                         if item.step == currentStep {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(DesignSystem.Colors.primary)
+                                .foregroundColor(tc.primary)
                         }
                     }
                 }
@@ -1141,11 +1160,11 @@ private struct StepPickerSheet: View {
                 ToolbarItem(placement: .principal) {
                     Text("Go to Step")
                         .font(AppFont.bold(18))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .foregroundColor(tc.textPrimary)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Cancel") { dismiss() }
-                        .foregroundColor(DesignSystem.Colors.primary)
+                        .foregroundColor(tc.primary)
                 }
             }
         }

@@ -347,7 +347,7 @@ final class OnboardingViewModel {
         }
 
         let systemPrompt = """
-        You are a concise nutrition coach. Return ONLY a JSON object, no extra text:
+        You are a concise nutrition coach. Return ONLY a JSON object, no prose, no markdown fences.
         {"calories": Int, "protein": Int, "carbs": Int, "fat": Int, "tip": String}
         tip must be exactly 2 sentences, personalized to the user's profile.
         """
@@ -370,21 +370,61 @@ final class OnboardingViewModel {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
-                print("[OnboardingVM] Claude API non-200 response")
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("[OnboardingVM] Claude API: missing HTTP response")
+                return nil
+            }
+            guard httpResponse.statusCode == 200 else {
+                let body = String(data: data, encoding: .utf8) ?? "<non-UTF8 body>"
+                print("[OnboardingVM] Claude API non-200 (\(httpResponse.statusCode)): \(String(body.prefix(200)))")
                 return nil
             }
 
             let apiResponse = try JSONDecoder().decode(ClaudeAPIResponse.self, from: data)
-            guard let textBlock = apiResponse.content.first(where: { $0.type == "text" }),
-                  let jsonData = textBlock.text.data(using: .utf8) else {
+            guard let textBlock = apiResponse.content.first(where: { $0.type == "text" }) else {
+                print("[OnboardingVM] Claude API: no text block in response")
                 return nil
             }
 
-            return try JSONDecoder().decode(ClaudeTargetResponse.self, from: jsonData)
+            // Extraction mirrors the recognition service (strip fences → slice braces →
+            // decode). Fixes markdown-fenced / preamble replies that previously threw and
+            // silently fell back to the generic coaching tip.
+            return extractTargetResponse(from: textBlock.text)
         } catch {
             print("[OnboardingVM] Claude API error: \(error)")
+            return nil
+        }
+    }
+
+    /// Extracts and decodes the target JSON from Claude's raw text reply.
+    ///
+    /// Replicates `AIFoodRecognitionService.parseRecognitionJSON` (B2b): (1) strip
+    /// ```json / ``` fences, (2) trim whitespace/newlines, (3) slice the first `{`
+    /// through the last `}` — this step ALWAYS runs, it is not a fallback, (4) decode.
+    /// Kept private here per B2b (no shared helper, no new type; the recognition
+    /// service is referenced, not edited). A missing brace or a decode failure logs
+    /// the first 200 characters of the raw text and returns nil → the caller's
+    /// local-math + fallback-tip path.
+    private func extractTargetResponse(from rawText: String) -> ClaudeTargetResponse? {
+        // (1) strip markdown fences if present
+        var text = rawText
+        text = text.replacingOccurrences(of: "```json", with: "")
+        text = text.replacingOccurrences(of: "```", with: "")
+        // (2) trim whitespace/newlines
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // (3) slice from the first { through the last } — always runs
+        guard let firstBrace = text.firstIndex(of: "{"),
+              let lastBrace = text.lastIndex(of: "}") else {
+            print("[OnboardingVM] Tip parse failure — no JSON braces in: \(String(rawText.prefix(200)))")
+            return nil
+        }
+        let jsonString = String(text[firstBrace...lastBrace])
+        guard let jsonData = jsonString.data(using: .utf8) else { return nil }
+        // (4) decode
+        do {
+            return try JSONDecoder().decode(ClaudeTargetResponse.self, from: jsonData)
+        } catch {
+            print("[OnboardingVM] Tip decode failed: \(error) — raw: \(String(rawText.prefix(200)))")
             return nil
         }
     }
