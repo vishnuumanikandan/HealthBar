@@ -114,7 +114,7 @@ struct SignUpView: View {
             }
             .accessibilityHidden(true)
 
-            Text("HealthBar")
+            Text("Overheal")
                 .font(AppFont.bold(28))
                 .foregroundColor(DesignSystem.Colors.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -227,7 +227,7 @@ struct SignUpView: View {
                 isDisabled: !viewModel.isSignUpSubmittable
             )
             .accessibilityLabel(viewModel.isLoading ? "Creating account" : "Create Account")
-            .accessibilityHint("Double-tap to create your HealthBar account")
+            .accessibilityHint("Double-tap to create your Overheal account")
 
             Button {
                 showLogin = true

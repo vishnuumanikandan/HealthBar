@@ -872,7 +872,7 @@ struct HomeView: View {
     /// only when `!isClean`, so every section takes its pixel branch.
     private var pixelContent: some View {
         VStack(spacing: 0) {
-            Text("HealthBar")
+            Text("Overheal")
                 .font(AppFont.serifTitle(32))
                 .foregroundColor(tc.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1123,7 +1123,7 @@ struct HomeView: View {
                     .foregroundColor(tc.primary)
                 // R4c: wordmark → display (Bebas), reversing the R3b deviation now that the
                 // Tier-B rule (R4 D1) is the standing convention for the flat branch.
-                Text("HealthBar")
+                Text("Overheal")
                     .font(AppFont.display(27))
                     .foregroundColor(tc.textPrimary)
             }

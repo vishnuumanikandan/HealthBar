@@ -548,7 +548,7 @@ struct GuildDetailView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
 
-                        ShareLink(item: "Join my HealthBar guild \"\(guild.name)\" with code \(code)") {
+                        ShareLink(item: "Join my Overheal guild \"\(guild.name)\" with code \(code)") {
                             Image(systemName: "square.and.arrow.up")
                                 .font(AppFont.bold(14))
                                 .foregroundColor(tc.primary)

@@ -38,6 +38,17 @@ struct ContentView: View {
     /// Created with the auth service so Views never touch the concrete type.
     @State private var authViewModel: AuthViewModel
 
+    /// B1: navigation path for the auth-flow NavigationStack. Lets WelcomeView's CTAs push
+    /// Login/SignUp (via ContentView) and lets `welcomeIsFrontmost` read the stack depth.
+    @State private var authPath = NavigationPath()
+
+    /// B1: whether the first-launch WelcomeView is the auth-stack root THIS session. Read
+    /// ONCE from `hasSeenWelcome` at init (root stability) and never recomputed in `body`, so
+    /// persisting the flag from a CTA doesn't flip the root mid-session — a pushed Login/SignUp
+    /// pops back to Welcome. Set false once any authenticated session appears (grandfathering)
+    /// so a later in-session logout lands on LoginView, not Welcome.
+    @State private var showWelcomeRoot: Bool
+
     // MARK: - Tab State
 
     /// Currently selected tab (0 = Home, 1 = Food, 2 = Battle, 3 = Friends, 4 = Profile).
@@ -83,6 +94,11 @@ struct ContentView: View {
         self._authViewModel = State(
             initialValue: AuthViewModel(authService: FirebaseAuthService.shared)
         )
+        // B1: read the welcome flag ONCE (root stability). The persisted flag takes effect
+        // only on the next launch; this session's auth-stack root is fixed here.
+        self._showWelcomeRoot = State(
+            initialValue: !SettingsManager.shared.hasSeenWelcome
+        )
     }
 
     // MARK: - Body
@@ -102,30 +118,71 @@ struct ContentView: View {
                     mainTabView
                 }
                 .transition(.opacity)
+                .onAppear {
+                    // B1 grandfathering: any authenticated session marks the welcome seen (so
+                    // existing/just-authed users never see it) and pins the auth root to
+                    // LoginView — an in-session logout then lands there, never on Welcome.
+                    if !SettingsManager.shared.hasSeenWelcome {
+                        SettingsManager.shared.hasSeenWelcome = true
+                    }
+                    showWelcomeRoot = false
+                }
             } else {
                 authFlow
                     .transition(.opacity)
             }
         }
-        .preferredColorScheme(settings.isCleanDark ? .dark : .light)
+        .preferredColorScheme(welcomeColorScheme)
+    }
+
+    // MARK: - B1 Welcome Routing
+
+    /// True only while the fixed-dark WelcomeView is the frontmost auth screen (root, nothing
+    /// pushed). Pushed Login/SignUp (path non-empty) and the logged-in app fall through.
+    private var welcomeIsFrontmost: Bool {
+        !authService.isLoggedIn && showWelcomeRoot && authPath.isEmpty
+    }
+
+    /// Force `.dark` under the fixed-dark Welcome so the status bar stays legible regardless
+    /// of the user's theme; otherwise the user's own scheme, exactly as before B1.
+    private var welcomeColorScheme: ColorScheme {
+        welcomeIsFrontmost ? .dark : (settings.isCleanDark ? .dark : .light)
     }
 
     // MARK: - Auth Flow
 
-    /// NavigationStack wrapping LoginView (root) and SignUpView (destination).
-    ///
-    /// LoginView uses `NavigationLink(value: AuthDestination.signUp)` to push
-    /// SignUpView. The `navigationDestination` modifier here handles the routing.
+    /// NavigationStack for the auth flow. Root is WelcomeView on first launch (B1) — until
+    /// `hasSeenWelcome` is set — otherwise LoginView. Welcome's CTAs push `.signUp`/`.login`
+    /// onto `authPath`; `navigationDestination` renders them (a pushed Login uses the nav-bar
+    /// variant with its guest/sign-up section hidden). Popping a pushed screen returns to
+    /// whichever root this session started with (root stability).
     @ViewBuilder
     private var authFlow: some View {
-        NavigationStack {
-            LoginView(viewModel: authViewModel)
-                .navigationDestination(for: AuthDestination.self) { destination in
-                    switch destination {
-                    case .signUp:
-                        SignUpView(viewModel: authViewModel)
-                    }
+        NavigationStack(path: $authPath) {
+            Group {
+                if showWelcomeRoot {
+                    WelcomeView(
+                        onGetStarted: {
+                            SettingsManager.shared.hasSeenWelcome = true
+                            authPath.append(AuthDestination.signUp)
+                        },
+                        onLogIn: {
+                            SettingsManager.shared.hasSeenWelcome = true
+                            authPath.append(AuthDestination.login)
+                        }
+                    )
+                } else {
+                    LoginView(viewModel: authViewModel)
                 }
+            }
+            .navigationDestination(for: AuthDestination.self) { destination in
+                switch destination {
+                case .signUp:
+                    SignUpView(viewModel: authViewModel)
+                case .login:
+                    LoginView(viewModel: authViewModel, showNavBar: true)
+                }
+            }
         }
     }
 

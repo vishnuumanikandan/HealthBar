@@ -16,6 +16,9 @@ import SwiftUI
 /// Defined here since LoginView is the root of the auth navigation stack.
 enum AuthDestination: Hashable {
     case signUp
+    /// B1: pushed from WelcomeView's "Log In" CTA. Renders the pushed-variant LoginView
+    /// (`showNavBar: true`) — back button visible, guest/sign-up section hidden.
+    case login
 }
 
 // MARK: - LoginView
@@ -109,7 +112,7 @@ struct LoginView: View {
             .accessibilityHidden(true)
 
             // App name
-            Text("HealthBar")
+            Text("Overheal")
                 .font(AppFont.bold(34))
                 .foregroundColor(DesignSystem.Colors.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -200,7 +203,7 @@ struct LoginView: View {
                 isDisabled: !viewModel.isLoginSubmittable
             )
             .accessibilityLabel(viewModel.isLoading ? "Logging in" : "Log In")
-            .accessibilityHint("Double-tap to log into your HealthBar account")
+            .accessibilityHint("Double-tap to log into your Overheal account")
 
             if !showNavBar {
                 // Navigate to SignUpView
@@ -217,7 +220,7 @@ struct LoginView: View {
                 }
                 .frame(minHeight: 44)
                 .accessibilityLabel("Don't have an account? Sign Up")
-                .accessibilityHint("Double-tap to create a new HealthBar account")
+                .accessibilityHint("Double-tap to create a new Overheal account")
 
                 // Divider
                 HStack(spacing: DesignSystem.Spacing.sm) {
@@ -245,7 +248,7 @@ struct LoginView: View {
                 }
                 .disabled(viewModel.isLoading)
                 .accessibilityLabel("Continue as Guest")
-                .accessibilityHint("Double-tap to use HealthBar without an account. Data is stored locally only.")
+                .accessibilityHint("Double-tap to use Overheal without an account. Data is stored locally only.")
             }
         }
     }
