@@ -1232,7 +1232,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Overheal;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
-				INFOPLIST_KEY_NSCameraUsageDescription = "HealthBar needs camera access to photograph your meals and scan product barcodes for quick nutrition logging.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Overheal needs camera access to photograph your meals and scan product barcodes for quick nutrition logging.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -1287,7 +1287,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Overheal;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
-				INFOPLIST_KEY_NSCameraUsageDescription = "HealthBar needs camera access to photograph your meals and scan product barcodes for quick nutrition logging.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Overheal needs camera access to photograph your meals and scan product barcodes for quick nutrition logging.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;

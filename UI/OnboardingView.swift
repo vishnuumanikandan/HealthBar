@@ -269,7 +269,7 @@ private struct WelcomeStep: View {
             }
 
             VStack(spacing: DesignSystem.Spacing.sm) {
-                Text("HealthBar")
+                Text("Overheal")
                     .font(AppFont.bold(34))
                     .foregroundColor(DesignSystem.Colors.textPrimary)
 
