@@ -42,6 +42,9 @@ struct LoginView: View {
     /// Set to true when pushed from SignUpView inside the guest sheet so the back button is visible.
     var showNavBar: Bool = false
 
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
     // MARK: - Focus Routing
 
     private enum Field: Hashable {
@@ -56,7 +59,7 @@ struct LoginView: View {
     var body: some View {
         ZStack {
             // Full-bleed background
-            DesignSystem.Colors.primaryBackground
+            tc.primaryBackground
                 .ignoresSafeArea()
 
             ScrollView {
@@ -88,42 +91,30 @@ struct LoginView: View {
     // MARK: - Header
 
     private var headerSection: some View {
-        VStack(spacing: DesignSystem.Spacing.md) {
-            // App icon mark
-            ZStack {
-                AdaptiveCardShapeStyle()
-                    .fill(
-                        DesignSystem.Colors.adaptiveGradient(
-                            light: Color(hex: "#34D399"),
-                            mid: Color(hex: "#10B981"),
-                            dark: Color(hex: "#059669")
-                        )
-                    )
-                    .frame(width: 84, height: 84)
-                    .overlay(
-                        AdaptiveCardShapeStyle()
-                            .stroke(SettingsManager.shared.isCleanUI ? Color.clear : Color(hex: "#047857"), lineWidth: SettingsManager.shared.isCleanUI ? 0 : 2)
-                    )
+        VStack(spacing: 0) {
+            // Eyebrow
+            Text("WELCOME BACK")
+                .font(AppFont.display(14))
+                .tracking(3)
+                .foregroundColor(tc.primary)
 
-                Image(systemName: "heart.fill")
-                    .font(.system(size: 38, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            .accessibilityHidden(true)
-
-            // App name
-            Text("Overheal")
-                .font(AppFont.bold(34))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+            // Wordmark — the display face carries its own leading, so the gap above is tight.
+            Text("OVERHEAL")
+                .font(AppFont.display(40))
+                .foregroundColor(tc.textPrimary)
+                .padding(.top, DesignSystem.Spacing.xs)
                 .accessibilityAddTraits(.isHeader)
 
             // Tagline
             Text("Your health quest begins here.")
                 .font(AppFont.regular(16))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .foregroundColor(tc.textSecondary)
                 .multilineTextAlignment(.center)
+                .padding(.top, DesignSystem.Spacing.sm)
         }
-        .padding(.bottom, DesignSystem.Spacing.sm)
+        // Absorbs the vertical space the retired icon mark occupied.
+        .padding(.top, DesignSystem.Spacing.lg)
+        .padding(.bottom, DesignSystem.Spacing.md)
     }
 
     // MARK: - Fields
@@ -136,6 +127,7 @@ struct LoginView: View {
                 placeholder: "you@example.com or @username",
                 text: $viewModel.email,
                 isSecure: false,
+                isEmailField: true,
                 errorMessage: viewModel.emailError,
                 submitLabel: .next,
                 onSubmit: { focusedField = .password }
@@ -211,11 +203,11 @@ struct LoginView: View {
                     HStack(spacing: DesignSystem.Spacing.xs) {
                         Text("Don't have an account?")
                             .font(AppFont.regular(16))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .foregroundColor(tc.textSecondary)
 
                         Text("Sign Up")
                             .font(AppFont.bold(16))
-                            .foregroundColor(DesignSystem.Colors.primary)
+                            .foregroundColor(tc.primary)
                     }
                 }
                 .frame(minHeight: 44)
@@ -226,13 +218,13 @@ struct LoginView: View {
                 HStack(spacing: DesignSystem.Spacing.sm) {
                     Rectangle()
                         .frame(height: 1)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary.opacity(0.25))
+                        .foregroundStyle(tc.textSecondary.opacity(0.25))
                     Text("or")
                         .font(AppFont.regular(12))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .foregroundColor(tc.textSecondary)
                     Rectangle()
                         .frame(height: 1)
-                        .foregroundStyle(DesignSystem.Colors.textSecondary.opacity(0.25))
+                        .foregroundStyle(tc.textSecondary.opacity(0.25))
                 }
                 .padding(.horizontal, DesignSystem.Spacing.md)
 
@@ -243,7 +235,7 @@ struct LoginView: View {
                 } label: {
                     Text("Continue as Guest")
                         .font(AppFont.regular(16))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .foregroundColor(tc.textSecondary)
                         .frame(minHeight: 44)
                 }
                 .disabled(viewModel.isLoading)
