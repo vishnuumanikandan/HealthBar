@@ -145,7 +145,7 @@ struct DailyGoalsView: View {
                     placeholder: "50",
                     text: $viewModel.purityTargetString,
                     unit: "score",
-                    helperText: "Lower toxin score = cleaner eating (0-100)"
+                    helperText: "Daily purity = calorie-weighted average toxin of your meals (0-100). Stay under this."
                 )
 
                 // Advanced Nutrition Goals (when enabled)

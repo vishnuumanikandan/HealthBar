@@ -159,7 +159,7 @@ final class AppCoordinator {
 
         let totalCalories = nutritionManager.calculateTotalCalories(from: entries)
         let macros = nutritionManager.calculateTotalMacros(from: entries)
-        let toxinScore = nutritionManager.calculateTotalToxinScore(from: entries)
+        let toxinScore = NutritionManager.dailyToxinScore(from: entries)
         let metGoals = nutritionManager.didMeetGoals(entries: entries, goal: goal)
 
         let currentLevel = gamificationManager.calculateLevel(from: progress.totalXP)
@@ -172,7 +172,7 @@ final class AppCoordinator {
             totalProtein: macros.protein,
             totalCarbs: macros.carbs,
             totalFat: macros.fat,
-            totalToxinScore: toxinScore,
+            dailyToxinScore: toxinScore,
             goal: goal,
             metGoals: metGoals,
             currentLevel: currentLevel,
@@ -432,6 +432,12 @@ final class AppCoordinator {
     }
 
     /// Compares today's purity against the baseline
+    ///
+    /// Both sides are on the same 0–100 scale: today's weighted-average toxin score against
+    /// the baseline's average of past daily scores for this weekday. (Before A1.5 this
+    /// compared a daily SUM against a per-entry mean — two different scales, so the ratio
+    /// was meaningless.)
+    ///
     /// - Returns: Difference as a fraction (e.g., -0.15 means 15% better, +0.10 means 10% worse)
     func getPurityVsBaseline() async throws -> Double? {
         guard let baseline = try await getTodaysBaseline(),
@@ -441,7 +447,7 @@ final class AppCoordinator {
         }
 
         let entries = try await dataManager.fetchTodaysEntries()
-        let todaysPurity = entries.reduce(0) { $0 + $1.toxinScore }
+        let todaysPurity = NutritionManager.dailyToxinScore(from: entries)
 
         // Calculate difference (positive = worse than baseline, negative = better)
         let difference = (Double(todaysPurity) - baseline.averagePurity) / baseline.averagePurity
@@ -533,13 +539,13 @@ final class AppCoordinator {
 
                 let totalCalories = entries.reduce(0) { $0 + $1.calories }
                 let totalProtein = entries.reduce(0.0) { $0 + $1.protein }
-                let totalPurity = entries.reduce(0) { $0 + $1.toxinScore }
+                let dailyToxin = NutritionManager.dailyToxinScore(from: entries)
 
                 daySummaries.append(DaySummary(
                     date: date,
                     calories: totalCalories,
                     protein: totalProtein,
-                    purityScore: totalPurity,
+                    dailyToxinScore: dailyToxin,
                     mealCount: entries.count
                 ))
             } else {
@@ -548,7 +554,7 @@ final class AppCoordinator {
                     date: date,
                     calories: 0,
                     protein: 0,
-                    purityScore: 0,
+                    dailyToxinScore: 0,
                     mealCount: 0
                 ))
             }
@@ -1153,7 +1159,8 @@ struct TodaySummary {
     let totalProtein: Double
     let totalCarbs: Double
     let totalFat: Double
-    let totalToxinScore: Int
+    /// Calorie-weighted average toxin score for the day (0–100). See NutritionManager.dailyToxinScore.
+    let dailyToxinScore: Int
     let goal: DailyGoal
     let metGoals: Bool
     let currentLevel: Int
