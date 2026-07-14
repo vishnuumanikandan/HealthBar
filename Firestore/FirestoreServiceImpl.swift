@@ -1772,6 +1772,39 @@ final class FirestoreServiceImpl: FirestoreService {
         return snapshot.count.intValue + 1
     }
 
+    func fetchLeaderboardSlice(direction: LeaderboardSliceDirection,
+                               fromRR: Int,
+                               after: (rr: Int, uid: String)?,
+                               limit: Int) async throws -> [GlobalLeaderboardDTO] {
+        // Order fields match the cursor exactly: rr, then documentID(). A range filter on the
+        // SAME field we order by needs no composite index (only the automatic single-field
+        // index + the implicit __name__ secondary). Ascending for .up (from my RR upward),
+        // descending for .down (from just below my RR downward).
+        var query: Query
+        switch direction {
+        case .up:
+            query = leaderboardCollection
+                .whereField("rr", isGreaterThanOrEqualTo: fromRR)
+                .order(by: "rr", descending: false)
+                .order(by: FieldPath.documentID(), descending: false)
+        case .down:
+            query = leaderboardCollection
+                .whereField("rr", isLessThan: fromRR)
+                .order(by: "rr", descending: true)
+                .order(by: FieldPath.documentID(), descending: true)
+        }
+        // Cursor values must line up with the two order-by fields (rr, then the doc ID).
+        if let after {
+            query = query.start(after: [after.rr, after.uid])
+        }
+        let snapshot = try await query.limit(to: limit).getDocuments()
+        return snapshot.documents.compactMap { doc in
+            guard var dto = try? doc.data(as: GlobalLeaderboardDTO.self) else { return nil }
+            dto.id = doc.documentID
+            return dto
+        }
+    }
+
     // MARK: - FirestoreService: Account Deletion
 
     /// Deletes all Firestore data under users/{userId}/ in batches of ≤500.

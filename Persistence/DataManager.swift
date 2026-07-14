@@ -3428,10 +3428,17 @@ final class DataManager {
 
     // MARK: - Duels (D1a)
 
-    /// Challengeable people: the union of my friends and my guild roster, deduped by
-    /// uid (a person who is both is kept as `.friend`), excluding myself. Sourced from
-    /// the already-readable friend list + guild members — no new private-data reads.
-    /// Empty for guests.
+    /// Challengeable people who live in their OWN lobby sections: my friends (Rivals) and my
+    /// guild roster (Guild), deduped by uid (a person who is both is kept as `.friend`),
+    /// excluding myself. Sourced from the already-readable friend list + guild members — no new
+    /// private-data reads. Empty for guests.
+    ///
+    /// C1: the public-directory union was REMOVED. "Everyone else" is now the RR-proximity stream
+    /// (`fetchNearbyRanked`) plus @handle search (`lookupChallengeCandidate`), both backed by the
+    /// world-readable `leaderboard/{uid}` projection — so the challenge surface shows only ranked
+    /// players, not every account ever created. `rr` is nil for these rows: neither the `Friend`
+    /// model nor `GuildMemberDTO` carries rr, and the lobby renders a plaque + RR only when
+    /// rr is non-nil.
     func fetchChallengeablePeople() async -> [DuelOpponentCandidate] {
         guard !isGuest, let me = currentUserId, !me.isEmpty else { return [] }
 
@@ -3441,7 +3448,7 @@ final class DataManager {
         let friends = (try? await fetchFriends()) ?? []
         for f in friends where f.friendUid != me && !f.friendUid.isEmpty {
             byUid[f.friendUid] = DuelOpponentCandidate(
-                uid: f.friendUid, username: f.username, displayName: f.displayName, source: .friend
+                uid: f.friendUid, username: f.username, displayName: f.displayName, source: .friend, rr: nil
             )
         }
 
@@ -3450,28 +3457,126 @@ final class DataManager {
             for m in await guildMembers(code: code) where m.uid != me && !m.uid.isEmpty {
                 if byUid[m.uid] == nil {
                     byUid[m.uid] = DuelOpponentCandidate(
-                        uid: m.uid, username: m.username, displayName: m.displayName, source: .guild
+                        uid: m.uid, username: m.username, displayName: m.displayName, source: .guild, rr: nil
                     )
                 }
-            }
-        }
-
-        // D3: everyone else in the public usernames directory (`.directory` source). Reuses the
-        // same world-readable read Add Friends performs — no private data, no rules change. Add
-        // only uids not already present as a friend/guild-mate. The directory carries no display
-        // name, so `displayName` stays "" (label falls back to `@username`).
-        let directory = (try? await fetchAllUsers()) ?? []
-        for u in directory where u.uid != me && !u.uid.isEmpty {
-            if byUid[u.uid] == nil {
-                byUid[u.uid] = DuelOpponentCandidate(
-                    uid: u.uid, username: u.username, displayName: "", source: .directory
-                )
             }
         }
 
         return byUid.values.sorted {
             $0.displayLabel.localizedCaseInsensitiveCompare($1.displayLabel) == .orderedAscending
         }
+    }
+
+    // MARK: - Duels: RR-proximity challenge stream (C1)
+
+    /// One page of the RR-proximity stream: merged rows (proximity-ordered, exclusions applied)
+    /// plus the two directional cursors. A nil cursor marks that direction exhausted.
+    struct ProximityPage {
+        let rows: [DuelOpponentCandidate]        // merged, proximity-ordered, exclusions applied
+        let upCursor: (rr: Int, uid: String)?    // nil once .up is exhausted
+        let downCursor: (rr: Int, uid: String)?  // nil once .down is exhausted
+        var isExhausted: Bool { upCursor == nil && downCursor == nil }
+    }
+
+    /// Pure merge of two leaderboard slices into one proximity-ordered list (C1). Sorted by
+    /// `|rr − myRR|` ascending; ties broken by higher rr first, then uid ascending (a total,
+    /// deterministic order). Rows whose uid is in `excluding` (friends, guild-mates, AND me —
+    /// the caller stamps me in) are dropped. Candidate mapping happens AFTER this, keeping the
+    /// function domain-minimal and standalone-testable (RED→GREEN vectors: proximity order,
+    /// ties, equal-rr page boundary, exclusion, one-direction exhaustion, cursor advance).
+    static func mergeByProximity(up: [GlobalLeaderboardDTO],
+                                 down: [GlobalLeaderboardDTO],
+                                 myRR: Int,
+                                 excluding: Set<String>) -> [GlobalLeaderboardDTO] {
+        let combined = (up + down).filter { dto in
+            guard let uid = dto.id, !uid.isEmpty else { return false }
+            return !excluding.contains(uid)
+        }
+        return combined.sorted { a, b in
+            let da = abs(a.rr - myRR)
+            let db = abs(b.rr - myRR)
+            if da != db { return da < db }            // closer to my RR first
+            if a.rr != b.rr { return a.rr > b.rr }    // tie on |Δ| → higher rr first
+            return (a.id ?? "") < (b.id ?? "")        // then uid ascending (deterministic)
+        }
+    }
+
+    /// One page of the RR-proximity stream around my RR. Fetches up to `proximityPerDirection`
+    /// rows from each non-exhausted direction CONCURRENTLY (`async let`), then merges by proximity
+    /// dropping `excluding` (friends/guild — they live in their own sections) and my own uid.
+    /// Each direction's new cursor is the (rr, uid) of the LAST row Firestore returned
+    /// (pre-exclusion — excluded rows still advance the cursor, or they would be re-fetched
+    /// forever); a short slice (`count < limit`) marks that direction exhausted (nil cursor).
+    /// First page: both directions with `after: nil`. Guest → empty exhausted page.
+    func fetchNearbyRanked(myRR: Int,
+                           upCursor: (rr: Int, uid: String)?,
+                           downCursor: (rr: Int, uid: String)?,
+                           isFirstPage: Bool,
+                           excluding: Set<String>) async -> ProximityPage {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            return ProximityPage(rows: [], upCursor: nil, downCursor: nil)
+        }
+        let limit = DuelConstants.proximityPerDirection
+        let fetchUp = isFirstPage || upCursor != nil
+        let fetchDown = isFirstPage || downCursor != nil
+
+        // Both directions concurrently; a per-direction failure degrades to an empty slice.
+        async let upResult: [GlobalLeaderboardDTO] = fetchUp
+            ? ((try? await firestoreService.fetchLeaderboardSlice(
+                direction: .up, fromRR: myRR, after: upCursor, limit: limit)) ?? [])
+            : []
+        async let downResult: [GlobalLeaderboardDTO] = fetchDown
+            ? ((try? await firestoreService.fetchLeaderboardSlice(
+                direction: .down, fromRR: myRR, after: downCursor, limit: limit)) ?? [])
+            : []
+        let upSlice = await upResult
+        let downSlice = await downResult
+
+        // New cursor = last raw row if the slice was full; nil (exhausted) on a short slice or a
+        // direction we did not fetch this page.
+        let newUp: (rr: Int, uid: String)? = (fetchUp && upSlice.count == limit)
+            ? upSlice.last.map { ($0.rr, $0.id ?? "") } : nil
+        let newDown: (rr: Int, uid: String)? = (fetchDown && downSlice.count == limit)
+            ? downSlice.last.map { ($0.rr, $0.id ?? "") } : nil
+
+        var exclusions = excluding
+        exclusions.insert(me)   // the .up slice includes me by construction (rr >= myRR)
+        let rows = Self.mergeByProximity(up: upSlice, down: downSlice, myRR: myRR, excluding: exclusions)
+            .map { dto in
+                // `.directory` now means "the ranked directory" (leaderboard-backed) — it carries
+                // a real displayName + rr, unlike the retired usernames-index directory.
+                DuelOpponentCandidate(uid: dto.id ?? "", username: dto.username,
+                                      displayName: dto.displayName, source: .directory, rr: dto.rr)
+            }
+        return ProximityPage(rows: rows, upCursor: newUp, downCursor: newDown)
+    }
+
+    /// Resolve a typed `@handle` to a single challenge candidate for the lobby's search field (C1).
+    /// Strips a leading `@`, normalizes/validates via the existing username path, resolves the uid
+    /// through the public usernames index, then reads that uid's world-readable `leaderboard/{uid}`
+    /// row for a real displayName + rr. Returns:
+    ///  - a `.directory` candidate WITH displayName + rr when the user has published stats,
+    ///  - a `.directory` candidate with just uid + handle (rr nil) when resolved but unranked,
+    ///  - nil when the handle is malformed or unclaimed (→ the sheet's "no such username" caption).
+    /// Guest → nil. Pure lookup; the sheet owns cancellation (latest-query-wins).
+    func lookupChallengeCandidate(handle raw: String) async -> DuelOpponentCandidate? {
+        guard !isGuest, currentUserId?.isEmpty == false else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        let stripped = trimmed.hasPrefix("@") ? String(trimmed.dropFirst()) : trimmed
+        guard let handleKey = try? DataManager.normalizeAndValidateUsername(stripped) else { return nil }
+        guard let uid = try? await firestoreService.lookupUid(forHandleKey: handleKey), !uid.isEmpty else {
+            return nil
+        }
+        // leaderboard/{uid} is world-readable (D3); `fetchMyLeaderboardEntry` reads that one doc by
+        // uid — reused here for an arbitrary uid (not just "my" row). Absent/undecodable → unranked.
+        if let row = try? await firestoreService.fetchMyLeaderboardEntry(userId: uid) {
+            let uname = row.username.isEmpty ? handleKey : row.username
+            return DuelOpponentCandidate(uid: uid, username: uname, displayName: row.displayName,
+                                         source: .directory, rr: row.rr)
+        }
+        return DuelOpponentCandidate(uid: uid, username: handleKey, displayName: "",
+                                     source: .directory, rr: nil)
     }
 
     // MARK: - Concurrent duel caps (D2.6)
@@ -4280,7 +4385,8 @@ final class DataManager {
             uid: opponentUid,
             username: opponentIsChallenger ? duel.challengerUsername : duel.opponentUsername,
             displayName: opponentIsChallenger ? duel.challengerDisplayName : duel.opponentDisplayName,
-            source: .friend // display-only for the picker; irrelevant on the direct rematch path
+            source: .friend, // display-only for the picker; irrelevant on the direct rematch path
+            rr: nil
         )
         try await sendChallenge(to: candidate, league: duel.league, rematchOfDuelId: originalId)
     }

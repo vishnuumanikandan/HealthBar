@@ -17,6 +17,14 @@ struct DirectoryUser {
     let claimedAt: Date?
 }
 
+/// Direction of a `fetchLeaderboardSlice` page relative to a reference RR (C1 — the
+/// RR-proximity challenge stream). `.up` pages upward from my RR (rr ascending), `.down`
+/// pages downward (rr descending); the client interleaves the two by `|rr − myRR|`.
+enum LeaderboardSliceDirection {
+    case up
+    case down
+}
+
 /// Defines the Firestore sync contract for cloud persistence.
 ///
 /// Phase 1: FoodEntry
@@ -534,6 +542,17 @@ protocol FirestoreService {
 
     /// RR-board position: count(rr > myRR) + 1 via the count() aggregation.
     func fetchLeaderboardPosition(myRR: Int) async throws -> Int
+
+    /// One directional slice of the leaderboard around an RR value (C1 — RR-proximity stream).
+    /// - `.up`:   rr >= fromRR, ordered rr ASC,  then documentID ASC
+    /// - `.down`: rr <  fromRR, ordered rr DESC, then documentID DESC
+    /// `after` is the (rr, uid) of the last row previously consumed in this direction; nil for
+    /// the first page. Returns up to `limit` rows (undecodable docs skipped). Single-field
+    /// range + orderBy on `rr` (implicit `__name__` secondary) — automatic index, no composite.
+    func fetchLeaderboardSlice(direction: LeaderboardSliceDirection,
+                               fromRR: Int,
+                               after: (rr: Int, uid: String)?,
+                               limit: Int) async throws -> [GlobalLeaderboardDTO]
 
     // MARK: - Account Deletion
 
