@@ -113,43 +113,4 @@ of implementing.
   behavior, the existing pattern over a new one, the boring option over the clever
   one, and flagging over silently deciding.
 
----
-
-# Reference (not invariants)
-
-## Tech Stack
-- SwiftUI, iOS 26.2, Xcode 16.0
-- MVVM with central AppCoordinator
-- SwiftData for local persistence
-- Firebase Auth (Google Sign-In) + Firestore cloud sync
-- OpenFoodFacts API for barcode scanning
-
-## Build & Run
-
-```bash
-# Build
-xcodebuild -project HealthBar.xcodeproj -scheme HealthBar -sdk iphonesimulator -configuration Debug build
-
-# Run tests
-xcodebuild -project HealthBar.xcodeproj -scheme HealthBar -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 16' test
-
-# List available simulators
-xcrun simctl list devices available
-```
-
-## Module Layout
-
-```
-App/              AppCoordinator, APIConfig, SettingsManager
-Auth/             FirebaseAuthService, LocalAuthService, AuthViewModel, Login/SignUp views
-Models/           SwiftData models (FoodEntry, DailyGoal, UserProgress, etc.)
-Firestore/        DTO types for Firestore sync
-Nutrition/        NutritionManager, FoodDatabase, BarcodeService
-Gamification/     GamificationManager
-Persistence/      DataManager
-Notifications/    NotificationManager
-Resources/        DesignSystem, TimeOfDayTheme
-UI/               All views and their ViewModels
-UI/Components/    Reusable UI components (toasts, cards, pills)
-HealthBar/        App entry point (HealthBarApp.swift, ContentView.swift, assets)
-```
+Rank raw values are Firestore wire format — pinned forever. They appear in immutable feedEvents/rank_<rawValue> doc IDs and public/stats.rank. Rename Swift case identity only; never touch a raw value; new cases get an explicit pinned raw value from day one.
