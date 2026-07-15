@@ -69,9 +69,7 @@ struct BadgeToastView: View {
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.sm) {
-            Image(systemName: badge.symbolName)
-                .font(AppFont.regular(32))
-                .foregroundColor(tc.primary)
+            BadgeEmblem(badge, size: 32, isLocked: false)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Badge Unlocked!")

@@ -390,10 +390,7 @@ struct ProfileView: View {
                         selectedBadge = badge
                     } label: {
                         VStack(spacing: DesignSystem.Spacing.xs) {
-                            Image(systemName: earned ? badge.symbolName : "lock.fill")
-                                .font(AppFont.regular(34))
-                                .foregroundColor(earned ? tc.primary : tc.textSecondary)
-                                .opacity(earned ? 1.0 : 0.35)
+                            BadgeEmblem(badge, size: 34, isLocked: !earned)
                             Text(badge.title)
                                 .font(AppFont.regular(11))
                                 .foregroundColor(earned ? tc.textPrimary : tc.textTertiary)
@@ -434,9 +431,7 @@ struct BadgeDetailSheet: View {
                 tc.primaryBackground.ignoresSafeArea()
 
                 VStack(spacing: DesignSystem.Spacing.lg) {
-                    Image(systemName: definition.symbolName)
-                        .font(AppFont.regular(80))
-                        .foregroundColor(tc.primary)
+                    BadgeEmblem(definition, size: 80, isLocked: !(progress?.isUnlocked ?? false))
                         .padding(.top, DesignSystem.Spacing.lg)
 
                     VStack(spacing: DesignSystem.Spacing.sm) {
