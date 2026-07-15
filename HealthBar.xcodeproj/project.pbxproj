@@ -68,6 +68,9 @@
 		BE102EE62FDC979900E9744F /* SharedInboxSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102EE52FDC979900E9744F /* SharedInboxSection.swift */; };
 		BE102EE82FDC97A200E9744F /* FriendPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102EE72FDC97A200E9744F /* FriendPickerSheet.swift */; };
 		BE102F5A2FDD018600E9744F /* SharedItemDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102F592FDD018600E9744F /* SharedItemDTO.swift */; };
+		AADD0D022FE1000000000001 /* ProfanityFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADD0D012FE1000000000001 /* ProfanityFilter.swift */; };
+		AADD0D042FE1000000000002 /* ReportDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADD0D032FE1000000000002 /* ReportDTO.swift */; };
+		AADD0D062FE1000000000003 /* ProfanityDenylist.txt in Resources */ = {isa = PBXBuildFile; fileRef = AADD0D052FE1000000000003 /* ProfanityDenylist.txt */; };
 		BE102F5C2FDD019B00E9744F /* SaveQuickLogSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102F5B2FDD019B00E9744F /* SaveQuickLogSheet.swift */; };
 		BE1030442FE49A7000E9744F /* GuildDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1030432FE49A7000E9744F /* GuildDTO.swift */; };
 		BE1030462FE49AAD00E9744F /* GuildView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1030452FE49AAD00E9744F /* GuildView.swift */; };
@@ -278,6 +281,9 @@
 		BE102EE52FDC979900E9744F /* SharedInboxSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedInboxSection.swift; sourceTree = "<group>"; };
 		BE102EE72FDC97A200E9744F /* FriendPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendPickerSheet.swift; sourceTree = "<group>"; };
 		BE102F592FDD018600E9744F /* SharedItemDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedItemDTO.swift; sourceTree = "<group>"; };
+		AADD0D012FE1000000000001 /* ProfanityFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfanityFilter.swift; sourceTree = "<group>"; };
+		AADD0D032FE1000000000002 /* ReportDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportDTO.swift; sourceTree = "<group>"; };
+		AADD0D052FE1000000000003 /* ProfanityDenylist.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ProfanityDenylist.txt; sourceTree = "<group>"; };
 		BE102F5B2FDD019B00E9744F /* SaveQuickLogSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveQuickLogSheet.swift; sourceTree = "<group>"; };
 		BE1030432FE49A7000E9744F /* GuildDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuildDTO.swift; sourceTree = "<group>"; };
 		BE1030452FE49AAD00E9744F /* GuildView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuildView.swift; sourceTree = "<group>"; };
@@ -494,6 +500,7 @@
 			children = (
 				1146B26B2F1F493D004767C9 /* DesignSystem.swift */,
 				CC770AA12F500000000000E1 /* TimeOfDayTheme.swift */,
+				AADD0D052FE1000000000003 /* ProfanityDenylist.txt */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -645,6 +652,7 @@
 			children = (
 				BEF96A982F7CC7F600FB0F83 /* Date+Helpers.swift */,
 				BEF96A992F7CC7F600FB0F83 /* XP+Helpers.swift */,
+				AADD0D012FE1000000000001 /* ProfanityFilter.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -696,6 +704,7 @@
 		CC220AA02F400000000000C0 /* Firestore */ = {
 			isa = PBXGroup;
 			children = (
+				AADD0D032FE1000000000002 /* ReportDTO.swift */,
 				BED60B8A2FFCBAFE00F9E190 /* GlobalLeaderboardDTO.swift */,
 				BED60B6A2FFC612400F9E190 /* DuelQueueTicketDTO.swift */,
 				BED60B362FFA318F00F9E190 /* DuelDTO.swift */,
@@ -881,6 +890,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BE47B6822F6D16A0007F48F5 /* GoogleService-Info.plist in Resources */,
+				AADD0D062FE1000000000003 /* ProfanityDenylist.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -907,6 +917,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AADD0D022FE1000000000001 /* ProfanityFilter.swift in Sources */,
+				AADD0D042FE1000000000002 /* ReportDTO.swift in Sources */,
 				BE7B0D022FE5000000000008 /* StandingsPieces.swift in Sources */,
 				BE7B0A022FE5000000000002 /* TopBar.swift in Sources */,
 				BE7B0B022FE5000000000004 /* SettingsView.swift in Sources */,
