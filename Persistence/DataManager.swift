@@ -3002,9 +3002,6 @@ final class DataManager {
         guard !isGuest, let me = currentUserId, !me.isEmpty else {
             throw FriendError.network("You must be signed in to use friends.")
         }
-        // TESTING ONLY — no real edges exist for the placeholder; succeed as a
-        // no-op (it reappears on the next load, by design).
-        if friendUid == PlaceholderFriend.uid { return }
         try await firestoreService.removeFriend(friendUid: friendUid, meUid: me)
     }
 
@@ -4505,11 +4502,6 @@ final class DataManager {
             }
         }
 
-        // TESTING ONLY — fabricated events from the placeholder friend so the
-        // Activity segment isn't empty without a second account. Merges and
-        // sorts alongside real events. Grep "PlaceholderFriend" to remove.
-        items.append(contentsOf: PlaceholderFriend.feedItems())
-
         items.sort { $0.createdAt > $1.createdAt }
         let capped = Array(items.prefix(50))
 
@@ -4522,9 +4514,6 @@ final class DataManager {
         await withTaskGroup(of: FeedItem.self) { group in
             for item in capped {
                 group.addTask { [firestoreService, me, item] in
-                    // TESTING ONLY — placeholder items keep their fabricated
-                    // cheer fields (the fixture has no real cheers subcollection).
-                    if item.friendUid == PlaceholderFriend.uid { return item }
                     var result = item
                     let cheers = (try? await firestoreService.fetchCheers(
                         ownerUid: item.friendUid, eventId: item.eventId, limit: 20)) ?? []
@@ -4607,12 +4596,6 @@ final class DataManager {
             }
         }
         items.sort { $0.createdAt > $1.createdAt }
-
-        // TESTING ONLY — fabricated owner milestones so the "Your milestones"
-        // strip is visible without real emitted events. Grep "PlaceholderFriend".
-        if items.isEmpty {
-            items = PlaceholderFriend.ownMilestones()
-        }
         return items
     }
 
@@ -4787,8 +4770,6 @@ final class DataManager {
     /// both rendered as "hasn't shared their stats yet."
     func fetchPublicStats(friendUid: String) async throws -> PublicStatsDTO? {
         guard !isGuest, let me = currentUserId, !me.isEmpty else { return nil }
-        // TESTING ONLY — the placeholder friend's stats are fabricated locally.
-        if friendUid == PlaceholderFriend.uid { return PlaceholderFriend.stats }
         return try await firestoreService.fetchPublicStats(friendUid: friendUid)
     }
 
@@ -4800,15 +4781,12 @@ final class DataManager {
         guard !isGuest, let me = currentUserId, !me.isEmpty else { return [:] }
 
         let friendModels = (try? await fetchFriends()) ?? []
-        var uids = friendModels.map { $0.friendUid }
-        // TESTING ONLY — placeholder friend rides along (fabricated stats).
-        uids.append(PlaceholderFriend.uid)
+        let uids = friendModels.map { $0.friendUid }
 
         var statsByUid: [String: PublicStatsDTO] = [:]
         await withTaskGroup(of: (uid: String, stats: PublicStatsDTO?).self) { group in
             for uid in uids {
                 group.addTask { [firestoreService] in
-                    if uid == PlaceholderFriend.uid { return (uid, PlaceholderFriend.stats) }
                     return (uid, try? await firestoreService.fetchPublicStats(friendUid: uid))
                 }
             }
@@ -4893,23 +4871,6 @@ final class DataManager {
                 )
             }
         }
-
-        // TESTING ONLY — placeholder friend row, built from the same fabricated
-        // stats the profile sheet shows (PlaceholderFriend).
-        entriesByUid[PlaceholderFriend.uid] = LeaderboardEntry(
-            uid: PlaceholderFriend.uid,
-            username: PlaceholderFriend.username,
-            displayName: PlaceholderFriend.displayName,
-            level: PlaceholderFriend.stats.level,
-            totalXP: PlaceholderFriend.stats.totalXP,
-            currentStreak: PlaceholderFriend.stats.currentStreak,
-            rank: PlaceholderFriend.stats.rank,
-            rr: PlaceholderFriend.stats.rr,
-            weeklyGoalsMet: PlaceholderFriend.stats.weeklyGoalsMet,
-            weeklyAdherence: PlaceholderFriend.stats.weeklyAdherence,
-            isCurrentUser: false,
-            hasData: true
-        )
 
         // PREVIEW ONLY — two extra demo rows so CLI screenshots show the full
         // gold/silver/bronze podium. Active only under the HB_PREVIEW launch
@@ -5434,92 +5395,6 @@ extension Rank {
     static func displayString(rr: Int?, legacyRank: String) -> String {
         if let rr { return Rank.rankTier(from: rr).displayName }
         return legacyRank.capitalized
-    }
-}
-
-// MARK: - Placeholder Friend (TESTING ONLY)
-
-/// TESTING ONLY — a fake friend every signed-in user sees, so the friends
-/// list, leaderboard, and profile sheet can be exercised without a second
-/// account. Lives entirely in memory: never written to SwiftData (the friend
-/// listeners' reconcile would delete it) and never written to Firestore.
-/// Grep "PlaceholderFriend" and delete every reference to remove the fixture.
-enum PlaceholderFriend {
-    static let uid = "placeholder-test-friend"
-    static let username = "testbuddy"
-    static let displayName = "Test Buddy"
-
-    /// Fabricated projection that exercises every field of the profile sheet:
-    /// rank pill, level, both streaks, member-since, adherence, badge grid.
-    static let stats = PublicStatsDTO(
-        username: username,
-        displayName: displayName,
-        level: 12,
-        totalXP: 4200,
-        currentStreak: 5,
-        rank: Rank.gold.rawValue,
-        rr: 1000,
-        weeklyGoalsMet: 5,
-        weeklyAdherence: 5.0 / 7.0,
-        longestStreak: 21,
-        joinedAt: Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 1)),
-        badgeCount: 3,
-        earnedBadgeIds: ["first_flame", "goal_getter", "week_warrior"],
-        updatedAt: Date()
-    )
-
-    /// TESTING ONLY — fabricated activity-feed events so the Friends → Activity
-    /// segment shows content without a second account. Exercises all four event
-    /// types; timestamps are relative to now so the "Xh ago" labels read live.
-    /// Values line up with the fabricated `stats` above (Level 12, Gold, its
-    /// earned badges). Grep "PlaceholderFriend" to remove the whole fixture.
-    static func feedItems() -> [FeedItem] {
-        let now = Date()
-        func event(_ type: String, _ value: String, hoursAgo: Double,
-                   cheers: Int = 0, names: [String] = []) -> FeedItem {
-            let dto = FeedEventDTO(
-                type: type,
-                value: value,
-                username: username,
-                displayName: displayName,
-                createdAt: now.addingTimeInterval(-hoursAgo * 3600)
-            )
-            var item = FeedItem(dto: dto, friendUid: uid)
-            // Fabricated cheer counts/names (Phase 8) so the feed shows the
-            // cheer affordance populated. didCheer stays false so tapping toggles.
-            item.cheerCount = cheers
-            item.recentCheererNames = names
-            return item
-        }
-        return [
-            event("streak", "30", hoursAgo: 2, cheers: 3, names: ["Sam", "Priya", "Alex"]),
-            event("level", "12", hoursAgo: 8, cheers: 1, names: ["Sam"]),
-            event("badge", "week_warrior", hoursAgo: 26),
-            event("rank", Rank.gold.rawValue, hoursAgo: 50, cheers: 2, names: ["Jordan", "Riley"]),
-            event("badge", "first_flame", hoursAgo: 80)
-        ]
-    }
-
-    /// TESTING ONLY — fabricated OWN milestones (Phase 8) so the "Your
-    /// milestones" receipts strip is visible without real emitted events.
-    /// Used by loadMyMilestones() only when the user has no real events.
-    static func ownMilestones() -> [OwnEventItem] {
-        let now = Date()
-        func own(_ type: String, _ value: String, hoursAgo: Double,
-                 cheers: Int, names: [String]) -> OwnEventItem {
-            OwnEventItem(
-                eventId: "\(type)_\(value)",
-                type: type,
-                value: value,
-                createdAt: now.addingTimeInterval(-hoursAgo * 3600),
-                cheerCount: cheers,
-                recentCheererNames: names
-            )
-        }
-        return [
-            own("level", "8", hoursAgo: 5, cheers: 4, names: ["Test Buddy", "Sam", "Priya"]),
-            own("streak", "7", hoursAgo: 30, cheers: 2, names: ["Alex", "Jordan"])
-        ]
     }
 }
 

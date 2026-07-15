@@ -103,13 +103,6 @@ final class FriendsViewModel {
         let friendModels = (try? await coordinator.fetchFriends()) ?? []
         var friendRows = friendModels
             .map { FriendRow(id: $0.friendUid, username: $0.username, displayName: $0.displayName, since: $0.since) }
-        // TESTING ONLY — placeholder friend shown to every user (PlaceholderFriend).
-        friendRows.append(FriendRow(
-            id: PlaceholderFriend.uid,
-            username: PlaceholderFriend.username,
-            displayName: PlaceholderFriend.displayName,
-            since: PlaceholderFriend.stats.joinedAt ?? .distantPast
-        ))
         // Merge the cached published stats into each row (nil = unpublished).
         friendRows = friendRows.map { row in
             var row = row
