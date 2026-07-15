@@ -29,6 +29,9 @@ struct BarcodeScannerView: View {
     /// Scanner coordinator state
     @State private var coordinator = ScannerCoordinator()
 
+    /// Active-theme colors (R8 token conversion)
+    private var tc: ThemeColors { SettingsManager.shared.activeColors }
+
     // MARK: - Body
 
     var body: some View {
@@ -99,7 +102,7 @@ struct BarcodeScannerView: View {
 
                 // Scanning frame
                 RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                    .stroke(DesignSystem.Colors.primary, lineWidth: 3)
+                    .stroke(tc.primary, lineWidth: 3)
                     .frame(width: 280, height: 180)
                     .background(
                         RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
@@ -120,7 +123,7 @@ struct BarcodeScannerView: View {
     private var scanningLine: some View {
         VStack {
             Rectangle()
-                .fill(DesignSystem.Colors.primary.opacity(0.5))
+                .fill(tc.primary.opacity(0.5))
                 .frame(height: 2)
                 .padding(.horizontal, 4)
         }

@@ -818,7 +818,7 @@ struct HomeView: View {
                 .scaleEffect(1.5)
             Text("Loading your progress...")
                 .font(AppFont.regular(16))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .foregroundColor(tc.textSecondary)
         }
     }
 
@@ -831,10 +831,10 @@ struct HomeView: View {
             VStack(spacing: DesignSystem.Spacing.sm) {
                 Text("Error Loading Data")
                     .font(AppFont.bold(22))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .foregroundColor(tc.textPrimary)
                 Text(message)
                     .font(AppFont.regular(14))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .foregroundColor(tc.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DesignSystem.Spacing.xl)
             }
@@ -2339,18 +2339,20 @@ struct QuickScanView: View {
     @State private var scannedNutrition: FoodNutrition?
     @State private var showAddFoodForm = false
 
+    private var tc: ThemeColors { SettingsManager.shared.activeColors }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: DesignSystem.Spacing.xl) {
                 // Icon
                 ZStack {
                     Circle()
-                        .fill(DesignSystem.Colors.secondary.opacity(0.15))
+                        .fill(tc.primary.opacity(0.15))
                         .frame(width: 100, height: 100)
 
                     Image(systemName: "barcode.viewfinder")
                         .font(.system(size: 50, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.secondary)
+                        .foregroundColor(tc.primary)
                 }
                 .padding(.top, DesignSystem.Spacing.xxl)
 
@@ -2358,11 +2360,11 @@ struct QuickScanView: View {
                 VStack(spacing: DesignSystem.Spacing.sm) {
                     Text("Quick Scan")
                         .font(.system(size: DesignSystem.FontSizes.title, weight: .bold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .foregroundColor(tc.textPrimary)
 
                     Text("Scan a barcode or enter manually to quickly log packaged foods")
                         .font(.system(size: DesignSystem.FontSizes.callout, weight: .regular))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .foregroundColor(tc.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, DesignSystem.Spacing.xl)
                 }
@@ -2394,13 +2396,13 @@ struct QuickScanView: View {
                     } label: {
                         Text("Cancel")
                             .font(.system(size: 17, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .foregroundColor(tc.textSecondary)
                     }
                 }
                 .padding(.horizontal, DesignSystem.Spacing.xl)
                 .padding(.bottom, DesignSystem.Spacing.xl)
             }
-            .background(DesignSystem.Colors.primaryBackground)
+            .background(tc.primaryBackground)
             .navigationTitle("Quick Scan")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -2492,28 +2494,30 @@ struct QuickScanManualEntryView: View {
 
     @FocusState private var isFocused: Bool
 
+    private var tc: ThemeColors { SettingsManager.shared.activeColors }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: DesignSystem.Spacing.xl) {
                 ZStack {
                     Circle()
-                        .fill(DesignSystem.Colors.secondary.opacity(0.15))
+                        .fill(tc.primary.opacity(0.15))
                         .frame(width: 80, height: 80)
 
                     Image(systemName: "keyboard")
                         .font(.system(size: 40, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.secondary)
+                        .foregroundColor(tc.primary)
                 }
                 .padding(.top, DesignSystem.Spacing.xl)
 
                 VStack(spacing: DesignSystem.Spacing.sm) {
                     Text("Enter Barcode Number")
                         .font(.system(size: DesignSystem.FontSizes.title2, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                        .foregroundColor(tc.textPrimary)
 
                     Text("Enter the UPC or EAN barcode from the product packaging")
                         .font(.system(size: DesignSystem.FontSizes.callout, weight: .regular))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .foregroundColor(tc.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, DesignSystem.Spacing.xl)
                 }
@@ -2524,11 +2528,11 @@ struct QuickScanManualEntryView: View {
                         .keyboardType(.numberPad)
                         .textFieldStyle(.plain)
                         .padding(DesignSystem.Spacing.md)
-                        .background(DesignSystem.Colors.cardBackground)
+                        .background(tc.cardBackground)
                         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
                         .overlay(
                             RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                                .strokeBorder(DesignSystem.Colors.border, lineWidth: 1)
+                                .strokeBorder(tc.primary.opacity(0.3), lineWidth: 1)
                         )
                         .focused($isFocused)
 
@@ -2573,13 +2577,13 @@ struct QuickScanManualEntryView: View {
                     } label: {
                         Text("Cancel")
                             .font(.system(size: 17, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .foregroundColor(tc.textSecondary)
                     }
                 }
                 .padding(.horizontal, DesignSystem.Spacing.xl)
                 .padding(.bottom, DesignSystem.Spacing.xl)
             }
-            .background(DesignSystem.Colors.primaryBackground)
+            .background(tc.primaryBackground)
             .navigationTitle("Enter Barcode")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -2616,6 +2620,8 @@ struct QuickScanAddFoodView: View {
     @State private var isSubmitting = false
     @State private var errorMessage: String?
 
+    private var tc: ThemeColors { SettingsManager.shared.activeColors }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -2623,22 +2629,22 @@ struct QuickScanAddFoodView: View {
                     VStack(spacing: DesignSystem.Spacing.sm) {
                         ZStack {
                             Circle()
-                                .fill(DesignSystem.Colors.primary.opacity(0.15))
+                                .fill(tc.primary.opacity(0.15))
                                 .frame(width: 80, height: 80)
 
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 40, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.primary)
+                                .foregroundColor(tc.primary)
                         }
 
                         Text("Product Found!")
                             .font(.system(size: DesignSystem.FontSizes.title2, weight: .bold))
-                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                            .foregroundColor(tc.textPrimary)
 
                         if let brand = nutrition.brand {
                             Text(brand)
                                 .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                .foregroundColor(tc.textSecondary)
                         }
                     }
                     .padding(.bottom, DesignSystem.Spacing.md)
@@ -2687,14 +2693,14 @@ struct QuickScanAddFoodView: View {
                         } label: {
                             Text("Cancel")
                                 .font(.system(size: 17, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                .foregroundColor(tc.textSecondary)
                         }
                     }
                     .padding(.top, DesignSystem.Spacing.md)
                 }
                 .padding(DesignSystem.Spacing.lg)
             }
-            .background(DesignSystem.Colors.primaryBackground)
+            .background(tc.primaryBackground)
             .navigationTitle("Add Food")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -2717,7 +2723,7 @@ struct QuickScanAddFoodView: View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
             Text("Serving Size")
                 .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .foregroundColor(tc.textSecondary)
 
             HStack(spacing: DesignSystem.Spacing.md) {
                 TextField("100", text: $servingSize)
@@ -2725,17 +2731,17 @@ struct QuickScanAddFoodView: View {
                     .keyboardType(.decimalPad)
                     .textFieldStyle(.plain)
                     .padding(DesignSystem.Spacing.md)
-                    .background(DesignSystem.Colors.cardBackground)
+                    .background(tc.cardBackground)
                     .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
                     .overlay(
                         RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                            .strokeBorder(DesignSystem.Colors.border, lineWidth: 1)
+                            .strokeBorder(tc.primary.opacity(0.3), lineWidth: 1)
                     )
                     .frame(maxWidth: .infinity)
 
                 Text("grams")
                     .font(.system(size: DesignSystem.FontSizes.callout, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .foregroundColor(tc.textSecondary)
 
                 Button {
                     applyServingSize()
@@ -2745,7 +2751,7 @@ struct QuickScanAddFoodView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, DesignSystem.Spacing.md)
                         .padding(.vertical, DesignSystem.Spacing.sm)
-                        .background(DesignSystem.Colors.secondary)
+                        .background(tc.primary)
                         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm))
                 }
             }
@@ -2756,7 +2762,7 @@ struct QuickScanAddFoodView: View {
         VStack(spacing: DesignSystem.Spacing.md) {
             Text("Nutrition Info")
                 .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .foregroundColor(tc.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             inputField(title: "Calories", text: $calories, placeholder: "0", unit: "cal", keyboardType: .numberPad)
@@ -2773,7 +2779,7 @@ struct QuickScanAddFoodView: View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
             Text(title)
                 .font(.system(size: DesignSystem.FontSizes.footnote, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .foregroundColor(tc.textSecondary)
 
             HStack {
                 TextField(placeholder, text: text)
@@ -2784,15 +2790,15 @@ struct QuickScanAddFoodView: View {
                 if let unit = unit {
                     Text(unit)
                         .font(.system(size: DesignSystem.FontSizes.footnote, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .foregroundColor(tc.textTertiary)
                 }
             }
             .padding(DesignSystem.Spacing.md)
-            .background(DesignSystem.Colors.cardBackground)
+            .background(tc.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
             .overlay(
                 RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                    .strokeBorder(DesignSystem.Colors.border, lineWidth: 1)
+                    .strokeBorder(tc.primary.opacity(0.3), lineWidth: 1)
             )
         }
     }
@@ -2802,7 +2808,7 @@ struct QuickScanAddFoodView: View {
             HStack {
                 Text("Toxin Score")
                     .font(.system(size: DesignSystem.FontSizes.headline, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .foregroundColor(tc.textPrimary)
 
                 Spacer()
 
@@ -2827,7 +2833,7 @@ struct QuickScanAddFoodView: View {
             }
         }
         .padding(DesignSystem.Spacing.md)
-        .background(DesignSystem.Colors.cardBackground)
+        .background(tc.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
     }
 
