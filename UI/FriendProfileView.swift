@@ -309,10 +309,7 @@ struct FriendProfileView: View {
                     let earned = viewModel.earnedBadgeIdSet.contains(badge.id)
 
                     VStack(spacing: DesignSystem.Spacing.xs) {
-                        Image(systemName: earned ? badge.symbolName : "lock.fill")
-                            .font(AppFont.regular(earned ? 32 : 24))
-                            .foregroundColor(earned ? tc.primary : tc.textSecondary)
-                            .opacity(earned ? 1.0 : 0.3)
+                        BadgeEmblem(badge, size: 32, isLocked: !earned)
                             .frame(height: 38)
 
                         Text(badge.title)

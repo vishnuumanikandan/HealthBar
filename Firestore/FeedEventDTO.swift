@@ -65,7 +65,7 @@ enum FeedEventDisplay {
 
     static func symbolName(type: String, value: String) -> String {
         switch type {
-        case "badge": return BadgeDefinition.find(id: value)?.symbolName ?? "medal.fill"
+        case "badge": return "medal.fill"
         case "level": return "star.fill"
         case "rank": return "shield.fill"
         case "streak": return "flame.fill"
