@@ -83,8 +83,6 @@ struct ContentView: View {
     /// True when a guest user taps "Create Account" in ProfileView.
     @State private var showSignUpFromGuest: Bool = false
 
-    /// PREVIEW ONLY — driven by the "--preview-friend-profile" launch argument.
-    @State private var showPreviewFriendProfile: Bool = false
 
     // MARK: - Initialization
 
@@ -304,17 +302,6 @@ struct ContentView: View {
                 SignUpView(viewModel: authViewModel)
             }
         }
-        // PREVIEW ONLY — the "--preview-friend-profile" launch argument
-        // auto-opens the placeholder friend's profile sheet so the UI can be
-        // iterated/screenshotted from the CLI. Remove with PlaceholderFriend.
-        .sheet(isPresented: $showPreviewFriendProfile) {
-            FriendProfileView(
-                coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
-                friendUid: PlaceholderFriend.uid,
-                username: PlaceholderFriend.username,
-                displayName: PlaceholderFriend.displayName
-            )
-        }
         // Clean-log QTE (D1d): presented root-level so a qualifying low-toxin meal logged from
         // ANY flow (Home quick-add, Food log, Describe-a-meal) surfaces the same power moment.
         // DataManager sets the pending state; `.sheet(item:)` clears it on dismiss.
@@ -330,9 +317,6 @@ struct ContentView: View {
         }
         .task {
             switch ProcessInfo.processInfo.environment["HB_PREVIEW"] {
-            case "friend-profile":
-                try? await Task.sleep(for: .seconds(1))
-                showPreviewFriendProfile = true
             case "friends-tab", "leaderboard":
                 // R3a: tab 3 is now Guilds (Friends moved to a push off Home).
                 // TODO-preview-friends: repoint to the pushed FriendsView when a hook exists.

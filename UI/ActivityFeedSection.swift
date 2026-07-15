@@ -70,14 +70,6 @@ final class ActivityFeedViewModel {
         cheerError = nil
         defer { cheerInFlight.remove(item.id) }
 
-        // TESTING ONLY — the placeholder friend isn't a real Firestore friend, so
-        // a real cheer write would be permission-denied. Toggle locally so the
-        // demo stays interactive. Grep "PlaceholderFriend" to remove.
-        if item.friendUid == PlaceholderFriend.uid {
-            applyCheer(itemId: item.id, nowCheered: !item.didCheer)
-            return
-        }
-
         do {
             if item.didCheer {
                 try await coordinator.uncheer(ownerUid: item.friendUid, eventId: item.eventId)
