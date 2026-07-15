@@ -111,9 +111,12 @@ struct MoodButton: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: DesignSystem.Spacing.sm) {
-                // Emoji
-                Text(mood.emoji)
+                // Mood icon — fixed square keeps all three tiles the same width the
+                // emoji glyphs used to give them (SF Symbols vary in intrinsic width).
+                Image(systemName: mood.symbolName)
                     .font(AppFont.regular(48))
+                    .foregroundColor(mood.color)
+                    .frame(width: 56, height: 56)
 
                 // Label
                 Text(mood.displayName)

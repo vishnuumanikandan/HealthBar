@@ -204,7 +204,7 @@ struct ActivityFeedSection: View {
     /// button — self-cheer is impossible.
     private func ownRow(_ own: OwnEventItem) -> some View {
         HStack(spacing: DesignSystem.Spacing.md) {
-            emojiTile(own.emoji)
+            symbolTile(own.symbolName)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(own.resolvedText.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? "Milestone")
@@ -230,7 +230,7 @@ struct ActivityFeedSection: View {
                 selectedFriend = item
             } label: {
                 HStack(alignment: .top, spacing: DesignSystem.Spacing.md) {
-                    emojiTile(item.emoji)
+                    symbolTile(item.symbolName)
 
                     VStack(alignment: .leading, spacing: 3) {
                         // "Name <did something>" — name bold, action regular.
@@ -271,8 +271,9 @@ struct ActivityFeedSection: View {
                         .controlSize(.mini)
                         .tint(item.didCheer ? .white : tc.primary)
                 } else {
-                    Text("💪")
+                    Image(systemName: "hands.clap.fill")
                         .font(AppFont.regular(14))
+                        .foregroundColor(item.didCheer ? .white : tc.textSecondary)
                         .opacity(item.didCheer ? 1 : 0.5)
                 }
 
@@ -296,12 +297,13 @@ struct ActivityFeedSection: View {
 
     // MARK: - Shared pieces
 
-    private func emojiTile(_ emoji: String) -> some View {
+    private func symbolTile(_ symbolName: String) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12)
                 .fill(tc.primary.opacity(0.12))
-            Text(emoji)
+            Image(systemName: symbolName)
                 .font(AppFont.regular(22))
+                .foregroundColor(tc.primary)
         }
         .frame(width: 44, height: 44)
     }
@@ -314,7 +316,7 @@ struct ActivityFeedSection: View {
                 .foregroundColor(tc.textTertiary)
 
             if cheerCount > 0, !names.isEmpty {
-                Text("· 💪 \(cheererSummary(names: names, total: cheerCount))")
+                Text("· \(Image(systemName: "hands.clap.fill")) \(cheererSummary(names: names, total: cheerCount))")
                     .font(AppFont.regular(11))
                     .foregroundColor(tc.textSecondary)
                     .lineLimit(1)

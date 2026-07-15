@@ -204,7 +204,7 @@ struct GuildChatView: View {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(AppFont.regular(40))
                 .foregroundColor(tc.textTertiary)
-            Text("No messages yet — say hi 👋")
+            Text("No messages yet — say hi")
                 .font(AppFont.regular(14))
                 .foregroundColor(tc.textSecondary)
                 .multilineTextAlignment(.center)
