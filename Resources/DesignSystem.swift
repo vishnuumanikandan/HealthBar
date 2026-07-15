@@ -750,45 +750,60 @@ struct EmptyStateView: View {
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
 
+    /// Active-theme colors (R8: retired statics → themed card treatment).
+    private var tc: ThemeColors { SettingsManager.shared.activeColors }
+
     var body: some View {
         VStack(spacing: DesignSystem.Spacing.lg) {
             Spacer()
 
-            // Large icon
-            Image(systemName: icon)
-                .font(AppFont.regular(64))
-                .foregroundColor(DesignSystem.Colors.textTertiary)
-                .padding(.bottom, DesignSystem.Spacing.sm)
+            // R8: green-filled empty state → themed card (fill + hairline border).
+            VStack(spacing: DesignSystem.Spacing.lg) {
+                // R5b tinted icon-box (retired gray glyph → accent glyph on a tinted box)
+                Image(systemName: icon)
+                    .font(AppFont.regular(40))
+                    .foregroundColor(tc.primary)
+                    .frame(width: 76, height: 76)
+                    .background(tc.primary.opacity(0.14))
+                    .clipShape(AdaptivePillShapeStyle())
 
-            // Clean typography hierarchy
-            VStack(spacing: DesignSystem.Spacing.sm) {
-                Text(title)
-                    .font(AppFont.bold(22))
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
-                    .multilineTextAlignment(.center)
+                // Clean typography hierarchy
+                VStack(spacing: DesignSystem.Spacing.sm) {
+                    Text(title)
+                        .font(AppFont.bold(22))
+                        .foregroundColor(tc.textPrimary)
+                        .multilineTextAlignment(.center)
 
-                Text(message)
-                    .font(AppFont.regular(16))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                    .multilineTextAlignment(.center)
+                    Text(message)
+                        .font(AppFont.regular(16))
+                        .foregroundColor(tc.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, DesignSystem.Spacing.xl)
+                }
+
+                // Optional action button
+                if let actionTitle = actionTitle, let action = action {
+                    AppButton(
+                        title: actionTitle,
+                        style: .primary,
+                        action: action
+                    )
                     .padding(.horizontal, DesignSystem.Spacing.xl)
+                    .padding(.top, DesignSystem.Spacing.md)
+                }
             }
-
-            // Optional action button
-            if let actionTitle = actionTitle, let action = action {
-                AppButton(
-                    title: actionTitle,
-                    style: .primary,
-                    action: action
-                )
-                .padding(.horizontal, DesignSystem.Spacing.xl)
-                .padding(.top, DesignSystem.Spacing.md)
-            }
+            .padding(.vertical, DesignSystem.Spacing.xxl)
+            .frame(maxWidth: .infinity)
+            .adaptiveCard(
+                borderColor: tc.primary.opacity(0.3),
+                fillColor: tc.cardBackground
+            )
+            .padding(.horizontal, DesignSystem.Spacing.lg)
 
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(DesignSystem.Colors.primaryBackground)
+        .background(tc.primaryBackground)
     }
 }
 

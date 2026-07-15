@@ -337,12 +337,12 @@ struct AccountView: View {
                     HStack(spacing: 0) {
                         Text("@")
                             .font(AppFont.bold(17))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .foregroundColor(tc.textSecondary)
                             .padding(.leading, DesignSystem.Spacing.md)
 
                         TextField("new_username", text: $viewModel.newUsername)
                             .font(AppFont.regular(DesignSystem.FontSizes.body))
-                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                            .foregroundColor(tc.textPrimary)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .padding(.leading, DesignSystem.Spacing.xs)
@@ -356,14 +356,14 @@ struct AccountView: View {
                             }
                     }
                     .frame(minHeight: 52)
-                    .background(DesignSystem.Colors.cardBackground)
+                    .background(tc.cardBackground)
                     .clipShape(AdaptiveCardShapeStyle())
                     .overlay(
                         AdaptiveCardShapeStyle()
                             .stroke(
                                 viewModel.usernameError != nil
                                     ? DesignSystem.Colors.danger
-                                    : DesignSystem.Colors.border,
+                                    : tc.primary.opacity(0.3),
                                 lineWidth: viewModel.usernameError != nil ? 2 : 1
                             )
                     )
@@ -409,7 +409,7 @@ struct AccountView: View {
                                 }()
                                 Text("Can change again on \(formatter.string(from: cooldownEnd))")
                                     .font(AppFont.regular(12))
-                                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                                    .foregroundColor(tc.textTertiary)
                             }
                         }
 
@@ -454,7 +454,7 @@ struct AccountView: View {
                     }()
                     Text("Can change again on \(formatter.string(from: cooldownEnd))")
                         .font(AppFont.regular(12))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .foregroundColor(tc.textTertiary)
                 }
 
                 AppButton(

@@ -273,7 +273,7 @@ struct ContentView: View {
         // Keep it anchored to the screen bottom (text entry lives in sheets/scroll views that
         // handle their own field reveal).
         .ignoresSafeArea(.keyboard, edges: .bottom)
-        .tint(DesignSystem.Colors.primary)
+        .tint(tc.primary)
         .overlay(alignment: .top) {
             if let badge = BadgeToastQueue.shared.currentToast {
                 BadgeToastView(badge: badge, onDismiss: { BadgeToastQueue.shared.dismiss() })
