@@ -334,7 +334,7 @@ final class BattleViewModel {
             myStreak: myStreak,
             theirStreak: theirStats?.currentStreak ?? 0,
             candidate: DuelOpponentCandidate(uid: pick.uid, username: pick.username,
-                                             displayName: pick.displayName, source: .friend)
+                                             displayName: pick.displayName, source: .friend, rr: nil)
         )
     }
 

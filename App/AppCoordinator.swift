@@ -1040,6 +1040,21 @@ final class AppCoordinator {
         await dataManager.fetchChallengeablePeople()
     }
 
+    /// One page of the RR-proximity "Nearby Ranks" stream (C1). Passthrough to DataManager.
+    func fetchNearbyRanked(myRR: Int,
+                           upCursor: (rr: Int, uid: String)?,
+                           downCursor: (rr: Int, uid: String)?,
+                           isFirstPage: Bool,
+                           excluding: Set<String>) async -> DataManager.ProximityPage {
+        await dataManager.fetchNearbyRanked(myRR: myRR, upCursor: upCursor, downCursor: downCursor,
+                                            isFirstPage: isFirstPage, excluding: excluding)
+    }
+
+    /// Resolve a typed `@handle` to a single challenge candidate for the lobby search (C1).
+    func lookupChallengeCandidate(handle raw: String) async -> DuelOpponentCandidate? {
+        await dataManager.lookupChallengeCandidate(handle: raw)
+    }
+
     func sendChallenge(to opponent: DuelOpponentCandidate, league: Int) async throws {
         try await dataManager.sendChallenge(to: opponent, league: league)
     }

@@ -141,16 +141,32 @@ enum DuelConstants {
     // MARK: - D3: global leaderboard
     /// Rows fetched per board.
     static let leaderboardPageSize = 50
+
+    // MARK: - C1: RR-proximity challenge stream
+    /// Rows the "Nearby Ranks" stream targets per Load-more page (the merge of both directions).
+    static let proximityPageSize = 20
+    /// Rows fetched from EACH direction (up / down) per page — half of `proximityPageSize`.
+    static let proximityPerDirection = 10
 }
 
-/// A challengeable person — a friend, a guild-mate, or anyone in the public directory —
-/// for the challenge picker.
+/// A challengeable person — a friend, a guild-mate, or a ranked player from the RR-proximity
+/// stream / @handle search — for the challenge lobby.
 ///
 /// `uid` is the sole identity key; `username`/`displayName` are display snapshots.
-/// `source` drives the picker's Friends/Guild/Everyone sectioning (a person present in
-/// more than one is deduped to the more specific source: friend > guild > directory).
-/// `.directory` candidates carry an empty `displayName` (the public username index has no
-/// display name) — `displayLabel` then falls back to `@username`.
+/// `source` drives the lobby's Rivals/Guild/Nearby sectioning (a person present in more than
+/// one is deduped to the more specific source: friend > guild > directory). As of C1,
+/// `.directory` means "the ranked directory" — a row backed by the world-readable
+/// `leaderboard/{uid}` projection (which carries a real `displayName`), NOT the username index.
+/// (The case name is kept for continuity — do NOT rename.)
+///
+/// `rr` is the player's Ranked Rating when the backing model carries it, else nil. Populated
+/// for `.directory` rows (from the leaderboard row) and for a resolved-but-unranked search hit
+/// (nil). Friend/guild candidates are nil today — the `Friend` model and `GuildMemberDTO`
+/// carry no rr, and the lobby renders a plaque + RR figure ONLY when `rr` is non-nil.
+///
+/// `rr` is part of the synthesized `Equatable`, but that changes no behavior: selection compares
+/// instances drawn from the SAME loaded array (identical rr per uid), and the preselect flow
+/// matches by `uid`, not by whole-instance equality.
 struct DuelOpponentCandidate: Identifiable, Equatable {
     enum Source: Equatable { case friend, guild, directory }
 
@@ -158,6 +174,8 @@ struct DuelOpponentCandidate: Identifiable, Equatable {
     let username: String
     let displayName: String
     let source: Source
+    /// Ranked Rating — non-nil only where the backing model carries it (see the type doc).
+    let rr: Int?
 
     var id: String { uid }
 
