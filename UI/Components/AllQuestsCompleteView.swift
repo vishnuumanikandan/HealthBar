@@ -31,9 +31,10 @@ struct AllQuestsCompleteView: View {
 
     var body: some View {
         VStack(spacing: DesignSystem.Spacing.lg) {
-            // Celebration emoji
-            Text("🎉")
+            // Celebration icon
+            Image(systemName: "party.popper.fill")
                 .font(AppFont.regular(64))
+                .foregroundColor(tc.primary)
                 .scaleEffect(emojiScale)
                 .animation(.spring(response: 0.5, dampingFraction: 0.6), value: emojiScale)
 

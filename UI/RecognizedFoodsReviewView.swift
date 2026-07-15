@@ -389,7 +389,7 @@ struct RecognizedFoodsReviewView: View {
                     )
                     .accessibilityLabel("Clarified")
             } else {
-                Text("⚠ " + reason)
+                Text("\(Image(systemName: "exclamationmark.triangle.fill")) \(reason)")
                     .font(AppFont.bold(9))
                     .foregroundColor(DesignSystem.Colors.warning)
                     .padding(.horizontal, 6)

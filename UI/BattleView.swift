@@ -732,7 +732,7 @@ struct BattleView: View {
 
     private var emptyState: some View {
         VStack(spacing: DesignSystem.Spacing.sm) {
-            Text("No duels yet — challenge a friend ⚔️")
+            Text("No duels yet — challenge a friend")
                 .font(AppFont.regular(15))
                 .foregroundColor(tc.textSecondary)
                 .multilineTextAlignment(.center)

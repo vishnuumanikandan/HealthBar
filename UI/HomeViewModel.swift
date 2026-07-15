@@ -128,13 +128,6 @@ final class HomeViewModel {
         return Double(xpInCurrentLevel) / Double(xpPerLevel)
     }
 
-    /// Streak display text (e.g., "🔥 12 day streak")
-    var streakText: String {
-        guard let summary else { return "No streak" }
-        let days = summary.currentStreak
-        return "🔥 \(days) day\(days == 1 ? "" : "s") streak"
-    }
-
     /// Number of completed quests today
     var completedQuestsCount: Int {
         summary?.quests.filter { $0.isCompleted }.count ?? 0

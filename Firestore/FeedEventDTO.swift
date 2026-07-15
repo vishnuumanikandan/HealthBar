@@ -40,8 +40,8 @@ struct FeedEventDTO: Codable {
 }
 
 /// Client-side resolution of a feed event's `type`+`value` to display text and
-/// emoji (Friend System Phase 7+). Shared by `FeedItem` (friends' feed) and
-/// `OwnEventItem` (the owner's receipts strip) so the two never diverge.
+/// an SF Symbol name (Friend System Phase 7+). Shared by `FeedItem` (friends'
+/// feed) and `OwnEventItem` (the owner's receipts strip) so the two never diverge.
 ///
 /// `text` returns nil when the event no longer resolves (a removed badge/rank
 /// id), which callers use to drop it. Never crashes.
@@ -63,13 +63,13 @@ enum FeedEventDisplay {
         }
     }
 
-    static func emoji(type: String, value: String) -> String {
+    static func symbolName(type: String, value: String) -> String {
         switch type {
-        case "badge": return BadgeDefinition.find(id: value)?.emoji ?? "🏅"
-        case "level": return "⭐️"
-        case "rank": return "🛡️"
-        case "streak": return "🔥"
-        default: return "✨"
+        case "badge": return BadgeDefinition.find(id: value)?.symbolName ?? "medal.fill"
+        case "level": return "star.fill"
+        case "rank": return "shield.fill"
+        case "streak": return "flame.fill"
+        default: return "sparkles"
         }
     }
 }
@@ -122,8 +122,8 @@ struct FeedItem: Identifiable {
     /// (unknown badge/rank id) and the feed drops it.
     var resolvedText: String? { FeedEventDisplay.text(type: type, value: value) }
 
-    /// A type-appropriate emoji glyph for the row's leading badge.
-    var emoji: String { FeedEventDisplay.emoji(type: type, value: value) }
+    /// A type-appropriate SF Symbol name for the row's leading badge.
+    var symbolName: String { FeedEventDisplay.symbolName(type: type, value: value) }
 }
 
 /// One of the owner's OWN recent events, for the "Your milestones" receipts
@@ -142,5 +142,5 @@ struct OwnEventItem: Identifiable {
     var id: String { eventId }
 
     var resolvedText: String? { FeedEventDisplay.text(type: type, value: value) }
-    var emoji: String { FeedEventDisplay.emoji(type: type, value: value) }
+    var symbolName: String { FeedEventDisplay.symbolName(type: type, value: value) }
 }

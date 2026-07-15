@@ -21,12 +21,12 @@ enum Mood: String, Codable, CaseIterable {
         rawValue.capitalized
     }
 
-    /// Large emoji representation for button display
-    var emoji: String {
+    /// SF Symbol name for button display, tinted with `color`.
+    var symbolName: String {
         switch self {
-        case .great: return "😊"
-        case .okay: return "😐"
-        case .rough: return "😔"
+        case .great: return "face.smiling"
+        case .okay: return "face.dashed"
+        case .rough: return "cloud.rain.fill"
         }
     }
 
