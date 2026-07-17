@@ -1100,6 +1100,11 @@ final class AppCoordinator {
                                             guildCode: guildCode, messageId: messageId)
     }
 
+    /// UGC-1b (D6/D7): resolved display rows for the Blocked Users management screen.
+    func blockedUsersDisplay() async -> [(uid: String, username: String, displayName: String)] {
+        await dataManager.blockedUsersDisplay()
+    }
+
     // MARK: - Duels (D1b)
 
     func forfeitDuel(_ duel: DuelDTO) async throws {

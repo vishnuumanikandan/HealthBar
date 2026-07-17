@@ -291,6 +291,10 @@ final class AuthViewModel {
         if trimmedName.count < 2 || trimmedName.count > 30 {
             displayNameError = "Display name must be 2–30 characters."
             isValid = false
+        } else if ProfanityFilter.containsBlockedTerm(trimmedName) {
+            // UGC-1b (D9a): reject a disallowed display name on content, after the length gate.
+            displayNameError = "That name isn't allowed."
+            isValid = false
         }
 
         if !isValidEmail(email) {

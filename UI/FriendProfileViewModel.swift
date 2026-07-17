@@ -189,4 +189,46 @@ final class FriendProfileViewModel {
             return false
         }
     }
+
+    // MARK: - Safety (UGC-1b)
+
+    /// Transient confirmation after a report — mirrors FriendsView's success line (persists
+    /// until the next action or the sheet dismisses).
+    var actionMessage: String? = nil
+
+    /// Surfaced when a block fails; the sheet stays open (same treatment as removeError).
+    var blockError: String? = nil
+    var isBlocking: Bool = false
+
+    /// Reports this profile (D5 `.userProfile`). Deterministic-id duplicates return silent
+    /// success in DataManager (D6) → same confirmation, no special casing. Snapshot composed
+    /// at the call site: "@username / displayName", omitting " / " when displayName is empty.
+    func report() async {
+        blockError = nil
+        let snapshot = displayName.isEmpty ? "@\(username)" : "@\(username) / \(displayName)"
+        do {
+            try await coordinator.submitReport(
+                context: .userProfile, reportedUid: friendUid,
+                contentSnapshot: snapshot, guildCode: nil, messageId: nil)
+            actionMessage = "Report submitted"
+        } catch {
+            blockError = (error as? BlockError)?.errorDescription ?? "Couldn't submit the report."
+        }
+    }
+
+    /// Blocks this user (D4). Returns true so the view dismisses (D11 — they are no longer
+    /// viewable). On failure the sheet stays open with blockError surfaced.
+    func block() async -> Bool {
+        guard !isBlocking else { return false }
+        isBlocking = true
+        blockError = nil
+        defer { isBlocking = false }
+        do {
+            try await coordinator.blockUser(friendUid)
+            return true
+        } catch {
+            blockError = (error as? BlockError)?.errorDescription ?? "Couldn't block this user."
+            return false
+        }
+    }
 }

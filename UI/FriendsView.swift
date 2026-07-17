@@ -52,6 +52,9 @@ struct FriendsView: View {
     /// Friend whose read-only profile sheet is open (Friend System Phase 4).
     @State private var profileFriend: FriendsViewModel.FriendRow? = nil
 
+    /// UGC-1b: directory user pending a block — drives the confirm dialog.
+    @State private var directoryUserToBlock: FriendsViewModel.DirectoryRow? = nil
+
     // MARK: - Init
 
     init(
@@ -118,6 +121,24 @@ struct FriendsView: View {
             Button("Cancel", role: .cancel) { friendToRemove = nil }
         } message: {
             Text("This removes the friendship for both of you.")
+        }
+        .confirmationDialog(
+            "Block @\(directoryUserToBlock?.username ?? "")?",
+            isPresented: Binding(
+                get: { directoryUserToBlock != nil },
+                set: { if !$0 { directoryUserToBlock = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Block", role: .destructive) {
+                if let row = directoryUserToBlock {
+                    Task { await viewModel.blockDirectoryUser(row) }
+                }
+                directoryUserToBlock = nil
+            }
+            Button("Cancel", role: .cancel) { directoryUserToBlock = nil }
+        } message: {
+            Text("They'll be removed from your friends, hidden from your lists, and won't be able to challenge or friend you.")
         }
         .sheet(item: $profileFriend) { friend in
             FriendProfileView(
@@ -530,6 +551,19 @@ struct FriendsView: View {
         }
         .padding(DesignSystem.Spacing.md)
         .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
+        .contextMenu {
+            // UGC-1b: Report fires immediately; Block… routes through the confirm dialog.
+            Button {
+                Task { await viewModel.reportDirectoryUser(row) }
+            } label: {
+                Label("Report", systemImage: "flag")
+            }
+            Button(role: .destructive) {
+                directoryUserToBlock = row
+            } label: {
+                Label("Block…", systemImage: "hand.raised")
+            }
+        }
     }
 
     /// Renders the action matching the locally classified relationship:

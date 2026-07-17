@@ -70,6 +70,7 @@
 		BE102F5A2FDD018600E9744F /* SharedItemDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102F592FDD018600E9744F /* SharedItemDTO.swift */; };
 		AADD0D022FE1000000000001 /* ProfanityFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADD0D012FE1000000000001 /* ProfanityFilter.swift */; };
 		AADD0D042FE1000000000002 /* ReportDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADD0D032FE1000000000002 /* ReportDTO.swift */; };
+		AADD0D062FE2000000000001 /* BlockedUsersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADD0D052FE2000000000001 /* BlockedUsersView.swift */; };
 		AADD0D062FE1000000000003 /* ProfanityDenylist.txt in Resources */ = {isa = PBXBuildFile; fileRef = AADD0D052FE1000000000003 /* ProfanityDenylist.txt */; };
 		BE102F5C2FDD019B00E9744F /* SaveQuickLogSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102F5B2FDD019B00E9744F /* SaveQuickLogSheet.swift */; };
 		BE1030442FE49A7000E9744F /* GuildDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1030432FE49A7000E9744F /* GuildDTO.swift */; };
@@ -283,6 +284,7 @@
 		BE102F592FDD018600E9744F /* SharedItemDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedItemDTO.swift; sourceTree = "<group>"; };
 		AADD0D012FE1000000000001 /* ProfanityFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfanityFilter.swift; sourceTree = "<group>"; };
 		AADD0D032FE1000000000002 /* ReportDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportDTO.swift; sourceTree = "<group>"; };
+		AADD0D052FE2000000000001 /* BlockedUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedUsersView.swift; sourceTree = "<group>"; };
 		AADD0D052FE1000000000003 /* ProfanityDenylist.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ProfanityDenylist.txt; sourceTree = "<group>"; };
 		BE102F5B2FDD019B00E9744F /* SaveQuickLogSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveQuickLogSheet.swift; sourceTree = "<group>"; };
 		BE1030432FE49A7000E9744F /* GuildDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuildDTO.swift; sourceTree = "<group>"; };
@@ -522,6 +524,7 @@
 				BED60B402FFA31CD00F9E190 /* DuelUIState.swift */,
 				BED60B3E2FFA31C600F9E190 /* SparkQTESheet.swift */,
 				BED60B3C2FFA31BF00F9E190 /* CleanLogQTESheet.swift */,
+				AADD0D052FE2000000000001 /* BlockedUsersView.swift */,
 				BED60B3A2FFA31B800F9E190 /* BattleView.swift */,
 				BED60B382FFA31B100F9E190 /* MacroGuessQTESheet.swift */,
 				BE10306F2FE8A18000E9744F /* GuildChatViewModel.swift */,
@@ -919,6 +922,7 @@
 			files = (
 				AADD0D022FE1000000000001 /* ProfanityFilter.swift in Sources */,
 				AADD0D042FE1000000000002 /* ReportDTO.swift in Sources */,
+				AADD0D062FE2000000000001 /* BlockedUsersView.swift in Sources */,
 				BE7B0D022FE5000000000008 /* StandingsPieces.swift in Sources */,
 				BE7B0A022FE5000000000002 /* TopBar.swift in Sources */,
 				BE7B0B022FE5000000000004 /* SettingsView.swift in Sources */,

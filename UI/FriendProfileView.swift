@@ -30,6 +30,7 @@ struct FriendProfileView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var showRemoveConfirm = false
+    @State private var showBlockConfirm = false
 
     // MARK: - Init
 
@@ -61,6 +62,20 @@ struct FriendProfileView: View {
                     VStack(spacing: DesignSystem.Spacing.md) {
                         identityHeader
 
+                        // UGC-1b: report confirmation + block-failure feedback.
+                        if let msg = viewModel.actionMessage {
+                            Text(msg)
+                                .font(AppFont.regular(13))
+                                .foregroundColor(tc.primary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                        }
+                        if let blockError = viewModel.blockError {
+                            Text(blockError)
+                                .font(AppFont.regular(13))
+                                .foregroundColor(DesignSystem.Colors.danger)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                        }
+
                         if viewModel.isLoading && !viewModel.hasLoaded {
                             loadingCard
                         } else if let error = viewModel.loadError {
@@ -83,6 +98,25 @@ struct FriendProfileView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // UGC-1b: Report / Block… overflow menu, near the existing close affordance.
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Button {
+                            Task { await viewModel.report() }
+                        } label: {
+                            Label("Report", systemImage: "flag")
+                        }
+                        Button(role: .destructive) {
+                            showBlockConfirm = true
+                        } label: {
+                            Label("Block…", systemImage: "hand.raised")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(AppFont.regular(20))
+                            .foregroundColor(tc.textTertiary)
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         dismiss()
@@ -116,6 +150,25 @@ struct FriendProfileView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes the friendship for both of you.")
+        }
+        .confirmationDialog(
+            "Block @\(viewModel.username)?",
+            isPresented: $showBlockConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Block", role: .destructive) {
+                Task {
+                    // Dismiss on success (D11 — they are no longer viewable); onRemoved lets
+                    // the presenter refresh (the blocked user vanishes from its list).
+                    if await viewModel.block() {
+                        dismiss()
+                        onRemoved()
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("They'll be removed from your friends, hidden from your lists, and won't be able to challenge or friend you.")
         }
     }
 

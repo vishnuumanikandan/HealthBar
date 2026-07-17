@@ -69,6 +69,9 @@ final class AccountViewModel {
         self.firestoreService = FirestoreServiceImpl.shared
     }
 
+    /// UGC-1b (D10): gates the Blocked Users row out of the settings list for guests.
+    var isGuest: Bool { coordinator.isGuest }
+
     // MARK: - Load
 
     func loadData() async {
@@ -97,6 +100,13 @@ final class AccountViewModel {
 
         guard trimmed.count >= 2, trimmed.count <= 30 else {
             displayNameError = "Display name must be 2–30 characters."
+            return
+        }
+
+        // UGC-1b (D9b): reject a disallowed display name on CONTENT before the cooldown check —
+        // a dirty name should fail on what it is, not burn a "you can change again on…" message.
+        guard !ProfanityFilter.containsBlockedTerm(trimmed) else {
+            displayNameError = "That name isn't allowed."
             return
         }
 
@@ -280,7 +290,16 @@ struct AccountView: View {
     @State private var settings = SettingsManager.shared
     private var tc: ThemeColors { settings.activeColors }
 
+    /// UGC-1b: retained to construct the Blocked Users subscreen.
+    private let coordinator: AppCoordinator
+
+    /// UGC-1b: presents the Blocked Users subscreen. AccountView is itself presented as a
+    /// sheet (no ambient NavigationStack), so the subscreen is a sheet too — matching the
+    /// password/delete sheets rather than a push that would have no stack to push onto.
+    @State private var showBlockedUsers = false
+
     init(coordinator: AppCoordinator, authService: FirebaseAuthService) {
+        self.coordinator = coordinator
         self._viewModel = State(
             initialValue: AccountViewModel(coordinator: coordinator, authService: authService)
         )
@@ -296,6 +315,10 @@ struct AccountView: View {
                     displayNameSection
                     emailSection
                     passwordSection
+                    // UGC-1b (D10): hidden for guests (they never block anyone).
+                    if !viewModel.isGuest {
+                        blockedUsersSection
+                    }
                     dangerSection
                 }
                 .padding(DesignSystem.Spacing.lg)
@@ -324,6 +347,9 @@ struct AccountView: View {
         }
         .sheet(isPresented: $viewModel.showDeleteSheet) {
             deleteSheetView
+        }
+        .sheet(isPresented: $showBlockedUsers) {
+            BlockedUsersView(coordinator: coordinator)
         }
     }
 
@@ -493,6 +519,28 @@ struct AccountView: View {
                 style: .secondary,
                 action: { viewModel.showPasswordSheet = true }
             )
+        }
+    }
+
+    // MARK: - Blocked Users Section (UGC-1b)
+
+    private var blockedUsersSection: some View {
+        sectionCard(title: "Safety") {
+            Button {
+                showBlockedUsers = true
+            } label: {
+                HStack {
+                    Text("Blocked Users")
+                        .font(AppFont.bold(16))
+                        .foregroundColor(tc.textPrimary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(AppFont.regular(13))
+                        .foregroundColor(tc.textTertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
         }
     }
 

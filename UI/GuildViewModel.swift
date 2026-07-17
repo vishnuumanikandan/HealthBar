@@ -59,6 +59,8 @@ final class GuildViewModel {
         let name: String
         let description: String?
         let joinPolicy: String
+        /// UGC-1b: the guild owner's uid — the report target for a directory-row report (D5).
+        let ownerUid: String
 
         /// Request-policy guilds send an approval request rather than joining directly.
         var isRequestPolicy: Bool { joinPolicy == "request" }
@@ -115,6 +117,8 @@ final class GuildViewModel {
     // MARK: - Action State (in-guild)
 
     var actionError: String? = nil
+    /// UGC-1b: transient "Report submitted" confirmation (guild report — directory + detail header).
+    var reportConfirmation: String? = nil
     /// True while a guild-wide action (leave / disband) is in flight.
     var isActing: Bool = false
     /// Uids with an in-flight per-row action (approve / deny / kick).
@@ -210,10 +214,30 @@ final class GuildViewModel {
             guildDirectory = dtos.compactMap { dto in
                 guard let code = dto.id else { return nil }
                 return GuildDirectoryRow(id: code, name: dto.name,
-                                         description: dto.description, joinPolicy: dto.joinPolicy)
+                                         description: dto.description, joinPolicy: dto.joinPolicy,
+                                         ownerUid: dto.ownerUid)
             }
         } catch {
             directoryError = friendlyMessage(for: error)
+        }
+    }
+
+    // MARK: - Safety (UGC-1b)
+
+    /// Reports a guild (D5 `.guild`): reportedUid is the owner's uid, guildCode is the code,
+    /// snapshot is the name plus " — description" when a description is present. Deterministic-id
+    /// duplicates are silent success in DataManager (D6) → same confirmation, no special casing.
+    func reportGuild(ownerUid: String, code: String, name: String, description: String?) async {
+        reportConfirmation = nil
+        var snapshot = name
+        if let description, !description.isEmpty { snapshot += " — \(description)" }
+        do {
+            try await coordinator.submitReport(
+                context: .guild, reportedUid: ownerUid,
+                contentSnapshot: snapshot, guildCode: code, messageId: nil)
+            reportConfirmation = "Report submitted"
+        } catch {
+            actionError = (error as? BlockError)?.errorDescription ?? friendlyMessage(for: error)
         }
     }
 

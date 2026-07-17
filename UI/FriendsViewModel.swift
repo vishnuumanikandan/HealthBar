@@ -232,6 +232,36 @@ final class FriendsViewModel {
         }
     }
 
+    // MARK: - Safety (UGC-1b)
+
+    /// Reports a directory user (D5 `.userProfile`). The row carries no displayName, so the
+    /// snapshot is "@username" alone — the " / displayName" part is omitted (D5). Duplicate
+    /// reports are silent success in DataManager (D6) → same toast.
+    func reportDirectoryUser(_ row: DirectoryRow) async {
+        searchError = nil
+        do {
+            try await coordinator.submitReport(
+                context: .userProfile, reportedUid: row.id,
+                contentSnapshot: "@\(row.username)", guildCode: nil, messageId: nil)
+            searchSuccessMessage = "Report submitted"
+        } catch {
+            searchError = (error as? BlockError)?.errorDescription ?? friendlyMessage(for: error)
+        }
+    }
+
+    /// Blocks a directory user (D4/D11). On success reloads friends + directory so the now-
+    /// hidden row disappears (fetchAllUsers filters blocked uids — chokepoint 2).
+    func blockDirectoryUser(_ row: DirectoryRow) async {
+        searchError = nil
+        do {
+            try await coordinator.blockUser(row.id)
+            await load()
+            await loadDirectory()
+        } catch {
+            searchError = (error as? BlockError)?.errorDescription ?? friendlyMessage(for: error)
+        }
+    }
+
     // MARK: - Request / Friend Actions
 
     func accept(fromUid: String) async {

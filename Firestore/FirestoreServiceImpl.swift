@@ -729,6 +729,16 @@ final class FirestoreServiceImpl: FirestoreService {
                 }
             }
         } catch {
+            // UGC-1b (D8): preserve a Firestore permission-denied so the caller can classify it
+            // (e.g. sendFriendRequest → FriendError.blocked). Without this the raw domain/code is
+            // lost and a block-denied create surfaces as a generic "reach the server" error
+            // (SMOKE-2 step 7). Other callers are unaffected — they don't classify it, and the VM
+            // layer re-wraps any non-FriendError as .network, so their surfaced copy is unchanged.
+            let nsError = error as NSError
+            if nsError.domain == FirestoreErrorDomain,
+               nsError.code == FirestoreErrorCode.permissionDenied.rawValue {
+                throw error
+            }
             throw FriendError.network(error.localizedDescription)
         }
     }
@@ -1803,6 +1813,26 @@ final class FirestoreServiceImpl: FirestoreService {
             dto.id = doc.documentID
             return dto
         }
+    }
+
+    func fetchLeaderboardEntries(uids: [String]) async throws -> [GlobalLeaderboardDTO] {
+        // UGC-1b (D7): Firestore caps an `in` filter at 10 values — chunk and concatenate.
+        // The documentID() filter needs no composite index. Undecodable/missing docs are
+        // simply absent from the result; the caller sorts (no ordering here).
+        var result: [GlobalLeaderboardDTO] = []
+        for start in stride(from: 0, to: uids.count, by: 10) {
+            let chunk = Array(uids[start..<min(start + 10, uids.count)])
+            guard !chunk.isEmpty else { continue }
+            let snapshot = try await leaderboardCollection
+                .whereField(FieldPath.documentID(), in: chunk)
+                .getDocuments()
+            for doc in snapshot.documents {
+                guard var dto = try? doc.data(as: GlobalLeaderboardDTO.self) else { continue }
+                dto.id = doc.documentID
+                result.append(dto)
+            }
+        }
+        return result
     }
 
     // MARK: - FirestoreService: Safety — blocklist + reports (UGC-1a)
