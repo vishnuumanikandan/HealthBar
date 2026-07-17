@@ -554,6 +554,24 @@ protocol FirestoreService {
                                after: (rr: Int, uid: String)?,
                                limit: Int) async throws -> [GlobalLeaderboardDTO]
 
+    // MARK: - Safety: blocklist + reports (UGC-1a)
+
+    /// One-time read of the caller's blocklist doc (users/{userId}/account/blocklist).
+    /// A missing doc or missing `blockedUids` field returns [].
+    func fetchBlocklist(userId: String) async throws -> [String]
+
+    /// Adds `blockedUid` to the caller's blocklist via setData(merge:) + arrayUnion —
+    /// creates the doc if absent. Idempotent (arrayUnion de-dupes).
+    func addToBlocklist(userId: String, blockedUid: String) async throws
+
+    /// Removes `blockedUid` via setData(merge:) + arrayRemove. No-throw when the
+    /// doc or entry is absent (arrayRemove of a missing element is a no-op).
+    func removeFromBlocklist(userId: String, blockedUid: String) async throws
+
+    /// Creates reports/{reportId}. Errors are NOT swallowed here — DataManager
+    /// interprets permission-denied (duplicate report) as idempotent success (D6).
+    func submitReport(_ report: ReportDTO, reportId: String) async throws
+
     // MARK: - Account Deletion
 
     /// Deletes all Firestore data under users/{userId}/ in batches.

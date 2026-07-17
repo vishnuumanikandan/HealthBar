@@ -1075,6 +1075,31 @@ final class AppCoordinator {
         try await dataManager.cancelChallenge(duel)
     }
 
+    // MARK: - Safety: blocking + reporting (UGC-1a)
+
+    func blockUser(_ uid: String) async throws {
+        try await dataManager.blockUser(uid)
+    }
+
+    func unblockUser(_ uid: String) async throws {
+        try await dataManager.unblockUser(uid)
+    }
+
+    func isBlocked(_ uid: String) -> Bool {
+        dataManager.isBlocked(uid)
+    }
+
+    /// UGC-1b's block-management screen reads this.
+    var blockedUids: Set<String> { dataManager.blockedUids }
+
+    func submitReport(context: ReportContext, reportedUid: String,
+                      contentSnapshot: String, guildCode: String?,
+                      messageId: String?) async throws {
+        try await dataManager.submitReport(context: context, reportedUid: reportedUid,
+                                            contentSnapshot: contentSnapshot,
+                                            guildCode: guildCode, messageId: messageId)
+    }
+
     // MARK: - Duels (D1b)
 
     func forfeitDuel(_ duel: DuelDTO) async throws {

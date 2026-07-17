@@ -10,6 +10,7 @@ import Foundation
 enum UsernameError: LocalizedError {
     case taken
     case invalidFormat
+    case notAllowed
     case notAuthenticated
     case network(String)
     case cooldownActive(Date)
@@ -18,6 +19,7 @@ enum UsernameError: LocalizedError {
         switch self {
         case .taken:            return "That username is already taken."
         case .invalidFormat:    return "Usernames must be 3–20 characters: lowercase letters, numbers, or underscores, starting with a letter."
+        case .notAllowed:       return "That username isn't allowed."
         case .notAuthenticated: return "You must be signed in to choose a username."
         case .network(let m):   return "Couldn't reach the server. Try again. (\(m))"
         case .cooldownActive(let date):

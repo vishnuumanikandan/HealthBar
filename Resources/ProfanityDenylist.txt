@@ -1,0 +1,137 @@
+# HealthBar profanity / slur denylist (UGC-1a).
+#
+# Format (D9): one lowercase term per line. Lines starting with `#` and blank
+# lines are ignored. Matching is a SUBSTRING scan over the caller's normalized
+# input (lowercased, diacritic-folded, leetspeak-mapped, non-a–z stripped), so
+# a root such as `fuck` also catches `fucker`, `motherfucker`, `fuckface`, etc.
+#
+# AUTHORING RULES — read before adding a term:
+#   * Every entry MUST be >= 4 characters. Short terms + substring matching =
+#     Scunthorpe false positives.
+#   * NEVER add a term that is a common English word or a common substring of
+#     ordinary names. (Excluded for exactly this reason: dick → Dickinson,
+#     cock → peacock, coon → raccoon, arse → coarse, chink → "a chink in", crap
+#     → scrap, rape → grape, rapist → therapist, pedo → torpedo, anus → Uranus,
+#     kraut → sauerkraut, paki → Pakistan, shag → shaggy, knob → door knob.)
+#   * Prefer the root form; substring matching covers inflections.
+#
+# This is v1: English only, no full confusable-script mapping. Moderation of
+# anything this misses is handled by the report path + block path.
+
+# --- profanity (roots cover inflections/compounds) ---
+fuck
+motherfuck
+clusterfuck
+fucktard
+shit
+bullshit
+dipshit
+horseshit
+batshit
+shithead
+shithole
+bitch
+biatch
+sonofabitch
+bastard
+cunt
+twat
+whore
+manwhore
+slut
+skank
+douche
+douchebag
+wanker
+tosser
+bollock
+bugger
+buggery
+knobhead
+arsehole
+arsehat
+
+# --- ass compounds (bare "ass" excluded: class/pass/embassy/assassin) ---
+asshole
+asshat
+asswipe
+assclown
+assface
+asslick
+jackass
+dumbass
+smartass
+
+# --- dick / cock compounds (bare forms excluded: Dickinson / peacock) ---
+dickhead
+dickwad
+dickface
+dickbag
+cocksucker
+cockhead
+
+# --- sexual / anatomical ---
+penis
+vagina
+testicle
+pussy
+pussies
+boobies
+titties
+nutsack
+ballsack
+dildo
+buttplug
+blowjob
+handjob
+rimjob
+cumshot
+titfuck
+gangbang
+creampie
+bukkake
+queef
+jizz
+spooge
+porno
+pornhub
+hentai
+orgasm
+molester
+pedophile
+goddamn
+goddammit
+
+# --- racial / ethnic / religious slurs ---
+nigger
+nigga
+faggot
+faggit
+kike
+gook
+honky
+honkey
+beaner
+wetback
+sandnigger
+raghead
+towelhead
+injun
+dago
+zipperhead
+
+# --- homophobic / transphobic slurs ---
+tranny
+trannies
+faggotry
+
+# --- ableist slurs ---
+retard
+retarded
+spastic
+mongoloid
+
+# --- hate / extremism ---
+nazi
+hitler
+klux

@@ -1805,6 +1805,48 @@ final class FirestoreServiceImpl: FirestoreService {
         }
     }
 
+    // MARK: - FirestoreService: Safety — blocklist + reports (UGC-1a)
+
+    /// The single blocklist doc: users/{userId}/account/blocklist. The `account`
+    /// subcollection is already in the owner-allowlist rules and in
+    /// deleteAllUserData's knownSubcollections, so this needs no rules/cascade change.
+    private func blocklistDocument(for userId: String) -> DocumentReference {
+        db.collection("users").document(userId).collection("account").document("blocklist")
+    }
+
+    /// The top-level, write-only moderation mailbox.
+    private var reportsCollection: CollectionReference {
+        db.collection("reports")
+    }
+
+    func fetchBlocklist(userId: String) async throws -> [String] {
+        let snapshot = try await blocklistDocument(for: userId).getDocument()
+        return snapshot.data()?["blockedUids"] as? [String] ?? []
+    }
+
+    func addToBlocklist(userId: String, blockedUid: String) async throws {
+        try await blocklistDocument(for: userId).setData(
+            ["blockedUids": FieldValue.arrayUnion([blockedUid])], merge: true)
+    }
+
+    func removeFromBlocklist(userId: String, blockedUid: String) async throws {
+        // arrayRemove of an absent element (or on an absent doc that merge creates)
+        // is a no-op — idempotent unblock.
+        try await blocklistDocument(for: userId).setData(
+            ["blockedUids": FieldValue.arrayRemove([blockedUid])], merge: true)
+    }
+
+    func submitReport(_ report: ReportDTO, reportId: String) async throws {
+        // Encode via the Codable encoder, then AWAIT the dictionary setData so a
+        // server-side rules rejection (e.g. the create-only duplicate-report deny)
+        // actually THROWS — the fire-and-forget setData(from:) overload would swallow
+        // it. DataManager interprets the permission-denied (same precedent as
+        // sendSharedItem). @ServerTimestamp createdAt encodes the server sentinel;
+        // nil guildCode/messageId omit, so the written keys match the rules' hasOnly.
+        let data = try Firestore.Encoder().encode(report)
+        try await reportsCollection.document(reportId).setData(data)
+    }
+
     // MARK: - FirestoreService: Account Deletion
 
     /// Deletes all Firestore data under users/{userId}/ in batches of ≤500.

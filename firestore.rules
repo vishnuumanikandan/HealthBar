@@ -7,6 +7,19 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/users/$(owner)/friendRequests/$(sender));
     }
 
+    // UGC-1a: true when EITHER user has the other on their private blocklist
+    // (users/{uid}/account/blocklist → { blockedUids: [String] }). exists()
+    // short-circuits before get(); data.get(...,[]) defaults a malformed/missing
+    // field so a bad doc denies only interactions toward ITS OWN owner, never
+    // errors the rule set. Interaction bans (duel create, friend request) are
+    // SYMMETRIC — denied if a blocks b OR b blocks a.
+    function blockedEither(a, b) {
+      return (exists(/databases/$(database)/documents/users/$(a)/account/blocklist)
+                && b in get(/databases/$(database)/documents/users/$(a)/account/blocklist).data.get('blockedUids', []))
+          || (exists(/databases/$(database)/documents/users/$(b)/account/blocklist)
+                && a in get(/databases/$(database)/documents/users/$(b)/account/blocklist).data.get('blockedUids', []));
+    }
+
     // Root user document. Owner-only read/write/delete on users/{userId} ITSELF
     // (the account-info root doc + the account-deletion path need it; the recursive
     // wildcard matched it before). This match is NON-recursive: it covers only the
@@ -103,7 +116,9 @@ service cloud.firestore {
         && request.resource.data.fromUsername is string
         && request.resource.data.fromDisplayName is string
         && request.resource.data.fromUsername.size() < 300
-        && request.resource.data.fromDisplayName.size() < 300;
+        && request.resource.data.fromDisplayName.size() < 300
+        // UGC-1a: no friend request if either party blocks the other.
+        && !blockedEither(ownerUid, fromUid);
 
       allow update: if false;
 
@@ -637,7 +652,9 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['participantUids','challengerUid','opponentUid',
                'challengerUsername','challengerDisplayName','opponentUsername','opponentDisplayName',
                'league','status','createdAt','respondBy','challengerScore','opponentScore',
-               'rematchOfDuelId']);
+               'rematchOfDuelId'])
+          // UGC-1a: neither party may block the other.
+          && !blockedEither(request.auth.uid, request.resource.data.opponentUid);
       }
 
       // D2: matchmade create — born active, authored by the claimer, provable via the
@@ -683,7 +700,9 @@ service cloud.firestore {
           // claimer cannot match a victim into a higher league (longer window / bigger
           // RR swings) they never opted into.
           && request.resource.data.league
-               == getAfter(/databases/$(database)/documents/duelQueue/$(request.resource.data.opponentUid)).data.league;
+               == getAfter(/databases/$(database)/documents/duelQueue/$(request.resource.data.opponentUid)).data.league
+          // UGC-1a: neither party may block the other (symmetric — same as challenge).
+          && !blockedEither(request.auth.uid, request.resource.data.opponentUid);
       }
 
       allow create: if request.auth != null
@@ -837,6 +856,32 @@ service cloud.firestore {
       allow delete: if request.auth != null
                     && request.auth.uid == resource.data.challengerUid
                     && resource.data.status == 'pending';
+    }
+
+    // UGC-1a: write-only moderation mailbox. Owned by neither party (precedent:
+    // duels); clients may only create; the operator reads via the console.
+    // contentSnapshot cap 1000 mirrors UGCConstants.maxReportSnapshotLength.
+    match /reports/{reportId} {
+      allow read, update, delete: if false;
+      allow create: if request.auth != null
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.keys().hasOnly(
+             ['reporterUid','reportedUid','contextType','contentSnapshot',
+              'guildCode','messageId','createdAt'])
+        && request.resource.data.contextType in ['chat_message','user_profile','guild']
+        && request.resource.data.reportedUid is string
+        && request.resource.data.reportedUid.size() >= 1
+        && request.resource.data.reportedUid.size() < 128
+        && request.resource.data.reportedUid != request.auth.uid
+        && request.resource.data.contentSnapshot is string
+        && request.resource.data.contentSnapshot.size() <= 1000
+        && (!('guildCode' in request.resource.data)
+              || (request.resource.data.guildCode is string
+                  && request.resource.data.guildCode.size() < 64))
+        && (!('messageId' in request.resource.data)
+              || (request.resource.data.messageId is string
+                  && request.resource.data.messageId.size() < 128));
+      // createdAt intentionally not type-checked (serverTimestamp sentinel precedent)
     }
   }
 }

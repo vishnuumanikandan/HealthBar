@@ -7,6 +7,10 @@
 
 import Foundation
 import SwiftData
+// UGC-1a: DataManager may reference Firestore types (architecture spine allows it
+// here and in the service layer). Used ONLY to classify a permission-denied NSError
+// in the sendChallenge catch — all Firestore I/O still goes through firestoreService.
+import FirebaseFirestore
 
 /// Handles all SwiftData persistence operations (CRUD only)
 ///
@@ -72,6 +76,14 @@ final class DataManager {
         return id
     }
 
+    /// In-memory cache of the current user's blocklist (UGC-1a). Fetch-on-login
+    /// only (NOT a listener) — loaded by `loadBlocklist`, mutated by block/unblock,
+    /// reset to [] at every sign-out/user-switch teardown. Mutated on the MainActor
+    /// only (matching the existing `recentDuelClaims` cache pattern — no cross-actor
+    /// mutation). The rules are the real enforcement boundary; this only powers
+    /// client UX (and UGC-1b's management screen, which reads it via the coordinator).
+    private(set) var blockedUids: Set<String> = []
+
     // MARK: - Initialization
 
     /// Initializes the data manager with a SwiftData model context, auth service, and Firestore sync service.
@@ -120,6 +132,10 @@ final class DataManager {
             FirestoreServiceImpl.shared.pendingCustomFoodIds.removeAll()
             FirestoreServiceImpl.shared.pendingSavedMealIds.removeAll()
             FirestoreServiceImpl.shared.pendingSavedRecipeIds.removeAll()
+            // UGC-1a: drop the blocklist cache on sign-out / user-switch so it can't
+            // leak into the next session (guest or another user). loadBlocklist
+            // repopulates on the next authenticated login.
+            blockedUids = []
             return
         }
 
@@ -289,6 +305,10 @@ final class DataManager {
         // Backfill/heal the username → email login mapping on every login so
         // accounts that claimed a handle before this feature can sign in by username.
         Task { await self.syncLoginHandle(userId: userId) }
+
+        // UGC-1a: load the private blocklist into the in-memory cache (fetch-on-login,
+        // NOT a listener). Overwrites the cache; the block rules enforce server-side.
+        Task { await self.loadBlocklist(userId: userId) }
 
         // MARK: One-time initial sync per model (runs once at login)
         // For each model:
@@ -2618,6 +2638,13 @@ final class DataManager {
             throw UsernameError.invalidFormat
         }
 
+        // UGC-1a: profanity/slur chokepoint. This single site covers claim, change,
+        // AND ClaimUsernameViewModel's live inline validation (it calls this
+        // function) — the new error flows to the existing inline error UI, no view edit.
+        guard !ProfanityFilter.containsBlockedTerm(lowercased) else {
+            throw UsernameError.notAllowed
+        }
+
         return lowercased
     }
 
@@ -3005,6 +3032,134 @@ final class DataManager {
         try await firestoreService.removeFriend(friendUid: friendUid, meUid: me)
     }
 
+    // MARK: - Safety: blocking + reporting (UGC-1a)
+
+    /// Loads the blocklist into the in-memory cache on login (D5). Guests keep an
+    /// empty cache. OVERWRITES the cache; a fetch failure leaves it as-is and logs
+    /// (non-fatal — the block rules still enforce server-side).
+    func loadBlocklist(userId: String) async {
+        guard !isGuest else { return }
+        do {
+            let remote = try await firestoreService.fetchBlocklist(userId: userId)
+            blockedUids = Set(remote)
+        } catch {
+            print("⚠️ loadBlocklist failed (cache left unchanged): \(error.localizedDescription)")
+        }
+    }
+
+    /// Pure cache lookup. Guests are never blocking anyone → false.
+    func isBlocked(_ uid: String) -> Bool {
+        guard !isGuest else { return false }
+        return blockedUids.contains(uid)
+    }
+
+    /// Blocks `uid`. Cleans up the relationship BEFORE recording the block (D4) so
+    /// a cleanup failure aborts the whole call, the block is NOT recorded, and a
+    /// retry re-runs cleanup idempotently. Active duels are deliberately untouched.
+    func blockUser(_ uid: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw BlockError.notAuthenticated
+        }
+        // Self / empty ⇒ nothing to do.
+        guard uid != me, !uid.isEmpty else { return }
+        // Idempotent: re-blocking is a no-op success (checked before the cap so a
+        // full blocklist never turns a redundant re-block into an error).
+        guard !blockedUids.contains(uid) else { return }
+        guard blockedUids.count < UGCConstants.maxBlocklistSize else {
+            throw BlockError.limitReached
+        }
+
+        do {
+            // (1) Remove the friend edge — idempotent (no-op if not friends; delete of
+            //     an absent edge is permitted). We do NOT gate on stale local
+            //     friendship state (FR-1); an unconditional removeFriend is correct.
+            try await removeFriend(friendUid: uid)
+            // (2) Decline any incoming pending request from them + cancel any sent
+            //     pending request to them (both delete-absent = no-op).
+            try await declineIncomingRequest(fromUid: uid)
+            try await cancelSentRequest(toUid: uid)
+            // (3) Cancel my outgoing PENDING duels to them + decline incoming PENDING
+            //     duels from them, via the same paths the Battle UI uses. A plain
+            //     fetch (NOT loadMyDuels) — no scoring/RR side effects during a block.
+            let myDuels = try await firestoreService.fetchMyDuels(uid: me)
+            for duel in myDuels where duel.statusEnum == .pending {
+                if duel.challengerUid == me && duel.opponentUid == uid {
+                    try await cancelChallenge(duel)
+                } else if duel.opponentUid == me && duel.challengerUid == uid {
+                    try await declineChallenge(duel)
+                }
+            }
+            // (4) Record the block, THEN (5) update the in-memory cache.
+            try await firestoreService.addToBlocklist(userId: me, blockedUid: uid)
+            blockedUids.insert(uid)
+        } catch let error as BlockError {
+            throw error
+        } catch {
+            throw BlockError.network(error.localizedDescription)
+        }
+    }
+
+    /// Unblocks `uid`: removes the Firestore entry and the cache entry. Idempotent.
+    /// No friend restoration (D4).
+    func unblockUser(_ uid: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw BlockError.notAuthenticated
+        }
+        do {
+            try await firestoreService.removeFromBlocklist(userId: me, blockedUid: uid)
+            blockedUids.remove(uid)
+        } catch {
+            throw BlockError.network(error.localizedDescription)
+        }
+    }
+
+    /// Submits a moderation report (UGC-1a). The reportId is deterministic per (me,
+    /// target) so a duplicate report collides on the same doc; the create-only rules
+    /// reject the duplicate as an update, and that permission-denied is caught here
+    /// and returned as silent idempotent success ("already reported", D6).
+    func submitReport(context: ReportContext, reportedUid: String,
+                      contentSnapshot: String, guildCode: String?,
+                      messageId: String?) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw BlockError.notAuthenticated
+        }
+        guard reportedUid != me, !reportedUid.isEmpty else { return }
+
+        // Deterministic reportId per D6.
+        let reportId: String
+        switch context {
+        case .chatMessage: reportId = "\(me)_msg_\(messageId ?? "")"
+        case .userProfile: reportId = "\(me)_user_\(reportedUid)"
+        case .guild:       reportId = "\(me)_guild_\(guildCode ?? "")"
+        }
+
+        // Trim whitespace/newlines, THEN truncate to the snapshot cap, before writing
+        // (the single clamp site, D12).
+        let trimmed = contentSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
+        let snapshot = String(trimmed.prefix(UGCConstants.maxReportSnapshotLength))
+
+        let report = ReportDTO(
+            reporterUid: me,
+            reportedUid: reportedUid,
+            contextType: context.rawValue,
+            contentSnapshot: snapshot,
+            guildCode: guildCode,
+            messageId: messageId,
+            createdAt: nil
+        )
+        do {
+            try await firestoreService.submitReport(report, reportId: reportId)
+        } catch {
+            // Duplicate report ⇒ create-only rules reject the update ⇒ already reported.
+            let nsError = error as NSError
+            if nsError.domain == FirestoreErrorDomain,
+               nsError.code == FirestoreErrorCode.permissionDenied.rawValue {
+                return
+            }
+            throw BlockError.network(error.localizedDescription)
+        }
+    }
+
     // MARK: - Guilds (G1)
 
     /// Soft member cap. Enforced reliably only where the caller can read the
@@ -3044,6 +3199,15 @@ final class DataManager {
             finalDesc = trimmedDesc
         } else {
             finalDesc = nil
+        }
+        // UGC-1a: profanity/slur chokepoint for guild name AND description (either
+        // hit rejects). Runs after the existing length checks. Shared by createGuild
+        // and updateGuildSettings, so both entry points are covered here.
+        guard !ProfanityFilter.containsBlockedTerm(trimmedName) else {
+            throw GuildError.notAllowed
+        }
+        if let finalDesc, ProfanityFilter.containsBlockedTerm(finalDesc) {
+            throw GuildError.notAllowed
         }
         return (trimmedName, finalDesc)
     }
@@ -3657,6 +3821,16 @@ final class DataManager {
         do {
             _ = try await firestoreService.createDuel(duel)
         } catch {
+            // UGC-1a: a permission-denied on a well-formed challenge create is treated
+            // as a block — the isChallengeCreate() rule's blockedEither() guard is the
+            // only deny path a valid challenge hits. The user-facing message is
+            // deliberately soft because residual causes (expired auth, future rule
+            // changes) share this error code; we do not disclose block state (D3).
+            let nsError = error as NSError
+            if nsError.domain == FirestoreErrorDomain,
+               nsError.code == FirestoreErrorCode.permissionDenied.rawValue {
+                throw DuelError.blocked
+            }
             throw DuelError.network(error.localizedDescription)
         }
     }
@@ -5418,6 +5592,7 @@ enum GuildError: LocalizedError {
     case ownerMustDisband
     case codeCollision
     case notAuthorized
+    case notAllowed
     case network(String)
 
     var errorDescription: String? {
@@ -5428,6 +5603,7 @@ enum GuildError: LocalizedError {
         case .ownerMustDisband: return "As the owner, you can't leave — disband the guild instead."
         case .codeCollision:    return "Couldn't generate a unique guild code. Please try again."
         case .notAuthorized:    return "You don't have permission to do that."
+        case .notAllowed:       return "That name isn't allowed."
         case .network(let m):   return "Couldn't reach the server. Try again. (\(m))"
         }
     }
@@ -5450,11 +5626,14 @@ enum DuelError: LocalizedError {
     case notQueued              // no live ticket for me
     // D2.6: concurrent duel caps
     case leagueAtCapacity(league: Int)
+    // UGC-1a: challenge create denied by a block (either party blocks the other)
+    case blocked
 
     var errorDescription: String? {
         switch self {
         case .duplicateChallenge:   return "You already have a pending challenge with them in this league."
         case .expired:              return "This challenge is no longer available."
+        case .blocked:              return "This player isn't accepting challenges from you right now."
         case .notAuthorized:        return "You can't do that."
         case .invalidLeague:        return "Choose a 1, 3, or 5-day league."
         case .alreadyResolved:      return "This duel is already over."
@@ -5465,6 +5644,37 @@ enum DuelError: LocalizedError {
         case .notQueued:            return "You're not in the queue."
         case .leagueAtCapacity(let league):
             return "You're at the limit for \(league)-day duels — finish one first."
+        }
+    }
+}
+
+// MARK: - Safety constants (UGC-1a)
+
+/// UGC-1a magic-number home. Declared once; referenced everywhere used. The
+/// values are mirrored by a comment in firestore.rules (the reports snapshot cap).
+enum UGCConstants {
+    /// Hard cap on a user's private blocklist (`users/{uid}/account/blocklist`).
+    /// The array shape is deliberate at this scale; a `blocks/` subcollection is a
+    /// future option only if this cap ever binds (D1).
+    static let maxBlocklistSize = 500
+    /// Max length of a report's `contentSnapshot` after trim, before write. Mirrored
+    /// by the `contentSnapshot.size() <= 1000` check in the reports rules block (D12).
+    static let maxReportSnapshotLength = 1000
+}
+
+// MARK: - Block Error (UGC-1a)
+
+/// Errors surfaced by the block flow, mirroring FriendError/GuildError's style.
+enum BlockError: LocalizedError {
+    case notAuthenticated
+    case limitReached
+    case network(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .notAuthenticated: return "You must be signed in to do that."
+        case .limitReached:     return "You've reached the maximum number of blocked users."
+        case .network(let m):   return "Couldn't reach the server. Try again. (\(m))"
         }
     }
 }
