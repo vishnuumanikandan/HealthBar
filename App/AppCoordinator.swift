@@ -1090,7 +1090,7 @@ final class AppCoordinator {
     }
 
     /// UGC-1b's block-management screen reads this.
-    var blockedUids: Set<String> { dataManager.blockedUids }
+    var blockedUids: Set<String> { DataManager.blockedUids }
 
     func submitReport(context: ReportContext, reportedUid: String,
                       contentSnapshot: String, guildCode: String?,
@@ -1098,6 +1098,11 @@ final class AppCoordinator {
         try await dataManager.submitReport(context: context, reportedUid: reportedUid,
                                             contentSnapshot: contentSnapshot,
                                             guildCode: guildCode, messageId: messageId)
+    }
+
+    /// UGC-1b (D6/D7): resolved display rows for the Blocked Users management screen.
+    func blockedUsersDisplay() async -> [(uid: String, username: String, displayName: String)] {
+        await dataManager.blockedUsersDisplay()
     }
 
     // MARK: - Duels (D1b)

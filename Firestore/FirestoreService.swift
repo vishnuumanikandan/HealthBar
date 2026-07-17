@@ -554,6 +554,12 @@ protocol FirestoreService {
                                after: (rr: Int, uid: String)?,
                                limit: Int) async throws -> [GlobalLeaderboardDTO]
 
+    /// UGC-1b (D7): leaderboard rows for a specific set of uids (the Blocked Users screen
+    /// resolves display identity this way). Chunked at ≤10 per `documentID() in` query and
+    /// concatenated; uids with no leaderboard doc are simply absent from the result. No
+    /// ordering — the caller sorts. documentID-only ⇒ no composite index (indexes untouched).
+    func fetchLeaderboardEntries(uids: [String]) async throws -> [GlobalLeaderboardDTO]
+
     // MARK: - Safety: blocklist + reports (UGC-1a)
 
     /// One-time read of the caller's blocklist doc (users/{userId}/account/blocklist).

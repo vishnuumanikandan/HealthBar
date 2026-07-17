@@ -78,11 +78,18 @@ final class DataManager {
 
     /// In-memory cache of the current user's blocklist (UGC-1a). Fetch-on-login
     /// only (NOT a listener) — loaded by `loadBlocklist`, mutated by block/unblock,
-    /// reset to [] at every sign-out/user-switch teardown. Mutated on the MainActor
-    /// only (matching the existing `recentDuelClaims` cache pattern — no cross-actor
-    /// mutation). The rules are the real enforcement boundary; this only powers
-    /// client UX (and UGC-1b's management screen, which reads it via the coordinator).
-    private(set) var blockedUids: Set<String> = []
+    /// reset to [] at every sign-out/user-switch teardown. The rules are the real
+    /// enforcement boundary; this only powers client UX (and UGC-1b's management screen).
+    ///
+    /// UGC-1b-FIX: `static` — SHARED across every DataManager instance. ContentView builds a
+    /// separate AppCoordinator→DataManager per tab, so a per-instance cache is invisible to the
+    /// instance serving another surface: a block (or the login-time load) lands on one instance
+    /// while the Add Friend directory / guild roster / guild leaderboard are served by a
+    /// different instance whose cache was still empty (SMOKE-3: those three read a stale/empty
+    /// blocklist and never filtered). One shared cache — loaded once, mutated by block/unblock,
+    /// read by every filter on every tab — is the single source of truth. One user is signed in
+    /// at a time and the teardown below clears it on sign-out/user-switch, so there is no leak.
+    private(set) static var blockedUids: Set<String> = []
 
     // MARK: - Initialization
 
@@ -135,7 +142,7 @@ final class DataManager {
             // UGC-1a: drop the blocklist cache on sign-out / user-switch so it can't
             // leak into the next session (guest or another user). loadBlocklist
             // repopulates on the next authenticated login.
-            blockedUids = []
+            DataManager.blockedUids = []
             return
         }
 
@@ -2761,7 +2768,11 @@ final class DataManager {
         let descriptor = FetchDescriptor<Friend>(
             predicate: #Predicate { $0.userId == userId }
         )
-        return try modelContext.fetch(descriptor)
+        // UGC-1b (chokepoint 1): belt filter on friendUid. Edges are removed at block
+        // time, so this only covers multi-device staleness — but it does so for the
+        // Friends tab, Home standings, feed fan-out, AND the C1 friends carousel in one
+        // site (every consumer routes through fetchFriends()).
+        return try modelContext.fetch(descriptor).filter { !isBlocked($0.friendUid) }
     }
 
     /// Returns all cached friend requests for the current user in one direction
@@ -2847,7 +2858,8 @@ final class DataManager {
             }
         }
 
-        return latestByUid.values.sorted { $0.username < $1.username }
+        // UGC-1b (chokepoint 2): hide blocked users from the Add Friend directory.
+        return latestByUid.values.filter { !isBlocked($0.uid) }.sorted { $0.username < $1.username }
     }
 
     /// Fetches my identity for stamping into cross-user writes.
@@ -2941,13 +2953,28 @@ final class DataManager {
         }
 
         let identity = try await fetchMyFriendIdentity(userId: me)
-        try await firestoreService.sendFriendRequest(
-            toUid: toUid,
-            toUsername: handleKey,
-            fromUid: me,
-            fromUsername: identity.username,
-            fromDisplayName: identity.displayName
-        )
+        do {
+            try await firestoreService.sendFriendRequest(
+                toUid: toUid,
+                toUsername: handleKey,
+                fromUid: me,
+                fromUsername: identity.username,
+                fromDisplayName: identity.displayName
+            )
+        } catch {
+            // UGC-1b (D8): a permission-denied on this FRESH create is treated as a block — the
+            // friendRequests create rule's blockedEither() guard is the only deny path a
+            // well-formed request hits. Same soft-copy assumption as DuelError.blocked (1a):
+            // residual causes (expired auth, future rule changes) share this code, so block state
+            // is never disclosed. This is the fresh-create path ONLY — the FR-1 idempotency branch
+            // above already returned success for a re-send, so it is never reached here.
+            let nsError = error as NSError
+            if nsError.domain == FirestoreErrorDomain,
+               nsError.code == FirestoreErrorCode.permissionDenied.rawValue {
+                throw FriendError.blocked
+            }
+            throw FriendError.network(error.localizedDescription)
+        }
         // FR-1: reflect outgoing-pending immediately so the button flips before the sentRequests
         // listener syncs (addFriend calls load() right after, re-deriving friendshipState).
         insertLocalOutgoingRequest(toUid: toUid, toUsername: handleKey, userId: me)
@@ -3041,7 +3068,7 @@ final class DataManager {
         guard !isGuest else { return }
         do {
             let remote = try await firestoreService.fetchBlocklist(userId: userId)
-            blockedUids = Set(remote)
+            DataManager.blockedUids = Set(remote)
         } catch {
             print("⚠️ loadBlocklist failed (cache left unchanged): \(error.localizedDescription)")
         }
@@ -3050,7 +3077,7 @@ final class DataManager {
     /// Pure cache lookup. Guests are never blocking anyone → false.
     func isBlocked(_ uid: String) -> Bool {
         guard !isGuest else { return false }
-        return blockedUids.contains(uid)
+        return DataManager.blockedUids.contains(uid)
     }
 
     /// Blocks `uid`. Cleans up the relationship BEFORE recording the block (D4) so
@@ -3064,8 +3091,8 @@ final class DataManager {
         guard uid != me, !uid.isEmpty else { return }
         // Idempotent: re-blocking is a no-op success (checked before the cap so a
         // full blocklist never turns a redundant re-block into an error).
-        guard !blockedUids.contains(uid) else { return }
-        guard blockedUids.count < UGCConstants.maxBlocklistSize else {
+        guard !DataManager.blockedUids.contains(uid) else { return }
+        guard DataManager.blockedUids.count < UGCConstants.maxBlocklistSize else {
             throw BlockError.limitReached
         }
 
@@ -3091,7 +3118,7 @@ final class DataManager {
             }
             // (4) Record the block, THEN (5) update the in-memory cache.
             try await firestoreService.addToBlocklist(userId: me, blockedUid: uid)
-            blockedUids.insert(uid)
+            DataManager.blockedUids.insert(uid)
         } catch let error as BlockError {
             throw error
         } catch {
@@ -3107,7 +3134,7 @@ final class DataManager {
         }
         do {
             try await firestoreService.removeFromBlocklist(userId: me, blockedUid: uid)
-            blockedUids.remove(uid)
+            DataManager.blockedUids.remove(uid)
         } catch {
             throw BlockError.network(error.localizedDescription)
         }
@@ -3157,6 +3184,34 @@ final class DataManager {
                 return
             }
             throw BlockError.network(error.localizedDescription)
+        }
+    }
+
+    /// UGC-1b (D6/D7): resolves the blocklist into display rows for the Blocked Users screen.
+    /// Each blocked uid is looked up in the world-readable `leaderboard/{uid}` projection (the
+    /// C1 rail); a uid with no leaderboard row (never published / deleted) renders as
+    /// "Unknown player" but stays unblock-able (everything keys on uid). Sorted for a stable
+    /// list (blockedUids is an unordered Set). Guests never block anyone → [].
+    func blockedUsersDisplay() async -> [(uid: String, username: String, displayName: String)] {
+        guard !isGuest else { return [] }
+        let uids = Array(DataManager.blockedUids)
+        guard !uids.isEmpty else { return [] }
+
+        let entries = (try? await firestoreService.fetchLeaderboardEntries(uids: uids)) ?? []
+        var byUid: [String: GlobalLeaderboardDTO] = [:]
+        for entry in entries { if let id = entry.id { byUid[id] = entry } }
+
+        let rows = uids.map { uid -> (uid: String, username: String, displayName: String) in
+            if let entry = byUid[uid] {
+                return (uid: uid, username: entry.username, displayName: entry.displayName)
+            }
+            return (uid: uid, username: "", displayName: "Unknown player")
+        }
+        // Stable order: by the name the row renders (displayName, else @username).
+        return rows.sorted {
+            let l = ($0.displayName.isEmpty ? $0.username : $0.displayName).lowercased()
+            let r = ($1.displayName.isEmpty ? $1.username : $1.displayName).lowercased()
+            return l < r
         }
     }
 
@@ -3275,13 +3330,22 @@ final class DataManager {
     /// or when the caller is not permitted to read it.
     func guildMembers(code: String) async -> [GuildMemberDTO] {
         guard !isGuest else { return [] }
-        return (try? await firestoreService.fetchGuildMembers(code: code)) ?? []
+        // UGC-1b (chokepoint 3): filter blocked members from the roster. loadGuildLeaderboard()
+        // sources its roster through this method (`let roster = await guildMembers(code: code)`),
+        // so the guild leaderboard is covered here too — no separate filter needed there.
+        return ((try? await firestoreService.fetchGuildMembers(code: code)) ?? [])
+            .filter { !isBlocked($0.uid) }
     }
 
     /// Pending join requests for a guild (owner-only by rules). Empty otherwise.
     func joinRequests(code: String) async -> [GuildJoinRequestDTO] {
         guard !isGuest else { return [] }
-        return (try? await firestoreService.fetchJoinRequests(code: code)) ?? []
+        // UGC-1b (chokepoint 12): a blocked user's join request to my guild should not
+        // render. The request doc itself is untouched — the owner simply doesn't see it
+        // (and would never approve them anyway); leaving it unactioned is the correct
+        // passive outcome.
+        return ((try? await firestoreService.fetchJoinRequests(code: code)) ?? [])
+            .filter { !isBlocked($0.uid) }
     }
 
     /// Joins a guild by code. Open guilds self-join; request guilds create a
@@ -3407,7 +3471,18 @@ final class DataManager {
                         onUpdate: @escaping ([GuildMessageDTO]) -> Void,
                         onError: @escaping (Error) -> Void) {
         guard !isGuest else { return }
-        firestoreService.startGuildChatListener(code: code, onUpdate: onUpdate, onError: onError)
+        // UGC-1b (chokepoint 4): hide messages from blocked senders — both existing history
+        // and live updates — before the VM's closure ever sees them. Only the update callback
+        // is wrapped; the ListenerRegistration itself stays inside FirestoreServiceImpl (spine).
+        // Filtering is one-way: I stop seeing their messages; they still see mine.
+        firestoreService.startGuildChatListener(
+            code: code,
+            onUpdate: { [weak self] messages in
+                guard let self else { onUpdate(messages); return }
+                onUpdate(messages.filter { !self.isBlocked($0.senderUid) })
+            },
+            onError: onError
+        )
     }
 
     /// Stop the chat listener (idempotent). MUST be called when the chat screen disappears.
@@ -3703,6 +3778,10 @@ final class DataManager {
 
         var exclusions = excluding
         exclusions.insert(me)   // the .up slice includes me by construction (rr >= myRR)
+        // UGC-1b (chokepoint 5): exclude blocked users from the C1 NEARBY RANKS stream.
+        // mergeByProximity stays pure (exclusions are passed in); the C1 cursors-advance-
+        // past-excluded invariant makes this correct with no pagination change.
+        exclusions.formUnion(DataManager.blockedUids)
         let rows = Self.mergeByProximity(up: upSlice, down: downSlice, myRR: myRR, excluding: exclusions)
             .map { dto in
                 // `.directory` now means "the ranked directory" (leaderboard-backed) — it carries
@@ -3729,6 +3808,9 @@ final class DataManager {
         guard let uid = try? await firestoreService.lookupUid(forHandleKey: handleKey), !uid.isEmpty else {
             return nil
         }
+        // UGC-1b (chokepoint 6): a blocked user is fully hidden from @handle search —
+        // resolve to nil so the sheet shows "not found", disclosing nothing.
+        guard !isBlocked(uid) else { return nil }
         // leaderboard/{uid} is world-readable (D3); `fetchMyLeaderboardEntry` reads that one doc by
         // uid — reused here for an arbitrary uid (not just "my" row). Absent/undecodable → unranked.
         if let row = try? await firestoreService.fetchMyLeaderboardEntry(userId: uid) {
@@ -3947,7 +4029,16 @@ final class DataManager {
             DuelUIState.shared.hasUnseenChanges = unseen
         }
 
-        return duels
+        // UGC-1b (chokepoint 11, D2): multi-device-staleness belt — hide ONLY pending duels
+        // whose counterpart is blocked. Active/resolved/forfeited/expired duels ALWAYS run to
+        // completion and are never filtered (block-time cleanup + rules already prevent the
+        // normal pending case). The explicit `.pending` guard ensures nothing else is dropped;
+        // this runs AFTER the RR-claim/badge passes above, which see the full list.
+        return duels.filter { duel in
+            guard duel.statusEnum == .pending else { return true }
+            let counterpart = duel.isChallenger(me) ? duel.opponentUid : duel.challengerUid
+            return !isBlocked(counterpart)
+        }
     }
 
     /// Marks duels seen (UserDefaults snapshot) and refreshes the badge unseen flag/count.
@@ -4170,8 +4261,11 @@ final class DataManager {
     func fetchGlobalLeaderboard(metric: LeaderboardMetric, league: Int) async -> [GlobalLeaderboardDTO] {
         guard !isGuest else { return [] }
         let field = LeaderboardMetric.orderField(metric: metric, league: league)
-        return (try? await firestoreService.fetchLeaderboard(
-            orderField: field, limit: DuelConstants.leaderboardPageSize)) ?? []
+        // UGC-1b (chokepoint 7): hide blocked players from the Battle standings block. The
+        // leaderboard doc id IS the owner uid, so filter on `id`.
+        return ((try? await firestoreService.fetchLeaderboard(
+            orderField: field, limit: DuelConstants.leaderboardPageSize)) ?? [])
+            .filter { !isBlocked($0.id ?? "") }
     }
 
     /// My own leaderboard row + (RR board only) my standing via the count aggregation. Fail-soft:
@@ -4179,6 +4273,11 @@ final class DataManager {
     func fetchMyLeaderboardRow() async -> (entry: GlobalLeaderboardDTO?, rrPosition: Int?) {
         guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return (nil, nil) }
         guard let entry = try? await firestoreService.fetchMyLeaderboardEntry(userId: userId) else { return (nil, nil) }
+        // UGC-1b (chokepoint 8, D3): my own row is never filtered. `rrPosition` is a
+        // server-side COUNT aggregation that still counts any blocked players ranked above
+        // me — an accepted, un-corrected skew (a client-side fix would require reading the
+        // very rows we refuse to read). The standings LIST renumbers naturally via
+        // chokepoint 7; only this single server-counted position can drift.
         let position = try? await firestoreService.fetchLeaderboardPosition(myRR: entry.rr)
         return (entry, position)
     }
@@ -4657,7 +4756,10 @@ final class DataManager {
         // a real user and has no feedEvents subcollection, so it is naturally
         // absent — fetchFriends() never returns it.
         let friendModels = (try? await fetchFriends()) ?? []
-        let friendUids = friendModels.map { $0.friendUid }
+        // UGC-1b (chokepoint 10a): belt filter before fan-out. fetchFriends() already drops
+        // blocked edges (chokepoint 1), so this is a redundant multi-device-staleness net —
+        // kept per the complete inventory.
+        let friendUids = friendModels.map { $0.friendUid }.filter { !isBlocked($0) }
 
         var items: [FeedItem] = []
         await withTaskGroup(of: [FeedItem].self) { group in
@@ -4687,10 +4789,15 @@ final class DataManager {
         var enriched: [FeedItem] = []
         await withTaskGroup(of: FeedItem.self) { group in
             for item in capped {
-                group.addTask { [firestoreService, me, item] in
+                group.addTask { [firestoreService, me, item, blocked = DataManager.blockedUids] in
                     var result = item
-                    let cheers = (try? await firestoreService.fetchCheers(
-                        ownerUid: item.friendUid, eventId: item.eventId, limit: 20)) ?? []
+                    // UGC-1b (chokepoint 10b): drop a blocked user's cheer before computing
+                    // count/didCheer/recentCheererNames — their name must not surface on a
+                    // mutual friend's event. A captured Set snapshot keeps the task Sendable
+                    // (self is never captured here, matching the existing pattern).
+                    let cheers = ((try? await firestoreService.fetchCheers(
+                        ownerUid: item.friendUid, eventId: item.eventId, limit: 20)) ?? [])
+                        .filter { !blocked.contains($0.cheererUid) }
                     result.cheerCount = cheers.count
                     result.didCheer = cheers.contains { $0.cheererUid == me }
                     result.recentCheererNames = cheers.prefix(3).map {

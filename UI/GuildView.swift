@@ -216,6 +216,13 @@ struct GuildView: View {
                 inlineError(error)
             }
 
+            if let confirmation = viewModel.reportConfirmation {
+                Text(confirmation)
+                    .font(AppFont.regular(13))
+                    .foregroundColor(tc.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             directoryBody
         }
     }
@@ -276,6 +283,17 @@ struct GuildView: View {
                 directoryAction(row)
             }
             .padding(.vertical, DesignSystem.Spacing.md)
+            .contextMenu {
+                // UGC-1b: Report Guild (D5 `.guild`) — reportedUid is the owner's uid.
+                Button {
+                    Task {
+                        await viewModel.reportGuild(ownerUid: row.ownerUid, code: row.id,
+                                                    name: row.name, description: row.description)
+                    }
+                } label: {
+                    Label("Report Guild", systemImage: "flag")
+                }
+            }
 
             if !isLast {
                 Rectangle().fill(DesignSystem.Erewhon.lineSoft).frame(height: 1)
@@ -423,6 +441,13 @@ struct GuildDetailView: View {
                     inlineError(error)
                 }
 
+                if let confirmation = viewModel.reportConfirmation {
+                    Text(confirmation)
+                        .font(AppFont.regular(13))
+                        .foregroundColor(tc.primary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+
                 // Owner: pending requests (request-policy guilds only).
                 if viewModel.isOwner && !viewModel.requests.isEmpty {
                     requestsSection
@@ -566,6 +591,32 @@ struct GuildDetailView: View {
         .frame(maxWidth: .infinity)
         .padding(DesignSystem.Spacing.lg)
         .adaptiveCard(borderColor: tc.primary.opacity(0.4), fillColor: tc.cardBackground)
+        .overlay(alignment: .topTrailing) {
+            // UGC-1b: Report Guild overflow (the nav bar is hidden here, so a header affordance
+            // replaces a toolbar menu). Hidden for the owner — self-reports are rules-rejected
+            // and meaningless. Theme-tinted ellipsis; no new visual language.
+            // UGC-1b-FIX: the ellipsis carries an accessibilityLabel so VoiceOver / UI automation
+            // can identify it (it was an unlabeled button — the reason SMOKE-3 "couldn't find"
+            // the affordance, which does render for a non-owner member).
+            if !viewModel.isOwner {
+                Menu {
+                    Button(role: .destructive) {
+                        Task {
+                            await viewModel.reportGuild(ownerUid: guild.ownerUid, code: guild.id ?? "",
+                                                        name: guild.name, description: guild.description)
+                        }
+                    } label: {
+                        Label("Report Guild", systemImage: "flag")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(AppFont.bold(16))
+                        .foregroundColor(tc.textTertiary)
+                        .padding(DesignSystem.Spacing.md)
+                        .accessibilityLabel("Guild options")
+                }
+            }
+        }
     }
 
     private func policyIcon(_ joinPolicy: String) -> String {
