@@ -429,6 +429,35 @@ enum DesignSystem {
         static let subtleShadow: (color: Color, radius: CGFloat, y: CGFloat) =
             (Color.black.opacity(0.06), 7, 3)
     }
+
+    // MARK: - Metrics (OCCLUSION-1)
+
+    /// Layout metrics shared across the app. Single source of truth for the custom
+    /// bottom tab bar's height.
+    enum Metrics {
+        /// Breathing room above a tab bar's content, below its top hairline. Both
+        /// `CleanTabBar` and `WoodenTabBar` apply it as their top padding, and
+        /// `tabBarHeight` below is built from it, so the three can't drift.
+        static let tabBarTopInset: CGFloat = 12
+
+        /// Height of the custom bottom tab bar ABOVE the home-indicator safe area — i.e.
+        /// the clearance a screen pushed inside a tab's own `NavigationStack` must add so
+        /// its last control sits above the bar.
+        ///
+        /// Root tab screens get this clearance automatically from the TabView's
+        /// `.safeAreaInset` bar (`ContentView`), but that inset does NOT propagate into
+        /// child `NavigationStack`s — the paid-for R2/R6 lesson OCCLUSION-1 fixes. Pushed
+        /// screens (guild chat composer, guild detail's Leave/Disband) therefore clear the
+        /// bar by this token.
+        ///
+        /// Equals `CleanTabBar`'s rendered height: `Erewhon.tabBarContentHeight` (64pt of
+        /// content) + `tabBarTopInset` (12) = 76. `WoodenTabBar` renders shorter (~56–64pt
+        /// on device), so this single token — the taller, shipping Clean bar — over-clears
+        /// the pixel bar harmlessly and serves both themes. (The home-indicator region is
+        /// supplied separately by each screen's own bottom safe area, so it is NOT included
+        /// here.)
+        static let tabBarHeight: CGFloat = Erewhon.tabBarContentHeight + tabBarTopInset
+    }
 }
 
 // MARK: - Reusable SwiftUI Components

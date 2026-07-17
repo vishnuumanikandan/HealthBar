@@ -459,6 +459,12 @@ struct GuildDetailView: View {
             }
             .padding(DesignSystem.Spacing.lg)
         }
+        // OCCLUSION-1 D2 (scroll anatomy): this detail screen is pushed inside the Guilds
+        // tab's NavigationStack, which the TabView's `.safeAreaInset` tab bar does NOT reach,
+        // so the actions at the end (Leave / Disband) render behind the bar and are
+        // untappable (known since R7d). Add bottom scroll-content margin of the shared token
+        // so the last button clears the bar. Applied on this screen, not globally.
+        .contentMargins(.bottom, DesignSystem.Metrics.tabBarHeight, for: .scrollContent)
         .refreshable { await viewModel.refresh() }
         .confirmationDialog(
             "Leave Guild?",
