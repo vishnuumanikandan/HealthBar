@@ -1090,7 +1090,7 @@ final class AppCoordinator {
     }
 
     /// UGC-1b's block-management screen reads this.
-    var blockedUids: Set<String> { dataManager.blockedUids }
+    var blockedUids: Set<String> { DataManager.blockedUids }
 
     func submitReport(context: ReportContext, reportedUid: String,
                       contentSnapshot: String, guildCode: String?,

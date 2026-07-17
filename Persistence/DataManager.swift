@@ -78,11 +78,18 @@ final class DataManager {
 
     /// In-memory cache of the current user's blocklist (UGC-1a). Fetch-on-login
     /// only (NOT a listener) — loaded by `loadBlocklist`, mutated by block/unblock,
-    /// reset to [] at every sign-out/user-switch teardown. Mutated on the MainActor
-    /// only (matching the existing `recentDuelClaims` cache pattern — no cross-actor
-    /// mutation). The rules are the real enforcement boundary; this only powers
-    /// client UX (and UGC-1b's management screen, which reads it via the coordinator).
-    private(set) var blockedUids: Set<String> = []
+    /// reset to [] at every sign-out/user-switch teardown. The rules are the real
+    /// enforcement boundary; this only powers client UX (and UGC-1b's management screen).
+    ///
+    /// UGC-1b-FIX: `static` — SHARED across every DataManager instance. ContentView builds a
+    /// separate AppCoordinator→DataManager per tab, so a per-instance cache is invisible to the
+    /// instance serving another surface: a block (or the login-time load) lands on one instance
+    /// while the Add Friend directory / guild roster / guild leaderboard are served by a
+    /// different instance whose cache was still empty (SMOKE-3: those three read a stale/empty
+    /// blocklist and never filtered). One shared cache — loaded once, mutated by block/unblock,
+    /// read by every filter on every tab — is the single source of truth. One user is signed in
+    /// at a time and the teardown below clears it on sign-out/user-switch, so there is no leak.
+    private(set) static var blockedUids: Set<String> = []
 
     // MARK: - Initialization
 
@@ -135,7 +142,7 @@ final class DataManager {
             // UGC-1a: drop the blocklist cache on sign-out / user-switch so it can't
             // leak into the next session (guest or another user). loadBlocklist
             // repopulates on the next authenticated login.
-            blockedUids = []
+            DataManager.blockedUids = []
             return
         }
 
@@ -3061,7 +3068,7 @@ final class DataManager {
         guard !isGuest else { return }
         do {
             let remote = try await firestoreService.fetchBlocklist(userId: userId)
-            blockedUids = Set(remote)
+            DataManager.blockedUids = Set(remote)
         } catch {
             print("⚠️ loadBlocklist failed (cache left unchanged): \(error.localizedDescription)")
         }
@@ -3070,7 +3077,7 @@ final class DataManager {
     /// Pure cache lookup. Guests are never blocking anyone → false.
     func isBlocked(_ uid: String) -> Bool {
         guard !isGuest else { return false }
-        return blockedUids.contains(uid)
+        return DataManager.blockedUids.contains(uid)
     }
 
     /// Blocks `uid`. Cleans up the relationship BEFORE recording the block (D4) so
@@ -3084,8 +3091,8 @@ final class DataManager {
         guard uid != me, !uid.isEmpty else { return }
         // Idempotent: re-blocking is a no-op success (checked before the cap so a
         // full blocklist never turns a redundant re-block into an error).
-        guard !blockedUids.contains(uid) else { return }
-        guard blockedUids.count < UGCConstants.maxBlocklistSize else {
+        guard !DataManager.blockedUids.contains(uid) else { return }
+        guard DataManager.blockedUids.count < UGCConstants.maxBlocklistSize else {
             throw BlockError.limitReached
         }
 
@@ -3111,7 +3118,7 @@ final class DataManager {
             }
             // (4) Record the block, THEN (5) update the in-memory cache.
             try await firestoreService.addToBlocklist(userId: me, blockedUid: uid)
-            blockedUids.insert(uid)
+            DataManager.blockedUids.insert(uid)
         } catch let error as BlockError {
             throw error
         } catch {
@@ -3127,7 +3134,7 @@ final class DataManager {
         }
         do {
             try await firestoreService.removeFromBlocklist(userId: me, blockedUid: uid)
-            blockedUids.remove(uid)
+            DataManager.blockedUids.remove(uid)
         } catch {
             throw BlockError.network(error.localizedDescription)
         }
@@ -3187,7 +3194,7 @@ final class DataManager {
     /// list (blockedUids is an unordered Set). Guests never block anyone → [].
     func blockedUsersDisplay() async -> [(uid: String, username: String, displayName: String)] {
         guard !isGuest else { return [] }
-        let uids = Array(blockedUids)
+        let uids = Array(DataManager.blockedUids)
         guard !uids.isEmpty else { return [] }
 
         let entries = (try? await firestoreService.fetchLeaderboardEntries(uids: uids)) ?? []
@@ -3774,7 +3781,7 @@ final class DataManager {
         // UGC-1b (chokepoint 5): exclude blocked users from the C1 NEARBY RANKS stream.
         // mergeByProximity stays pure (exclusions are passed in); the C1 cursors-advance-
         // past-excluded invariant makes this correct with no pagination change.
-        exclusions.formUnion(blockedUids)
+        exclusions.formUnion(DataManager.blockedUids)
         let rows = Self.mergeByProximity(up: upSlice, down: downSlice, myRR: myRR, excluding: exclusions)
             .map { dto in
                 // `.directory` now means "the ranked directory" (leaderboard-backed) — it carries
@@ -4782,7 +4789,7 @@ final class DataManager {
         var enriched: [FeedItem] = []
         await withTaskGroup(of: FeedItem.self) { group in
             for item in capped {
-                group.addTask { [firestoreService, me, item, blocked = blockedUids] in
+                group.addTask { [firestoreService, me, item, blocked = DataManager.blockedUids] in
                     var result = item
                     // UGC-1b (chokepoint 10b): drop a blocked user's cheer before computing
                     // count/didCheer/recentCheererNames — their name must not surface on a

@@ -595,6 +595,9 @@ struct GuildDetailView: View {
             // UGC-1b: Report Guild overflow (the nav bar is hidden here, so a header affordance
             // replaces a toolbar menu). Hidden for the owner — self-reports are rules-rejected
             // and meaningless. Theme-tinted ellipsis; no new visual language.
+            // UGC-1b-FIX: the ellipsis carries an accessibilityLabel so VoiceOver / UI automation
+            // can identify it (it was an unlabeled button — the reason SMOKE-3 "couldn't find"
+            // the affordance, which does render for a non-owner member).
             if !viewModel.isOwner {
                 Menu {
                     Button(role: .destructive) {
@@ -610,6 +613,7 @@ struct GuildDetailView: View {
                         .font(AppFont.bold(16))
                         .foregroundColor(tc.textTertiary)
                         .padding(DesignSystem.Spacing.md)
+                        .accessibilityLabel("Guild options")
                 }
             }
         }
