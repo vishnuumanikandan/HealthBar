@@ -30,6 +30,9 @@ struct GuildChatView: View {
     @State private var profileSender: GuildMessageDTO? = nil
     /// Message pending delete confirmation.
     @State private var messageToDelete: GuildMessageDTO? = nil
+    /// UGC-1c: sender pending block confirmation (Report fires directly — no pending
+    /// state — mirroring FriendProfileView, where only Block confirms).
+    @State private var senderToBlock: GuildMessageDTO? = nil
     /// OCCLUSION-1 D3: true while the software keyboard is up. When it is, the composer
     /// rides above the keyboard (system avoidance) and the tab bar is hidden behind the
     /// keyboard, so the bar-clearing bottom padding is dropped to avoid a dead gap.
@@ -114,6 +117,34 @@ struct GuildChatView: View {
         } message: {
             Text("This removes the message for everyone.")
         }
+        // UGC-1c: block confirmation — copy mirrored verbatim from FriendProfileView.
+        .confirmationDialog(
+            "Block @\(senderToBlock?.senderUsername ?? "")?",
+            isPresented: Binding(
+                get: { senderToBlock != nil },
+                set: { if !$0 { senderToBlock = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Block", role: .destructive) {
+                if let message = senderToBlock {
+                    Task { await viewModel.block(message) }
+                }
+                senderToBlock = nil
+            }
+            Button("Cancel", role: .cancel) { senderToBlock = nil }
+        } message: {
+            Text("They'll be removed from your friends, hidden from your lists, and won't be able to challenge or friend you.")
+        }
+        // UGC-1c: post-report confirmation — mirrors FriendProfileView's "Report submitted"
+        // success feedback. Report has no pre-submit dialog (see the context menu); this
+        // fires after a successful (or silently-deduped) submit.
+        .alert("Report submitted", isPresented: Binding(
+            get: { viewModel.reportConfirmation },
+            set: { if !$0 { viewModel.reportConfirmation = false } }
+        )) {
+            Button("OK", role: .cancel) {}
+        }
         .sheet(item: $profileSender) { message in
             FriendProfileView(
                 coordinator: coordinator,
@@ -190,6 +221,20 @@ struct GuildChatView: View {
         }
         .frame(maxWidth: .infinity, alignment: isOwn ? .trailing : .leading)
         .contextMenu {
+            // UGC-1c: Report / Block on others' messages (never own — no self-report/block).
+            // Order is an invariant: Report Message → Block User → Delete.
+            if !isOwn {
+                Button {
+                    Task { await viewModel.report(message) }
+                } label: {
+                    Label("Report Message", systemImage: "flag")
+                }
+                Button(role: .destructive) {
+                    senderToBlock = message
+                } label: {
+                    Label("Block User", systemImage: "hand.raised")
+                }
+            }
             if viewModel.canDelete(message) {
                 Button(role: .destructive) {
                     messageToDelete = message
