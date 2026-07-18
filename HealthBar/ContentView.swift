@@ -421,7 +421,13 @@ struct WoodenTabBar: View {
                 }
             }
         }
-        .padding(.top, 12)
+        // Shares CleanTabBar's top inset token. Wooden's content is intrinsic (pixel
+        // icon + Silkscreen label) and shorter than Clean's fixed 64pt content, so the bar
+        // renders shorter than DesignSystem.Metrics.tabBarHeight (~56–64pt vs 76). Per
+        // OCCLUSION-1 D1 the two bars are NOT force-unified to one height (a >2pt change to
+        // the pixel theme, flagged) — the token is sized to the taller Clean bar and
+        // over-clears wooden's pushed screens harmlessly.
+        .padding(.top, DesignSystem.Metrics.tabBarTopInset)
         .padding(.bottom, 4)
         .background(
             LinearGradient(
@@ -476,8 +482,11 @@ struct CleanTabBar: View {
             centerBattle
             ForEach(rightTabs, id: \.tag) { sideTab($0) }
         }
-        .frame(height: DesignSystem.Erewhon.tabBarContentHeight)   // 64
-        .padding(.top, 12)
+        // Content (64) + tabBarTopInset (12) == DesignSystem.Metrics.tabBarHeight (76): the
+        // clearance token that screens pushed inside a tab's NavigationStack use (the
+        // TabView's `.safeAreaInset` bar does not propagate into those child stacks).
+        .frame(height: DesignSystem.Erewhon.tabBarContentHeight)
+        .padding(.top, DesignSystem.Metrics.tabBarTopInset)
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity)
         .background(barBackground)

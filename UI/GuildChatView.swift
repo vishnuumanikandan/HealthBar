@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit   // OCCLUSION-1 D3: keyboardWillShow/Hide notifications (UIResponder)
 
 /// Guild chat (Guilds Prompt G3): a real-time message list with a single
 /// screen-scoped listener (started on appear, removed on disappear). Pushed from
@@ -29,6 +30,10 @@ struct GuildChatView: View {
     @State private var profileSender: GuildMessageDTO? = nil
     /// Message pending delete confirmation.
     @State private var messageToDelete: GuildMessageDTO? = nil
+    /// OCCLUSION-1 D3: true while the software keyboard is up. When it is, the composer
+    /// rides above the keyboard (system avoidance) and the tab bar is hidden behind the
+    /// keyboard, so the bar-clearing bottom padding is dropped to avoid a dead gap.
+    @State private var keyboardVisible = false
 
     // MARK: - Init
 
@@ -59,6 +64,21 @@ struct GuildChatView: View {
             VStack(spacing: 0) {
                 messagesScroll
                 inputBar
+            }
+            // OCCLUSION-1 D2 (fixed-bar anatomy): this screen is pushed inside the Guilds
+            // tab's NavigationStack, which the TabView's `.safeAreaInset` tab bar does NOT
+            // reach — so the input bar would lay out at the true screen bottom, under the bar
+            // (which then wins hit-testing → SMOKE-3 "sends resolve to the Battle slot").
+            // Clear the bar with the shared token. The messages ScrollView needs no separate
+            // margin: the composer now occupies the cleared space beneath it.
+            // D3: while the keyboard is up, gate the padding to 0 (composer rides above the
+            // keyboard; the bar sits behind it) so no dead gap opens between them.
+            .padding(.bottom, keyboardVisible ? 0 : DesignSystem.Metrics.tabBarHeight)
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                keyboardVisible = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                keyboardVisible = false
             }
         }
         .navigationBarTitleDisplayMode(.inline)
