@@ -176,25 +176,12 @@ service cloud.firestore {
     }
 
     // Friend Leaderboard (Friend System Phase 3) — owner-published stats
-    // projection. The friend-edge existence check is the cross-user read
-    // boundary: a non-friend (or former friend) gets permission-denied,
-    // which the client treats as "no entry."
+    // projection. Reads are open to any signed-in user (NAV-1a / ruling B1):
+    // the projection contains zero private data by construction, so there is no
+    // read-side boundary to enforce. The write block below remains the
+    // enforcement of what can be published.
     match /users/{ownerUid}/public/stats {
-      // Owner, any friend, or any guild-mate may read.
-      //  - Friendship is mutual (both edges exist after accept), so friends read each other.
-      //  - Guild branch (G2): the reader is in a guild (their guildMemberships lock
-      //    exists) AND the stats owner is a member of that same guild. The exists()
-      //    guard precedes the get().data.guildCode so the get is only evaluated when
-      //    the reader actually has a lock (&& short-circuits — never .data on a null get).
-      allow read: if request.auth != null
-        && (
-             request.auth.uid == ownerUid
-             || exists(/databases/$(database)/documents/users/$(ownerUid)/friends/$(request.auth.uid))
-             || (
-                  exists(/databases/$(database)/documents/guildMemberships/$(request.auth.uid))
-                  && exists(/databases/$(database)/documents/guilds/$(get(/databases/$(database)/documents/guildMemberships/$(request.auth.uid)).data.guildCode)/members/$(ownerUid))
-                )
-           );
+      allow read: if request.auth != null;
 
       // Only the owner publishes their own stats, with the exact field set
       // and value ranges.
@@ -249,10 +236,10 @@ service cloud.firestore {
     }
 
     // Friend Activity Feed (Friend System Phase 7) — owner-published milestone
-    // events. Same friend-edge read boundary as public/stats: a non-friend
-    // (or former friend) gets permission-denied, which the client treats as
-    // "no events." Events are immutable; the deterministic doc id makes
-    // emission idempotent (re-emit = same id, no duplicate).
+    // events. The friend-edge existence check is the cross-user read boundary:
+    // a non-friend (or former friend) gets permission-denied, which the client
+    // treats as "no events." Events are immutable; the deterministic doc id
+    // makes emission idempotent (re-emit = same id, no duplicate).
     match /users/{ownerUid}/feedEvents/{eventId} {
       // Owner, or any user in the owner's friends list, may read (list + get).
       allow read: if request.auth != null
@@ -521,8 +508,8 @@ service cloud.firestore {
                          // M4: a SELF-written lock is valid ONLY alongside a real member
                          // doc written in the SAME atomic write (WriteBatch or transaction —
                          // Firestore treats both atomically and getAfter sees both). This
-                         // defeats a forged lock with an arbitrary guildCode, which otherwise
-                         // passed the public/stats guild-mate read gate. The client's
+                         // defeats a forged lock with an arbitrary guildCode, which would
+                         // otherwise falsely assert membership in a guild never joined. The client's
                          // founder-create and open-join flows already batch member-doc + lock.
                          (request.auth.uid == uid
                             && getAfter(/databases/$(database)/documents/guilds/$(request.resource.data.guildCode)/members/$(uid)).data.uid == uid)

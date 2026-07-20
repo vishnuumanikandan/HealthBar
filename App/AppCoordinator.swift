@@ -880,6 +880,7 @@ final class AppCoordinator {
     func friendshipState(with uid: String) -> FriendshipState { dataManager.friendshipState(with: uid) }
     func fetchAllUsers() async throws -> [DirectoryUser] { try await dataManager.fetchAllUsers() }
     func sendFriendRequest(toHandle raw: String) async throws { try await dataManager.sendFriendRequest(toHandle: raw) }
+    func sendFriendRequest(toUid: String, username: String) async throws { try await dataManager.sendFriendRequest(toUid: toUid, username: username) }
     func acceptIncomingRequest(fromUid: String) async throws { try await dataManager.acceptIncomingRequest(fromUid: fromUid) }
     func declineIncomingRequest(fromUid: String) async throws { try await dataManager.declineIncomingRequest(fromUid: fromUid) }
     func cancelSentRequest(toUid: String) async throws { try await dataManager.cancelSentRequest(toUid: toUid) }

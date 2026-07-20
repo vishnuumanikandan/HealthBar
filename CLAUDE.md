@@ -106,7 +106,12 @@ of implementing.
 ## UI discipline
 - All new UI styles through `DesignSystem` tokens (colors, fonts, spacing, radii).
   NO hard-coded colors/fonts — an app-wide reskin is planned and priced on this.
-- Profile taps on other users are friend-gated everywhere (leaderboards, rosters, chat).
+- Profile VIEWING is open to any signed-in user as of NAV-1a (`public/stats` reads
+  ungated, `FriendProfileView` renders a stranger mode); entry points (leaderboards,
+  rosters, chat) thread the taps in NAV-1b. Comparison and Remove Friend remain
+  friend-gated (`viewModel.isFriend`); challenge-from-profile stays out
+  (`TODO-profile-challenge`). Cross-user reads still touch ONLY the owner-published
+  `public/stats` projection — never private data.
 
 ## When in doubt
 - Preserve existing behavior. Never guess: prefer a clearly-marked TODO over invented

@@ -2459,6 +2459,9 @@ final class DataManager {
             if xpProgress.currentLevel >= 5 { try await unlock("level_up") }
         }
 
+        // NAV-1a: republish so earnedBadgeIds includes this unlock (the surrounding XP/food publishes race the upsert). Best-effort like every publish site — a failure self-heals on the next publish.
+        if !newlyUnlocked.isEmpty { Task { await publishMyStats() } }
+
         return newlyUnlocked
     }
 
@@ -2913,6 +2916,22 @@ final class DataManager {
             throw FriendError.network(error.localizedDescription)
         }
         guard let toUid = resolvedUid else { throw FriendError.userNotFound }
+
+        // NAV-1a: self-check and all post-resolution work live in the uid-keyed core;
+        // the resolved handle rides along as the display-only snapshot.
+        try await sendFriendRequest(toUid: toUid, username: handleKey)
+    }
+
+    /// uid-keyed core of the friend-request flow (NAV-1a). The handle path
+    /// (`sendFriendRequest(toHandle:)`) resolves the username to a uid and
+    /// delegates here; the NAV-1a profile "Add Friend" calls it directly with a
+    /// uid it already holds — no handle resolution, since usernames are mutable.
+    /// `username` is a display-only snapshot stamped into the request + local row
+    /// per the privacy spine (a stale value is acceptable); identity keys on `toUid`.
+    func sendFriendRequest(toUid: String, username: String) async throws {
+        guard !isGuest, let me = currentUserId, !me.isEmpty else {
+            throw FriendError.network("You must be signed in to add friends.")
+        }
         guard toUid != me else { throw FriendError.cannotFriendSelf }
 
         switch friendshipState(with: toUid) {
@@ -2948,7 +2967,7 @@ final class DataManager {
             throw FriendError.network(error.localizedDescription)
         }
         if alreadySent {
-            insertLocalOutgoingRequest(toUid: toUid, toUsername: handleKey, userId: me)
+            insertLocalOutgoingRequest(toUid: toUid, toUsername: username, userId: me)
             return
         }
 
@@ -2956,7 +2975,7 @@ final class DataManager {
         do {
             try await firestoreService.sendFriendRequest(
                 toUid: toUid,
-                toUsername: handleKey,
+                toUsername: username,
                 fromUid: me,
                 fromUsername: identity.username,
                 fromDisplayName: identity.displayName
@@ -2977,7 +2996,7 @@ final class DataManager {
         }
         // FR-1: reflect outgoing-pending immediately so the button flips before the sentRequests
         // listener syncs (addFriend calls load() right after, re-deriving friendshipState).
-        insertLocalOutgoingRequest(toUid: toUid, toUsername: handleKey, userId: me)
+        insertLocalOutgoingRequest(toUid: toUid, toUsername: username, userId: me)
     }
 
     /// FR-1: inserts (idempotently) the local outgoing FriendRequest row so friendshipState
@@ -5045,10 +5064,12 @@ final class DataManager {
         try await firestoreService.deleteSharedItem(id: shareId, userId: me)
     }
 
-    /// Fetches one friend's published stats projection for the profile sheet
-    /// (Friend System Phase 4). Reuses the leaderboard's friend-gated service
-    /// read — nil means not published yet OR permission-denied (unfriended),
-    /// both rendered as "hasn't shared their stats yet."
+    /// Fetches one user's published stats projection for the profile sheet.
+    /// Post-B1 (NAV-1a) the read is open to any signed-in user — no longer
+    /// friend-gated — so this serves stranger profiles too. nil still means
+    /// "not published yet" (and remains the fold for any residual
+    /// permission-denied), rendered as "hasn't shared their stats yet." The
+    /// `friendUid` label is now historically inaccurate but kept (no-renames rule).
     func fetchPublicStats(friendUid: String) async throws -> PublicStatsDTO? {
         guard !isGuest, let me = currentUserId, !me.isEmpty else { return nil }
         return try await firestoreService.fetchPublicStats(friendUid: friendUid)

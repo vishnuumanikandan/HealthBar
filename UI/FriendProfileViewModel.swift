@@ -7,13 +7,15 @@
 
 import Foundation
 
-/// ViewModel for FriendProfileView (Friend System Phase 4).
+/// ViewModel for FriendProfileView.
 ///
-/// A friend's profile is a richer render of the same `public/stats` projection
-/// the leaderboard fetches — one friend-gated document read, nothing persisted,
-/// no listener. Badges arrive as published IDs and are resolved to emoji/title
-/// locally via BadgeDefinition; another user's badges subcollection is never
-/// read.
+/// NAV-1a broadened this from friends-only to ANY signed-in viewer: the profile
+/// is a richer render of the same `public/stats` projection the leaderboard
+/// fetches — one document read (open to any signed-in user post-B1), nothing
+/// persisted, no listener. `relationship` drives friend vs. stranger mode.
+/// Badges arrive as published IDs and are resolved to emoji/title locally via
+/// BadgeDefinition; another user's badges subcollection is never read. The name
+/// is kept deliberately (no-renames rule).
 @Observable
 @MainActor
 final class FriendProfileViewModel {
@@ -44,6 +46,18 @@ final class FriendProfileViewModel {
 
     var isRemoving: Bool = false
     var removeError: String? = nil
+
+    // MARK: - Relationship (NAV-1a)
+
+    /// Drives friend vs. stranger mode. Resolved from the local friendship cache
+    /// on every load(); a synchronous read, so it's set directly on the main actor.
+    private(set) var relationship: FriendshipState = .none
+
+    /// In-flight flag for the Add Friend send (mirrors isRemoving's shape).
+    var isAddingFriend: Bool = false
+
+    /// Surfaced inline below the Add Friend button on failure; the section stays.
+    var addFriendError: String? = nil
 
     // MARK: - Comparison State (Friend System Phase 6)
 
@@ -114,6 +128,9 @@ final class FriendProfileViewModel {
     func load() async {
         isLoading = true
         loadError = nil
+        // NAV-1a: resolve friend vs. stranger mode on every load (incl. retry).
+        // Synchronous local-cache read — safe to set directly on the main actor.
+        relationship = coordinator.friendshipState(with: friendUid)
         defer {
             isLoading = false
             hasLoaded = true
@@ -187,6 +204,43 @@ final class FriendProfileViewModel {
                     ?? "Couldn't remove this friend."
             }
             return false
+        }
+    }
+
+    // MARK: - Add Friend (NAV-1a)
+
+    /// True in friend mode — gates the comparison + Remove Friend sections in the view.
+    var isFriend: Bool { relationship == .friends }
+
+    /// Pass-through for the view's defense-in-depth Add Friend hide (mirrors the
+    /// addFriend() guard; guests can't reach profiles today).
+    var isGuest: Bool { coordinator.isGuest }
+
+    /// Sends a friend request to this profile's owner by uid (NAV-1a). Guarded to
+    /// the `.none` relationship (defense-in-depth; the button only renders then)
+    /// and to non-guests, with an in-flight flag matching removeFriend's shape.
+    /// On success the local insert (or the FR-1 idempotent branch) makes the
+    /// relationship `.outgoingPending` → the button reads "Request Sent". Failure
+    /// surfaces `addFriendError`; all copy comes from existing FriendError cases.
+    func addFriend() async {
+        guard !coordinator.isGuest, relationship == .none, !isAddingFriend else { return }
+        isAddingFriend = true
+        addFriendError = nil
+        defer { isAddingFriend = false }
+
+        do {
+            try await coordinator.sendFriendRequest(toUid: friendUid, username: username)
+            // Re-resolve directly (no load() — no redundant stats refetch); the local
+            // insert makes this .outgoingPending.
+            relationship = coordinator.friendshipState(with: friendUid)
+        } catch {
+            // No new copy: matches removeFriend's FriendError-or-network fallback shape,
+            // minus the literal default (every relevant FriendError case has copy).
+            if let friendError = error as? FriendError {
+                addFriendError = friendError.errorDescription
+            } else {
+                addFriendError = FriendError.network(error.localizedDescription).errorDescription
+            }
         }
     }
 
