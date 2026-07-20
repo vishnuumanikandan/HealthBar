@@ -7,12 +7,14 @@
 
 import SwiftUI
 
-/// Read-only friend profile sheet (Friend System Phase 4): rank, level,
-/// streaks, member-since, weekly adherence, and the badge grid — all rendered
-/// from the friend's published `public/stats` projection.
+/// Read-only profile sheet: rank, level, streaks, member-since, weekly
+/// adherence, and the badge grid — all rendered from the owner's published
+/// `public/stats` projection.
 ///
-/// Presented from FriendsView rows and LeaderboardView rows. While stats load,
-/// the local Friend snapshot identity shows immediately; a friend who hasn't
+/// NAV-1a: this sheet now serves ANY signed-in viewer. Friend-only sections
+/// (comparison + Remove Friend) are gated on `viewModel.isFriend`; stranger mode
+/// shows Add Friend instead. The name is kept (no-renames rule). While stats
+/// load, the local snapshot identity shows immediately; an owner who hasn't
 /// published renders a "hasn't shared their stats yet" state, not an error.
 struct FriendProfileView: View {
 
@@ -86,12 +88,18 @@ struct FriendProfileView: View {
                             noStatsCard
                         }
 
-                        // "You vs. them" — inline, below the profile content.
-                        // Only appears once the friend's stats are loaded
-                        // (canCompare gates on that); collapses on toggle.
-                        comparisonSection
+                        // NAV-1a: friend mode keeps the friend-only sections;
+                        // stranger mode shows Add Friend in the same slot.
+                        if viewModel.isFriend {
+                            // "You vs. them" — inline, below the profile content.
+                            // Only appears once the friend's stats are loaded
+                            // (canCompare gates on that); collapses on toggle.
+                            comparisonSection
 
-                        removeFriendSection
+                            removeFriendSection
+                        } else {
+                            addFriendSection
+                        }
                     }
                     .padding(DesignSystem.Spacing.lg)
                 }
@@ -556,6 +564,55 @@ struct FriendProfileView: View {
         .padding(.top, DesignSystem.Spacing.sm)
     }
 
+    // MARK: - Add Friend (NAV-1a)
+
+    /// Stranger-mode action, in the slot friend mode gives to Remove Friend.
+    /// Hidden for guests (mirrors the VM guard). State is driven entirely by
+    /// `relationship`; the title change is the only in-flight affordance — no
+    /// spinner (so `isDisabled`, never `isLoading`, dims the button).
+    @ViewBuilder
+    private var addFriendSection: some View {
+        if !viewModel.isGuest {
+            VStack(spacing: DesignSystem.Spacing.sm) {
+                if let error = viewModel.addFriendError {
+                    compareErrorRow(error)
+                }
+
+                switch viewModel.relationship {
+                case .none:
+                    AppButton(
+                        title: viewModel.isAddingFriend ? "Sending…" : "Add Friend",
+                        style: .primary,
+                        action: {
+                            Task { await viewModel.addFriend() }
+                        },
+                        isDisabled: viewModel.isAddingFriend
+                    )
+
+                case .outgoingPending:
+                    AppButton(
+                        title: "Request Sent",
+                        style: .primary,
+                        action: {},
+                        isDisabled: true
+                    )
+
+                case .incomingPending:
+                    Text("They've sent you a friend request — respond from your Friends list.")
+                        .font(AppFont.regular(13))
+                        .foregroundColor(tc.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+
+                case .friends:
+                    // Unreachable — friend mode renders removeFriendSection instead.
+                    EmptyView()
+                }
+            }
+            .padding(.top, DesignSystem.Spacing.sm)
+        }
+    }
+
     // MARK: - Colors
 
     private func rankColor(_ rank: String) -> Color {
@@ -567,7 +624,7 @@ struct FriendProfileView: View {
         case Rank.platinum.rawValue: return Color(hex: "#5EEAD4")
         case Rank.diamond.rawValue: return Color(hex: "#38BDF8")
         case Rank.sentinel.rawValue, Rank.prismatic.rawValue, Rank.zenith.rawValue:
-            return Color(hex: "#38BDF8") // TODO: replace placeholder styling before public launch
+            return DesignSystem.Erewhon.rankPrismatic // NAV-1a: the ladder's one-colour-per-rank stand-in (matches RankPlaque)
         case "bronze": return Color(hex: "#CD7F32") // retired pre-RR-0a legacy string
         case "silver": return Color(hex: "#9CA3AF") // retired pre-RR-0a legacy string
         default: return tc.textTertiary
