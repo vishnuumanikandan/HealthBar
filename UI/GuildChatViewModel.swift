@@ -38,8 +38,13 @@ final class GuildChatViewModel {
     var input: String = ""
     var isSending: Bool = false
 
-    /// Transient error surfaced under the input (send/delete failures).
+    /// Transient error surfaced under the input (send/delete/report/block failures).
     var banner: String? = nil
+
+    /// UGC-1c: set true after a successful report; the view presents the 1b-mirrored
+    /// "Report submitted" confirmation, then resets it. Report has no pre-submit dialog
+    /// (mirrors FriendProfileView, where Report fires directly and only Block confirms).
+    var reportConfirmation: Bool = false
 
     /// Set when the listener hits a terminal error (kicked / left / disbanded
     /// while open) → the view shows a notice and pops.
@@ -133,6 +138,46 @@ final class GuildChatViewModel {
         }
     }
 
+    /// UGC-1c: report this message (contextType `.chatMessage`). Mirrors
+    /// FriendProfileViewModel.report — DataManager owns the deterministic
+    /// `{myUid}_msg_{msgId}` id and the snapshot cap, and folds a duplicate report
+    /// (permission-denied on the create-only doc) into silent success, so a normal
+    /// return is the success case with no special handling here. `id != nil` is
+    /// defense-in-depth: own (in-flight, id-nil) messages never expose Report.
+    func report(_ message: GuildMessageDTO) async {
+        guard !isOwnMessage(message) else { return }
+        guard let msgId = message.id else { return }
+        banner = nil
+        do {
+            try await coordinator.submitReport(
+                context: .chatMessage,
+                reportedUid: message.senderUid,
+                contentSnapshot: message.text,
+                guildCode: code,
+                messageId: msgId
+            )
+            reportConfirmation = true
+        } catch {
+            banner = friendlyMessage(for: error)
+        }
+    }
+
+    /// UGC-1c: block this message's sender. The UGC-1a side-effect order lives inside
+    /// DataManager (unfriend, cancel requests/duels, record block) — never reimplemented
+    /// here. Blocking does NOT touch guild membership (one-way visibility: I stop seeing
+    /// them; they stay in the guild and still see me).
+    func block(_ message: GuildMessageDTO) async {
+        guard !isOwnMessage(message) else { return }
+        banner = nil
+        do {
+            try await coordinator.blockUser(message.senderUid)
+            // UGC-1c: immediate local UX; the UGC-1b listener closure filters all future snapshot events + history reloads.
+            messages.removeAll { $0.senderUid == message.senderUid }
+        } catch {
+            banner = friendlyMessage(for: error)
+        }
+    }
+
     // MARK: - Helpers
 
     func isOwnMessage(_ message: GuildMessageDTO) -> Bool {
@@ -151,6 +196,11 @@ final class GuildChatViewModel {
         }
         if let guildError = error as? GuildError {
             return guildError.errorDescription ?? "Something went wrong."
+        }
+        // UGC-1c: report/block failures throw BlockError; surface its own copy rather
+        // than letting the fallthrough re-wrap it as a "Couldn't send…" chat error.
+        if let blockError = error as? BlockError {
+            return blockError.errorDescription ?? "Something went wrong."
         }
         return GuildChatError.network(error.localizedDescription).errorDescription ?? "Something went wrong."
     }
