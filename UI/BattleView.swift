@@ -425,7 +425,7 @@ struct BattleView: View {
     /// renders the BattleView-owned `GlobalLeaderboardViewModel`. R4c removed the "View all"
     /// footer; the full-screen board is retired now that the ladder lives inline.
     private var standingsBlock: some View {
-        BattleStandingsBlock(viewModel: leaderboardVM, myUid: authService.currentUserEmail ?? "")
+        BattleStandingsBlock(viewModel: leaderboardVM, myUid: authService.currentUserEmail ?? "", coordinator: coordinator)
     }
 
     // MARK: - Matchup preview card (D2)
@@ -1045,8 +1045,14 @@ private struct BattleStandingsBlock: View {
     let viewModel: GlobalLeaderboardViewModel
     let myUid: String
 
+    /// Retained to build the FriendProfileView sheet (NAV-1b).
+    let coordinator: AppCoordinator
+
     @State private var settings = SettingsManager.shared
     private var tc: ThemeColors { settings.activeColors }
+
+    /// Standing whose read-only profile sheet is open (NAV-1b).
+    @State private var profileStanding: Standing? = nil
 
     /// One rendered standing: the projection, its rank-chip position (nil → "—"), and whether it's me.
     private struct Standing: Identifiable {
@@ -1078,6 +1084,18 @@ private struct BattleStandingsBlock: View {
             rowsContent
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // NAV-1b: tap a non-self standing → read-only profile sheet.
+        .sheet(item: $profileStanding) { standing in
+            if let uid = standing.dto.id {
+                FriendProfileView(
+                    coordinator: coordinator,
+                    friendUid: uid,
+                    username: standing.dto.username,
+                    displayName: standing.dto.displayName,
+                    onRemoved: { Task { await viewModel.refresh() } }
+                )
+            }
+        }
     }
 
     // MARK: sec-head
@@ -1160,7 +1178,24 @@ private struct BattleStandingsBlock: View {
         }
     }
 
+    /// NAV-1b: non-self rows carrying a real uid open the read-only profile sheet;
+    /// my appended row and any id-less row stay inert.
+    @ViewBuilder
     private func standingRow(_ s: Standing, isLast: Bool) -> some View {
+        if !s.isMe, s.dto.id != nil {
+            Button {
+                guard s.dto.id != nil else { return }
+                profileStanding = s
+            } label: {
+                standingRowContent(s, isLast: isLast)
+            }
+            .buttonStyle(PlainButtonStyle())
+        } else {
+            standingRowContent(s, isLast: isLast)
+        }
+    }
+
+    private func standingRowContent(_ s: Standing, isLast: Bool) -> some View {
         // R7c §1: the shared standings pieces (this block's copies were their duplicates). A row
         // with no position — my appended row on the wins/streak boards, which have no position
         // API — is the canonical no-data chip.

@@ -192,7 +192,7 @@ struct GuildChatView: View {
             if isOwn { Spacer(minLength: DesignSystem.Spacing.xl) }
 
             VStack(alignment: isOwn ? .trailing : .leading, spacing: 2) {
-                // Sender line (others only). Tappable to a profile if a friend.
+                // Sender line (others only). NAV-1b: tappable to their read-only profile.
                 if !isOwn {
                     senderLabel(message)
                 }
@@ -248,6 +248,8 @@ struct GuildChatView: View {
     @ViewBuilder
     private func senderLabel(_ message: GuildMessageDTO) -> some View {
         let name = message.senderDisplayName.isEmpty ? "@\(message.senderUsername)" : message.senderDisplayName
+        // NAV-1b: every non-own sender is tappable (friend gate repealed); the
+        // secondary-color non-tappable branch is gone.
         if viewModel.canOpenProfile(message) {
             Button {
                 profileSender = message
@@ -257,10 +259,6 @@ struct GuildChatView: View {
                     .foregroundColor(tc.primary)
             }
             .buttonStyle(PlainButtonStyle())
-        } else {
-            Text(name)
-                .font(AppFont.bold(11))
-                .foregroundColor(tc.textSecondary)
         }
     }
 
