@@ -47,6 +47,17 @@ final class ArenaViewModel {
 
     var myLabel: String { "You" }
     var theirLabel: String { duel.opponentLabel(of: myUid) }
+
+    // MARK: - Opponent identity (NAV-1b profile threading)
+
+    /// The other participant's uid — side-aware (I may be challenger or opponent).
+    var theirUid: String { duel.isChallenger(myUid) ? duel.opponentUid : duel.challengerUid }
+    /// Stamped identity snapshots off the DTO (display-only; mirrors `opponentLabel(of:)`).
+    var theirUsername: String { duel.isChallenger(myUid) ? duel.opponentUsername : duel.challengerUsername }
+    var theirDisplayName: String { duel.isChallenger(myUid) ? duel.opponentDisplayName : duel.challengerDisplayName }
+    /// A blocked opponent leaves the head inert — active duels are never touched (UGC-1b).
+    var canOpenOpponentProfile: Bool { !coordinator.isBlocked(theirUid) }
+
     var myScore: Double { duel.myScore(myUid) }
     var theirScore: Double { duel.theirScore(myUid) }
     var myScoreText: String { "\(Int(myScore.rounded()))" }

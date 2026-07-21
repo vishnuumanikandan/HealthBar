@@ -62,6 +62,10 @@ struct ChallengeSheet: View {
     @State private var isSending = false
     @State private var inlineError: String?
 
+    /// NAV-1b: candidate whose read-only profile sheet is open (long-press "View
+    /// Profile"). Independent of `selectedOpponent` — viewing never changes selection.
+    @State private var profilePerson: DuelOpponentCandidate?
+
     private enum SearchPhase: Equatable { case idle, searching, result, noMatch }
 
     init(coordinator: AppCoordinator, preselected: DuelOpponentCandidate? = nil, onSent: @escaping () -> Void = {}) {
@@ -132,6 +136,17 @@ struct ChallengeSheet: View {
             // Cancel any in-flight page load / search so no stale write lands after dismissal.
             searchTask?.cancel()
             loadMoreTask?.cancel()
+        }
+        // NAV-1b: long-press "View Profile" → read-only profile sheet, stacked above the
+        // lobby. Selection state is untouched; a block drops the person on return via loadPeople.
+        .sheet(item: $profilePerson) { person in
+            FriendProfileView(
+                coordinator: coordinator,
+                friendUid: person.uid,
+                username: person.username,
+                displayName: person.displayName,
+                onRemoved: { Task { await loadPeople() } }
+            )
         }
     }
 
@@ -258,6 +273,14 @@ struct ChallengeSheet: View {
             }
         }
         .buttonStyle(.plain)
+        // NAV-1b: long-press to view the profile; tap still selects.
+        .contextMenu {
+            Button {
+                profilePerson = person
+            } label: {
+                Label("View Profile", systemImage: "person.crop.circle")
+            }
+        }
     }
 
     // MARK: - NEARBY RANKS stream
@@ -362,6 +385,14 @@ struct ChallengeSheet: View {
                           isSelected: isSelected)
         }
         .buttonStyle(.plain)
+        // NAV-1b: long-press to view the profile; tap still selects.
+        .contextMenu {
+            Button {
+                profilePerson = person
+            } label: {
+                Label("View Profile", systemImage: "person.crop.circle")
+            }
+        }
     }
 
     /// `+N vs you` / `−N vs you` / `even` (N = rr − myRR). Positive → secondary; negative or

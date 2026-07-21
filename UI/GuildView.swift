@@ -513,7 +513,8 @@ struct GuildDetailView: View {
                 coordinator: coordinator,
                 friendUid: member.id,
                 username: member.username,
-                displayName: member.displayName
+                displayName: member.displayName,
+                onRemoved: { Task { await viewModel.load() } }
             )
         }
         .sheet(isPresented: $showingEdit) {
@@ -776,7 +777,8 @@ struct GuildDetailView: View {
     }
 
     private func memberRow(_ member: GuildViewModel.MemberRow) -> some View {
-        let tappable = member.isFriend && !member.isMe
+        // NAV-1b: every non-self guild-mate opens their profile, friend or not.
+        let tappable = !member.isMe
         let canKick = viewModel.isOwner && !member.isMe && !member.isOwnerRole
         return Button {
             if tappable { profileMember = member }

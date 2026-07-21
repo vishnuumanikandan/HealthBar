@@ -50,9 +50,6 @@ final class GuildChatViewModel {
     /// while open) → the view shows a notice and pops.
     var wasEjected: Bool = false
 
-    /// Friend uids (resolved once on start) — drives the friend-only sender tap.
-    private var friendUids: Set<String> = []
-
     /// L3: set by stop(); guards the post-await listener registration in start() so a stop()
     /// that races an in-flight start() can't leave an orphan listener (this VM's guild-chat
     /// listener is deliberately outside the global registry, so stopAllListeners never reaps it).
@@ -69,13 +66,12 @@ final class GuildChatViewModel {
 
     // MARK: - Lifecycle
 
-    /// Resolve friends once, then start the live listener. Call from the view's `.task`.
+    /// Start the live listener. Call from the view's `.task`.
     func start() async {
         isStopped = false
-        friendUids = Set(((try? await coordinator.fetchFriends()) ?? []).map { $0.friendUid })
-        // L3: if the view disappeared during the friends fetch, stop() already ran — don't
-        // register an orphan listener. Check both the flag and Task cancellation (.task cancels on
-        // disappear, but cancellation alone doesn't stop these post-await lines from running).
+        // L3: if the view disappeared already, stop() may have run first — don't register an
+        // orphan listener. Check both the flag and Task cancellation (.task cancels on disappear;
+        // cancellation alone doesn't stop these lines from running).
         guard !isStopped, !Task.isCancelled else { return }
         // The closures hop to the main actor before touching @MainActor state. The
         // service already dispatches on main, so this is a (harmless) double-hop
@@ -184,10 +180,11 @@ final class GuildChatViewModel {
         message.senderUid == myUid
     }
 
-    /// True when this sender is a friend (and not me) — only then is the row
-    /// tappable to a profile, consistent with G1/G2.
+    /// NAV-1b: any non-own sender is tappable to their read-only profile (the friend
+    /// gate is repealed). Blocked senders never appear in the stream (UGC-1b), so no
+    /// block check is needed here.
     func canOpenProfile(_ message: GuildMessageDTO) -> Bool {
-        message.senderUid != myUid && friendUids.contains(message.senderUid)
+        message.senderUid != myUid
     }
 
     private func friendlyMessage(for error: Error) -> String {

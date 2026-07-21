@@ -52,6 +52,9 @@ struct FriendsView: View {
     /// Friend whose read-only profile sheet is open (Friend System Phase 4).
     @State private var profileFriend: FriendsViewModel.FriendRow? = nil
 
+    /// NAV-1b: incoming-request sender whose read-only profile sheet is open.
+    @State private var profileRequest: FriendsViewModel.RequestRow? = nil
+
     /// UGC-1b: directory user pending a block — drives the confirm dialog.
     @State private var directoryUserToBlock: FriendsViewModel.DirectoryRow? = nil
 
@@ -420,12 +423,31 @@ struct FriendsView: View {
                 }
             }
         }
+        // NAV-1b: profile sheet for an incoming-request sender. Attached to the
+        // requests container (not the friends-list node). A block auto-declines the
+        // pending request, so `load()` drops the row on return.
+        .sheet(item: $profileRequest) { request in
+            FriendProfileView(
+                coordinator: coordinator,
+                friendUid: request.id,
+                username: request.username,
+                displayName: request.displayName ?? "",
+                onRemoved: { Task { await viewModel.load() } }
+            )
+        }
     }
 
     private func incomingRequestRow(_ request: FriendsViewModel.RequestRow) -> some View {
         let isBusy = viewModel.pendingActionUids.contains(request.id)
         return HStack(spacing: DesignSystem.Spacing.md) {
-            identityLabel(displayName: request.displayName ?? "", username: request.username)
+            // NAV-1b: tap the sender's identity to open their read-only profile.
+            // Only the label is a Button — Accept/Decline stay independent siblings.
+            Button {
+                profileRequest = request
+            } label: {
+                identityLabel(displayName: request.displayName ?? "", username: request.username)
+            }
+            .buttonStyle(PlainButtonStyle())
 
             Spacer()
 

@@ -13,14 +13,19 @@ import SwiftUI
 struct ArenaView: View {
 
     @State private var viewModel: ArenaViewModel
+    /// Retained to build the FriendProfileView sheet (NAV-1b).
+    private let coordinator: AppCoordinator
     @State private var settings = SettingsManager.shared
     private var tc: ThemeColors { settings.activeColors }
 
     @State private var showForfeitConfirm = false
     @State private var endgamePulse = false
+    /// NAV-1b: opponent's read-only profile sheet presentation flag.
+    @State private var showOpponentProfile = false
 
     init(coordinator: AppCoordinator, myUid: String, duel: DuelDTO) {
         self._viewModel = State(initialValue: ArenaViewModel(coordinator: coordinator, myUid: myUid, duel: duel))
+        self.coordinator = coordinator
     }
 
     var body: some View {
@@ -62,6 +67,18 @@ struct ArenaView: View {
             guard message != nil else { return }
             Task { try? await Task.sleep(for: .seconds(3)); viewModel.toastMessage = nil }
         }
+        // NAV-1b: opponent head → read-only profile. Active duels are never touched by a
+        // block (onRemoved is a no-op); on return the head re-evaluates and goes inert if
+        // the opponent was just blocked.
+        .sheet(isPresented: $showOpponentProfile) {
+            FriendProfileView(
+                coordinator: coordinator,
+                friendUid: viewModel.theirUid,
+                username: viewModel.theirUsername,
+                displayName: viewModel.theirDisplayName,
+                onRemoved: {}
+            )
+        }
     }
 
     // MARK: - Header + scores
@@ -72,8 +89,26 @@ struct ArenaView: View {
         HStack(alignment: .center, spacing: 0) {
             fighterColumn(initial: "Y", isMe: true, name: nil, subline: leagueSubline)
             vsMid
-            fighterColumn(initial: initial(for: viewModel.theirLabel), isMe: false,
-                          name: viewModel.theirLabel, subline: leagueSubline)
+            opponentColumn
+        }
+    }
+
+    /// The opponent fighter column. NAV-1b: tappable to their read-only profile unless
+    /// they're blocked — in which case it renders exactly as today, just inert (no disabled
+    /// styling, no hint; visually indistinguishable). My own column is never tappable.
+    @ViewBuilder
+    private var opponentColumn: some View {
+        let column = fighterColumn(initial: initial(for: viewModel.theirLabel), isMe: false,
+                                   name: viewModel.theirLabel, subline: leagueSubline)
+        if viewModel.canOpenOpponentProfile {
+            Button {
+                showOpponentProfile = true
+            } label: {
+                column
+            }
+            .buttonStyle(PlainButtonStyle())
+        } else {
+            column
         }
     }
 

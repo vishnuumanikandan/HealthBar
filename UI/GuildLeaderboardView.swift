@@ -11,8 +11,8 @@ import SwiftUI
 /// a selectable metric (Adherence / XP / Level). Pushed from GuildDetailView.
 ///
 /// Reuses the friend-leaderboard `LeaderboardEntry`; the metric toggle re-sorts
-/// in memory (no refetch). Friend guild-mates open their profile; non-friend
-/// guild-mates are inline-only (consistent with the G1 roster rule).
+/// in memory (no refetch). NAV-1b: every non-self guild-mate opens their read-only
+/// profile, friend or not; only the current-user row is inline-only.
 struct GuildLeaderboardView: View {
 
     // MARK: - Properties
@@ -81,7 +81,8 @@ struct GuildLeaderboardView: View {
                 coordinator: coordinator,
                 friendUid: entry.uid,
                 username: entry.username,
-                displayName: entry.displayName
+                displayName: entry.displayName,
+                onRemoved: { Task { await viewModel.refresh() } }
             )
         }
     }
@@ -107,11 +108,11 @@ struct GuildLeaderboardView: View {
         }
     }
 
-    /// Friend rows open the read-only profile sheet; non-friend guild-mates and
-    /// the current-user row are inert (inline-only).
+    /// NAV-1b: every non-self row opens the read-only profile sheet, friend or not;
+    /// only the current-user row is inert (inline-only).
     @ViewBuilder
     private func entryRow(_ entry: LeaderboardEntry, position: Int) -> some View {
-        if entry.isFriend && !entry.isCurrentUser {
+        if !entry.isCurrentUser {
             Button {
                 profileEntry = entry
             } label: {
