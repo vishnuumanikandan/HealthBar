@@ -20,6 +20,48 @@ service cloud.firestore {
                 && a in get(/databases/$(database)/documents/users/$(b)/account/blocklist).data.get('blockedUids', []));
     }
 
+    // GUILD-CAP-1: the guild doc's `memberCount` may change by EXACTLY ±1, and only
+    // inside a batch that also performs the matching membership write. Two named
+    // helpers (beside blockedEither, the established helper precedent) for the
+    // count-only guild-update branch; reviewable in isolation.
+    //
+    // get()/getAfter() on the guild doc read its pre-/post-batch memberCount (the
+    // doc is updated in THIS batch). exists()/existsAfter() on the actor's OWN
+    // member doc prove the paired self-join (create) or self-leave (delete) is in
+    // the SAME batch. get()/getAfter()/exists() on one doc = one access (the
+    // established reviewer ruling), so these are cheap.
+    function canIncrementMemberCount(guildId) {
+      return getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount
+               == get(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount + 1
+          && getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount <= 40  // KEEP IN SYNC WITH DataManager.maxMembers
+          && (
+               // owner approves a requester (+1 for someone else's new member doc)
+               request.auth.uid == get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid
+               ||
+               // self-join: the caller creates their OWN member doc in this same batch
+               (!exists(/databases/$(database)/documents/guilds/$(guildId)/members/$(request.auth.uid))
+                  && existsAfter(/databases/$(database)/documents/guilds/$(guildId)/members/$(request.auth.uid)))
+             );
+    }
+
+    // KNOWN LIMITATION: rules cannot pair an arbitrary owner member-delete with this
+    // decrement (the batch's member target is invisible from this doc's context). An
+    // owner can therefore corrupt their OWN guild's counter downward. Self-inflicted,
+    // bounded to their guild, healed by re-running the backfill. Accepted (GUILD-CAP-1).
+    function canDecrementMemberCount(guildId) {
+      return getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount
+               == get(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount - 1
+          && getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount >= 0
+          && (
+               // owner kicks a member (-1)
+               request.auth.uid == get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid
+               ||
+               // self-leave: the caller deletes their OWN member doc in this same batch
+               (exists(/databases/$(database)/documents/guilds/$(guildId)/members/$(request.auth.uid))
+                  && !existsAfter(/databases/$(database)/documents/guilds/$(guildId)/members/$(request.auth.uid)))
+             );
+    }
+
     // Root user document. Owner-only read/write/delete on users/{userId} ITSELF
     // (the account-info root doc + the account-deletion path need it; the recursive
     // wildcard matched it before). This match is NON-recursive: it covers only the
@@ -361,7 +403,8 @@ service cloud.firestore {
 
       // Create: founder creates a guild they own, valid shape, with a 'create'
       // (the rules reject a create over an existing code, giving the client its
-      // collision signal).
+      // collision signal). GUILD-CAP-1: the count is born at exactly 1 (the founder
+      // is the sole member) — explicit presence, not equality-on-a-maybe-missing key.
       allow create: if request.auth != null
                     && request.resource.data.ownerUid == request.auth.uid
                     && request.resource.data.joinPolicy in ['open','request','private']
@@ -369,18 +412,39 @@ service cloud.firestore {
                     && request.resource.data.name.size() >= 1
                     && request.resource.data.name.size() <= 30
                     && (!('description' in request.resource.data) || (request.resource.data.description is string && request.resource.data.description.size() <= 140))
-                    && request.resource.data.keys().hasOnly(['name','ownerUid','joinPolicy','description','createdAt']);
+                    && 'memberCount' in request.resource.data
+                    && request.resource.data.memberCount == 1
+                    && request.resource.data.keys().hasOnly(['name','ownerUid','joinPolicy','description','createdAt','memberCount']);
 
-      // Update: owner only; ownerUid and createdAt are immutable; name/policy/description bounded.
+      // Update — GUILD-CAP-1 split the single owner-settings rule into two branches:
+      //   A) owner edits settings (name/policy/description); the count is provably
+      //      UNTOUCHED (memberCount not among the diff's affected keys).
+      //   B) a membership batch changes ONLY memberCount, by a validated ±1
+      //      (join/approve/leave/kick) — see canIncrement/canDecrementMemberCount.
+      //      The actor need NOT be the owner here (a self-joiner/self-leaver updates
+      //      the count for their own batch); the helpers gate WHO may do WHICH delta.
       allow update: if request.auth != null
-                    && request.auth.uid == resource.data.ownerUid
-                    && request.resource.data.ownerUid == resource.data.ownerUid
-                    && request.resource.data.createdAt == resource.data.createdAt
-                    && request.resource.data.joinPolicy in ['open','request','private']
-                    && request.resource.data.name is string
-                    && request.resource.data.name.size() >= 1
-                    && request.resource.data.name.size() <= 30
-                    && (!('description' in request.resource.data) || (request.resource.data.description is string && request.resource.data.description.size() <= 140));
+                    && (
+                         // A) owner settings update.
+                         (
+                           request.auth.uid == resource.data.ownerUid
+                           && request.resource.data.ownerUid == resource.data.ownerUid
+                           && request.resource.data.createdAt == resource.data.createdAt
+                           && request.resource.data.joinPolicy in ['open','request','private']
+                           && request.resource.data.name is string
+                           && request.resource.data.name.size() >= 1
+                           && request.resource.data.name.size() <= 30
+                           && (!('description' in request.resource.data) || (request.resource.data.description is string && request.resource.data.description.size() <= 140))
+                           && !('memberCount' in request.resource.data.diff(resource.data).affectedKeys())
+                         )
+                         ||
+                         // B) count-only maintenance: exactly memberCount changes, by a
+                         //    validated ±1 (the <= 40 ceiling lives in the helper).
+                         (
+                           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
+                           && (canIncrementMemberCount(guildId) || canDecrementMemberCount(guildId))
+                         )
+                       );
 
       // Delete (disband): owner only.
       allow delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
@@ -405,9 +469,12 @@ service cloud.firestore {
                            //    null and deny the whole batch. getAfter sees the same-batch guild;
                            //    for an EXISTING guild it falls back to current state, so ownerUid
                            //    must still equal the caller (can't claim someone else's guild).
+                           //    GUILD-CAP-1: the SAME getAfter pins the founder-set count to 1
+                           //    (createGuild writes memberCount:1 literally in this same batch).
                            (request.auth.uid == memberUid
                               && request.resource.data.role == 'owner'
-                              && getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid == request.auth.uid)
+                              && getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid == request.auth.uid
+                              && getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount == 1)
                            ||
                            // b) self-join an OPEN or PRIVATE guild as member (and not already in any
                            //    guild). R7d: 'private' is hidden from the directory, NOT harder to
@@ -417,22 +484,45 @@ service cloud.firestore {
                            (request.auth.uid == memberUid
                               && request.resource.data.role == 'member'
                               && get(/databases/$(database)/documents/guilds/$(guildId)).data.joinPolicy in ['open','private']
-                              && !exists(/databases/$(database)/documents/guildMemberships/$(memberUid)))
+                              && !exists(/databases/$(database)/documents/guildMemberships/$(memberUid))
+                              // GUILD-CAP-1: the self-join is invalid without its same-batch +1
+                              // (which the count-only update branch caps at <= 40).
+                              && getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount
+                                   == get(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount + 1)
                            ||
                            // c) owner approves a requester (member doc for someone else, who has a pending request)
                            (request.auth.uid == get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid
                               && memberUid != request.auth.uid
                               && request.resource.data.role == 'member'
-                              && exists(/databases/$(database)/documents/guilds/$(guildId)/joinRequests/$(memberUid)))
+                              && exists(/databases/$(database)/documents/guilds/$(guildId)/joinRequests/$(memberUid))
+                              // GUILD-CAP-1: the approval is invalid without its same-batch +1
+                              // (which the count-only update branch caps at <= 40).
+                              && getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount
+                                   == get(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount + 1)
                          );
 
         allow update: if false;  // no role changes in G1
 
         // Delete: a member leaves (but the owner cannot leave), or the owner kicks / disbands.
+        //
+        // GUILD-CAP-1 carve-out — the paired -1 is REQUIRED only on the self-leave
+        // arm. That is the anti-inflation control: without it a member could
+        // leave-WITHOUT-decrement, then rejoin (+1), ratcheting the count up to the
+        // cap to lock others out. The OWNER arm is deliberately NOT gated on the -1:
+        // kickMember DOES send it, but disbandGuild deletes every member doc through a
+        // SEPARATE, multi-batch teardown (deleteInBatches) that writes no count and
+        // drops the guild doc only afterward — those deletes carry no -1, and the
+        // guild doc still EXISTS during them, so neither an existsAfter guard nor a
+        // -1 requirement can distinguish disband from kick here. Requiring the -1
+        // would therefore break disband. An owner mis-stepping their own count is the
+        // already-accepted owner-tamper limitation (see canDecrementMemberCount),
+        // bounded to their guild and healed by re-running the backfill.
         allow delete: if request.auth != null
                       && (
                            (request.auth.uid == memberUid
-                              && memberUid != get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid)
+                              && memberUid != get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid
+                              && getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount
+                                   == get(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount - 1)
                            || request.auth.uid == get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid
                          );
       }
