@@ -185,10 +185,15 @@ struct ProfileView: View {
                 if authService.isGuest {
                     guestBanner
                 }
-                avatarSection
-                xpProgressSection
+                // D1 section order: Header → RANK → GUILD → STATS → BADGES → GOAL CALENDAR.
+                // Each section (except the header) carries its own leading rule + uppercase
+                // label; guildSection and calendarSection hide themselves entirely when empty.
+                headerSection
+                rankSection
+                guildSection
                 statsSection
                 badgesSection
+                calendarSection
             }
             .padding(DesignSystem.Spacing.lg)
         }
@@ -221,9 +226,12 @@ struct ProfileView: View {
         .adaptiveCard(borderColor: tc.macroBarCarbs, fillColor: tc.cardBackground)
     }
 
-    // MARK: - Avatar Section
+    // MARK: - Header Section
 
-    private var avatarSection: some View {
+    /// Identity header: avatar, displayName, @username (username row stays hidden for guests,
+    /// as today). D2 removed the rank pill and its `crown.fill` from the header — the Rank
+    /// Journey card is now rank's single home.
+    private var headerSection: some View {
         VStack(spacing: DesignSystem.Spacing.md) {
             // Avatar — pixel-bordered square portrait
             ZStack {
@@ -246,38 +254,194 @@ struct ProfileView: View {
                     .font(AppFont.regular(14))
                     .foregroundColor(tc.textSecondary)
             }
-
-            // Rank badge
-            HStack(spacing: DesignSystem.Spacing.xs) {
-                Image(systemName: "crown.fill")
-                    .font(AppFont.bold(14))
-                    .foregroundColor(tc.primary)
-
-                Text(viewModel.currentRankDisplay)
-                    .font(AppFont.regular(14))
-                    .foregroundColor(tc.textSecondary)
-            }
-            .padding(.horizontal, DesignSystem.Spacing.md)
-            .padding(.vertical, DesignSystem.Spacing.sm)
-            .adaptivePill(borderColor: tc.primary, fillColor: tc.primary.opacity(0.15), isSelected: true)  // R6c: preserved implicit-selection (review intent later)
         }
         .padding(.vertical, DesignSystem.Spacing.md)
     }
 
-    // MARK: - Stats Section
+    // MARK: - Section Chrome (D1)
 
+    /// D1: a bold 3pt rounded separator between sections, full content width. Token-colored —
+    /// D8 permits this small primitive (and the calendar cells) outside adaptiveCard.
+    private var sectionRule: some View {
+        RoundedRectangle(cornerRadius: 1.5)
+            .fill(tc.textTertiary.opacity(0.2))
+            .frame(height: 3)
+            .frame(maxWidth: .infinity)
+    }
+
+    /// D1: uppercase section label, styled with an existing secondary text token.
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(AppFont.bold(13))
+            .tracking(0.8)
+            .textCase(.uppercase)
+            .foregroundColor(tc.textSecondary)
+    }
+
+    // MARK: - Rank Section (D3 + D4)
+
+    /// RANK section: the Rank Journey card and the slim level strip.
+    private var rankSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+            sectionRule
+            sectionLabel("Rank")
+            rankJourneyCard
+            levelStrip
+        }
+    }
+
+    /// D3 Rank Journey card — driven purely by `userProgress.rr` via Rank.swift's API. Renders
+    /// only once progress is loaded (no invented default RR, no force-unwrap); before load the
+    /// region participates in the page's loading state.
+    @ViewBuilder
+    private var rankJourneyCard: some View {
+        if let journey = viewModel.rankJourney {
+            // rankMetal returns nil for Stone (and nil rr); FriendProfileView.rankColor is the
+            // canonical per-rank switch, but D8 forbids new hex here, so fall back to the neutral
+            // textTertiary token (the established `?? tc.textTertiary` FriendsView pattern).
+            let accent = DesignSystem.Erewhon.rankMetal(forRR: journey.rr) ?? tc.textTertiary
+            VStack(spacing: DesignSystem.Spacing.md) {
+                HStack(spacing: DesignSystem.Spacing.md) {
+                    RankPlaque(rank: journey.rank, size: 48)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(journey.tierTitle)
+                            .font(AppFont.bold(22))
+                            .foregroundColor(tc.textPrimary)
+                        Text(journey.subline)
+                            .font(AppFont.regular(13))
+                            .foregroundColor(tc.textSecondary)
+                            .monospacedDigit()
+                    }
+
+                    Spacer()
+                }
+
+                if journey.isPeak {
+                    // Peak state: bar + caption replaced by a single line (D3).
+                    Text("Peak of the ladder")
+                        .font(AppFont.bold(14))
+                        .foregroundColor(accent)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    // Progress bar: fill = (rr − currentTierFloor) / Rank.rrPerTier, clamped 0…1.
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            AdaptivePillShapeStyle()
+                                .fill(accent.opacity(0.18))
+                            AdaptivePillShapeStyle()
+                                .fill(accent)
+                                .frame(width: max(0, geo.size.width * journey.fill))
+                        }
+                    }
+                    .frame(height: 8)
+
+                    // Caption: left = current tier name; right = "<remaining> RR to <next>"
+                    // (ascending — next tier in-rank, or the next rank's tier 1 at tier 3).
+                    HStack {
+                        Text(journey.tierTitle)
+                        Spacer()
+                        Text(journey.captionRight)
+                    }
+                    .font(AppFont.regular(12))
+                    .foregroundColor(tc.textSecondary)
+                    .monospacedDigit()
+                }
+            }
+            .padding(DesignSystem.Spacing.md)
+            .adaptiveCard(borderColor: accent.opacity(0.4), fillColor: tc.cardBackground)
+        }
+    }
+
+    /// D4 level strip — the existing XP-progress data restyled into a slim card. One row
+    /// "Level N · x / 100 XP · Level N+1 →" over a thin bar (existing gradient tokens).
+    private var levelStrip: some View {
+        VStack(spacing: DesignSystem.Spacing.sm) {
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                Text("Level \(viewModel.currentLevel)")
+                    .font(AppFont.bold(13))
+                    .foregroundColor(tc.textPrimary)
+                Text("·")
+                    .font(AppFont.regular(13))
+                    .foregroundColor(tc.textTertiary)
+                Text("\(viewModel.xpWithinLevel) / 100 XP")
+                    .font(AppFont.regular(13))
+                    .foregroundColor(tc.textSecondary)
+                    .monospacedDigit()
+                Spacer()
+                Text("Level \(viewModel.nextLevel) →")
+                    .font(AppFont.regular(13))
+                    .foregroundColor(tc.textTertiary)
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    AdaptivePillShapeStyle()
+                        .fill(tc.primary.opacity(0.3))
+                    AdaptivePillShapeStyle()
+                        .fill(DesignSystem.Colors.adaptiveGradient(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark))
+                        .frame(width: max(0, geo.size.width * viewModel.levelProgress))
+                }
+            }
+            .frame(height: 6)
+        }
+        .padding(DesignSystem.Spacing.md)
+        .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
+    }
+
+    // MARK: - Guild Section (D6)
+
+    /// GUILD section — display-only guild row. Hidden ENTIRELY (rule + label + row) when the
+    /// user has no guild, when the fetch failed, or for guests (all collapse `loadedGuild` to nil).
+    @ViewBuilder
+    private var guildSection: some View {
+        if let guild = viewModel.loadedGuild {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                sectionRule
+                sectionLabel("Guild")
+                HStack(spacing: DesignSystem.Spacing.md) {
+                    Image(systemName: "shield.fill")
+                        .font(AppFont.bold(20))
+                        .foregroundColor(tc.primary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(guild.name)
+                            .font(AppFont.bold(16))
+                            .foregroundColor(tc.textPrimary)
+                        Text("Guild")
+                            .font(AppFont.regular(12))
+                            .foregroundColor(tc.textSecondary)
+                    }
+                    Spacer()
+                }
+                // TODO-guild-row-tap: GUILD-UI-1 — display-only, no tap action this prompt.
+                .padding(DesignSystem.Spacing.md)
+                .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
+            }
+        }
+    }
+
+    // MARK: - Stats Section (D5)
+
+    /// STATS section — a 2×2 grid: Meals Logged, Total XP, Longest Streak, Duel Record.
+    /// (Current Streak headlines Home; Level lives in the strip — both were removed here.) The
+    /// Duel cell is omitted for guests (D9), leaving a 3-cell grid.
     private var statsSection: some View {
-        VStack(spacing: DesignSystem.Spacing.md) {
-            Text("Stats")
-                .font(AppFont.bold(22))
-                .foregroundColor(tc.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+            sectionRule
+            sectionLabel("Stats")
 
-            // Stats grid - 2 columns
             LazyVGrid(columns: [
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: DesignSystem.Spacing.md) {
+                // Meals Logged (F1a) — nil (load failure) renders "—".
+                pixelStatCell(
+                    icon: "fork.knife",
+                    title: "Meals Logged",
+                    value: viewModel.mealsLogged.map { "\($0)" } ?? "—",
+                    iconColor: tc.primary
+                )
+
                 // Total XP
                 pixelStatCell(
                     icon: "star.fill",
@@ -286,33 +450,56 @@ struct ProfileView: View {
                     iconColor: tc.primary
                 )
 
-                // Current Level
+                // Longest Streak — "—" if progress is unavailable.
                 pixelStatCell(
-                    icon: "chart.line.uptrend.xyaxis",
-                    title: "Level",
-                    value: "\(viewModel.currentLevel)",
-                    iconColor: tc.primary
+                    icon: "flame.fill",
+                    title: "Longest Streak",
+                    value: viewModel.userProgress.map { "\($0.longestStreak) day\($0.longestStreak == 1 ? "" : "s")" } ?? "—",
+                    iconColor: tc.macroBarFat
                 )
 
-                // Current Streak
-                if let progress = viewModel.userProgress {
-                    pixelStatCell(
-                        icon: "flame.fill",
-                        title: "Current Streak",
-                        value: "\(progress.currentStreak) day\(progress.currentStreak == 1 ? "" : "s")",
-                        iconColor: tc.macroBarCarbs
-                    )
-
-                    // Longest Streak
-                    pixelStatCell(
-                        icon: "flame.fill",
-                        title: "Longest Streak",
-                        value: "\(progress.longestStreak) day\(progress.longestStreak == 1 ? "" : "s")",
-                        iconColor: tc.macroBarFat
-                    )
+                // Duel Record — guest-hidden (D9).
+                if !authService.isGuest {
+                    duelRecordCell
                 }
             }
         }
+    }
+
+    /// D5 Duel Record cell: wins–losses, wins green / losses red, en-dash separator. Both
+    /// counters exist locally (`UserProgress.duelWins` / `.duelLosses` — the publishMyStats
+    /// source), so this is always a W–L cell; wins nil (progress unavailable) → "—".
+    @ViewBuilder
+    private var duelRecordCell: some View {
+        VStack(spacing: DesignSystem.Spacing.sm) {
+            Image(systemName: "trophy.fill")
+                .font(AppFont.bold(20))
+                .foregroundColor(tc.primary)
+
+            if let wins = viewModel.duelWins, let losses = viewModel.duelLosses {
+                HStack(spacing: 2) {
+                    Text("\(wins)")
+                        .foregroundColor(DesignSystem.Colors.growth)
+                    Text("–")
+                        .foregroundColor(tc.textTertiary)
+                    Text("\(losses)")
+                        .foregroundColor(DesignSystem.Colors.danger)
+                }
+                .font(AppFont.bold(20))
+                .monospacedDigit()
+            } else {
+                Text("—")
+                    .font(AppFont.bold(20))
+                    .foregroundColor(tc.textPrimary)
+            }
+
+            Text("Duel Record")
+                .font(AppFont.regular(12))
+                .foregroundColor(tc.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(DesignSystem.Spacing.md)
+        .adaptiveCard(borderColor: tc.primary.opacity(0.6), fillColor: tc.cardBackground)
     }
 
     /// Pixel-styled stat cell for the stats grid
@@ -340,42 +527,22 @@ struct ProfileView: View {
         .adaptiveCard(borderColor: iconColor.opacity(0.6), fillColor: tc.cardBackground)
     }
 
-    // MARK: - XP Progress Section
+    // MARK: - Badges Section (D2)
 
-    private var xpProgressSection: some View {
-        VStack(spacing: DesignSystem.Spacing.sm) {
-            HStack {
-                Text("\(viewModel.xpWithinLevel) XP")
-                Spacer()
-                Text("Level \(viewModel.nextLevel)")
-                Spacer()
-                Text("\(viewModel.xpToNextLevel) to next")
-            }
-            .font(AppFont.regular(12))
-            .foregroundColor(tc.textSecondary)
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    AdaptivePillShapeStyle()
-                        .fill(tc.primary.opacity(0.3))
-                    AdaptivePillShapeStyle()
-                        .fill(DesignSystem.Colors.adaptiveGradient(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark))
-                        .frame(width: max(0, geo.size.width * viewModel.levelProgress))
-                }
-            }
-            .frame(height: 8)
-        }
-        .padding(.horizontal, DesignSystem.Spacing.xs)
-    }
-
-    // MARK: - Badges Section
-
+    /// BADGES section — the badge grid, unchanged except a FriendProfileView-style gold
+    /// earned/total counter in the section header. Own page counts from `badgeProgressList`
+    /// (NOT publishedBadgeCount — that is the friend-view concept).
     private var badgesSection: some View {
-        VStack(spacing: DesignSystem.Spacing.md) {
-            Text("Badges")
-                .font(AppFont.bold(22))
-                .foregroundColor(tc.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+            sectionRule
+            HStack {
+                sectionLabel("Badges")
+                Spacer()
+                Text("\(viewModel.earnedBadgeCount)/\(viewModel.totalBadgeCount)")
+                    .font(AppFont.bold(13))
+                    .foregroundColor(DesignSystem.Colors.goldMid)
+                    .monospacedDigit()
+            }
 
             LazyVGrid(columns: [
                 GridItem(.flexible()),
@@ -408,6 +575,101 @@ struct ProfileView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Goal Calendar Section (D7)
+
+    /// GOAL CALENDAR section — current month only (`// TODO-calendar-month-nav` — not built).
+    /// Hidden entirely when the calendar load failed (`calendarDays == nil`, D10). Every day
+    /// state is prebuilt in the VM; the view maps them 1:1 with zero per-cell computation.
+    @ViewBuilder
+    private var calendarSection: some View {
+        if let days = viewModel.calendarDays {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                sectionRule
+                sectionLabel("Goal Calendar")
+                calendarCard(days)
+            }
+        }
+    }
+
+    private func calendarCard(_ days: [DayCellState]) -> some View {
+        VStack(spacing: DesignSystem.Spacing.md) {
+            // Header: month + year left, "<n> days hit" right (D7).
+            HStack {
+                Text(viewModel.calendarMonthTitle)
+                    .font(AppFont.bold(16))
+                    .foregroundColor(tc.textPrimary)
+                Spacer()
+                Text("\(viewModel.calendarDaysHit) days hit")
+                    .font(AppFont.regular(12))
+                    .foregroundColor(tc.textSecondary)
+                    .monospacedDigit()
+            }
+
+            // Weekday initials header (ordered from Calendar.current.firstWeekday, not Sunday).
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                ForEach(Array(viewModel.weekdayInitials.enumerated()), id: \.offset) { _, initial in
+                    Text(initial)
+                        .font(AppFont.regular(11))
+                        .foregroundColor(tc.textTertiary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+
+            // 7-column grid: leading blanks align the 1st, then the day cells.
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: DesignSystem.Spacing.xs), count: 7),
+                spacing: DesignSystem.Spacing.xs
+            ) {
+                ForEach(Array(0..<viewModel.calendarLeadingBlanks), id: \.self) { _ in
+                    Color.clear.frame(height: 34)
+                }
+                ForEach(days, id: \.dayNumber) { day in
+                    dayCell(day)
+                }
+            }
+        }
+        .padding(DesignSystem.Spacing.md)
+        .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
+    }
+
+    /// One calendar day cell. met = green fill + on-accent numeral; past-unmet / no-goal =
+    /// muted gray fill; future = dashed faint outline; today = an accent ring over its live
+    /// state. Token-colored RoundedRectangles (a D8-permitted small primitive).
+    private func dayCell(_ day: DayCellState) -> some View {
+        let fill: Color
+        let numeral: Color
+        switch day.state {
+        case .met:
+            fill = tc.primary
+            numeral = DesignSystem.Erewhon.onAccent
+        case .unmet:
+            fill = tc.textTertiary.opacity(0.15)
+            numeral = tc.textSecondary
+        case .future:
+            fill = Color.clear
+            numeral = tc.textTertiary
+        }
+
+        return Text("\(day.dayNumber)")
+            .font(AppFont.regular(12))
+            .foregroundColor(numeral)
+            .monospacedDigit()
+            .frame(maxWidth: .infinity, minHeight: 34)
+            .background(RoundedRectangle(cornerRadius: 8).fill(fill))
+            .overlay {
+                if day.state == .future {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(tc.textTertiary.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [3]))
+                }
+            }
+            .overlay {
+                if day.isToday {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(tc.primary, lineWidth: 2)
+                }
+            }
     }
 
 }
