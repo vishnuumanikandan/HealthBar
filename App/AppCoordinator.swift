@@ -1143,14 +1143,14 @@ final class AppCoordinator {
         await dataManager.duelSlotUsageByLeague()
     }
 
-    // MARK: - Global Leaderboard (D3)
+    // MARK: - Global Leaderboard (D3 / LB-PAGE-1)
 
-    func fetchGlobalLeaderboard(metric: LeaderboardMetric, league: Int) async -> [GlobalLeaderboardDTO] {
-        await dataManager.fetchGlobalLeaderboard(metric: metric, league: league)
+    func fetchGlobalLeaderboardPage(metric: LeaderboardMetric, league: Int, after: LeaderboardCursor?) async -> (rows: [GlobalLeaderboardDTO], fetchedCount: Int, nextCursor: LeaderboardCursor?) {
+        await dataManager.fetchGlobalLeaderboardPage(metric: metric, league: league, after: after)
     }
 
-    func fetchMyLeaderboardRow() async -> (entry: GlobalLeaderboardDTO?, rrPosition: Int?) {
-        await dataManager.fetchMyLeaderboardRow()
+    func fetchMyLeaderboardRow(metric: LeaderboardMetric, league: Int) async -> (entry: GlobalLeaderboardDTO?, position: Int?) {
+        await dataManager.fetchMyLeaderboardRow(metric: metric, league: league)
     }
 
     // MARK: - QTEs (D1d)

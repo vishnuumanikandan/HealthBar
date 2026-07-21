@@ -533,15 +533,17 @@ protocol FirestoreService {
     /// the exact field set; a full overwrite keeps stale keys impossible).
     func upsertLeaderboardEntry(_ entry: GlobalLeaderboardDTO, userId: String) async throws
 
-    /// Top rows for a board: orderBy(field, descending) + limit. Single-field orderBy — no
-    /// composite index.
-    func fetchLeaderboard(orderField: String, limit: Int) async throws -> [GlobalLeaderboardDTO]
+    /// LB-PAGE-1: one server-cursor page of a board. orderBy(field, descending) + documentID()
+    /// tie-break + limit, `start(after: [value, uid])` when a cursor is supplied. Single-field
+    /// orderBy (+ implicit `__name__`) — automatic index, no composite (mirrors `fetchLeaderboardSlice`).
+    func fetchLeaderboardPage(orderField: String, limit: Int, after: LeaderboardCursor?) async throws -> [GlobalLeaderboardDTO]
 
     /// My own row (nil if never published).
     func fetchMyLeaderboardEntry(userId: String) async throws -> GlobalLeaderboardDTO?
 
-    /// RR-board position: count(rr > myRR) + 1 via the count() aggregation.
-    func fetchLeaderboardPosition(myRR: Int) async throws -> Int
+    /// Board position: count(field > myValue) + 1 via the count() aggregation. LB-PAGE-1
+    /// generalized across boards (RR/Wins/Streak) by parameterizing the field.
+    func fetchLeaderboardPosition(orderField: String, myValue: Int) async throws -> Int
 
     /// One directional slice of the leaderboard around an RR value (C1 — RR-proximity stream).
     /// - `.up`:   rr >= fromRR, ordered rr ASC,  then documentID ASC

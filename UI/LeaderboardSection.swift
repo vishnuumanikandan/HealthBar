@@ -10,9 +10,10 @@ import SwiftUI
 /// Embeddable, non-scrolling friend leaderboard (Friend System Phase 5).
 ///
 /// Extracted from the standalone `LeaderboardView` so the ranking can live as
-/// a section inside Home's existing `ScrollView`. Lays out a header plus a
-/// `LazyVStack` of rows — NO `ScrollView`/`List` wrapper — so the whole Home
-/// page scrolls as one.
+/// a section inside Home's existing `ScrollView`. Lays out a header plus the
+/// ranking. LB-PAGE-1 re-houses the ranking rows in a fixed-height, internally
+/// scrolling box (a deliberate nested-scroll exception, annotated at `rankingBox`);
+/// the header and all guest/loading/error/empty cards stay outside it.
 ///
 /// All ranking/fetch logic stays in the injected `LeaderboardViewModel` (owned
 /// by the parent); this view only renders that view model's state and presents
@@ -86,7 +87,7 @@ struct LeaderboardSection: View {
                     inlineError(error)
                 }
                 metricHeader
-                rankingList
+                rankingBox
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -139,10 +140,25 @@ struct LeaderboardSection: View {
 
     // MARK: - Ranking List
 
+    /// LB-PAGE-1: the friend ranking wrapped in the compact, internally-scrolling box (no pager —
+    /// the friend board is fully fetched). The staggered reveal still animates the rows inside it.
+    private var rankingBox: some View {
+        // LB-PAGE-1: deliberate nested-scroll exception (user ruling; Clash-style boxed board). Revisit if it fights the outer scroll. DO NOT replace with outer scrolling.
+        ScrollView {
+            rankingList
+                .padding(.horizontal, 12)
+                .padding(.vertical, 2)
+        }
+        .frame(height: DesignSystem.Metrics.leaderboardBoxHeightCompact)
+        .background(RoundedRectangle(cornerRadius: 16).fill(tc.cardBackground))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(DesignSystem.Erewhon.line, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
     private var rankingList: some View {
-        // LazyVStack, never a nested ScrollView/List: the page scrolls as one. Hairline-separated
-        // ladder rows (D5); the whole board still cascades in once, top rank first — 40ms steps
-        // keep it under half a second even with a full friends list.
+        // A LazyVStack (the box supplies the scroll — LB-PAGE-1). Hairline-separated ladder rows
+        // (D5); the whole board still cascades in once, top rank first — 40ms steps keep it under
+        // half a second even with a full friends list.
         LazyVStack(spacing: 0) {
             ForEach(Array(viewModel.entries.enumerated()), id: \.element.uid) { index, entry in
                 entryRow(entry, position: index + 1, isLast: index == viewModel.entries.count - 1)

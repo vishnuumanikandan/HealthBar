@@ -215,7 +215,7 @@ struct GlobalLeaderboardView: View {
     private var youFooter: some View {
         if let entry = viewModel.myEntry {
             // On the RR board, append my standing (#N) when the count aggregation succeeded.
-            let position: String? = (viewModel.metric == .rr) ? viewModel.myRRPosition.map { "#\($0)" } : nil
+            let position: String? = (viewModel.metric == .rr) ? viewModel.myBoardPosition.map { "#\($0)" } : nil
             HStack(spacing: DesignSystem.Spacing.md) {
                 youCapsule
                 Text(entry.displayName.isEmpty ? "@\(entry.username)" : entry.displayName)

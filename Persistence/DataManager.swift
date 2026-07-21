@@ -4274,30 +4274,54 @@ final class DataManager {
 
     // MARK: - Global Leaderboard (D3)
 
-    /// Fetches a board (top `leaderboardPageSize`) for the given metric/league. Metric/league
-    /// select the orderBy field (RR ignores league). Guest → []; a failed fetch → [] (the VM
-    /// distinguishes a genuine empty board from an error via its own load state).
-    func fetchGlobalLeaderboard(metric: LeaderboardMetric, league: Int) async -> [GlobalLeaderboardDTO] {
-        guard !isGuest else { return [] }
+    /// LB-PAGE-1: one server-cursor page of a board for the given metric/league. Metric/league
+    /// select the orderBy field (RR ignores league). Returns the (blocked-filtered) rows, the RAW
+    /// fetched count (BEFORE the UGC-1b filter — the VM keys exhaustion on this), and the next-page
+    /// cursor. Guest → ([], 0, nil); a failed fetch → ([], 0, nil).
+    func fetchGlobalLeaderboardPage(metric: LeaderboardMetric, league: Int, after: LeaderboardCursor?) async -> (rows: [GlobalLeaderboardDTO], fetchedCount: Int, nextCursor: LeaderboardCursor?) {
+        guard !isGuest else { return ([], 0, nil) }
         let field = LeaderboardMetric.orderField(metric: metric, league: league)
-        // UGC-1b (chokepoint 7): hide blocked players from the Battle standings block. The
-        // leaderboard doc id IS the owner uid, so filter on `id`.
-        return ((try? await firestoreService.fetchLeaderboard(
-            orderField: field, limit: DuelConstants.leaderboardPageSize)) ?? [])
-            .filter { !isBlocked($0.id ?? "") }
+        let fetched = (try? await firestoreService.fetchLeaderboardPage(
+            orderField: field, limit: DuelConstants.leaderboardPageLength, after: after)) ?? []
+        // The next cursor is derived from the RAW (pre-filter) last document's orderField value +
+        // uid — NEVER from the filtered `rows` below, whose last element may have been
+        // blocked-filtered away (deriving from filtered rows would skip or repeat records at the
+        // page boundary). nil when nothing was fetched (empty / exhausted). Cursor math lives here,
+        // immune to filtering — never in the VM.
+        let nextCursor: LeaderboardCursor? = fetched.last.flatMap { last -> LeaderboardCursor? in
+            guard let uid = last.id else { return nil }
+            let value: Int
+            switch metric {
+            case .rr: value = last.rr
+            case .wins: value = last.wins(league: league)
+            case .streak: value = last.streak(league: league)
+            }
+            return LeaderboardCursor(value: value, uid: uid)
+        }
+        // UGC-1b (chokepoint 7): hide blocked players from the paged board — post-fetch/pre-return.
+        // The leaderboard doc id IS the owner uid, so filter on `id`.
+        let rows = fetched.filter { !isBlocked($0.id ?? "") }
+        return (rows, fetched.count, nextCursor)
     }
 
-    /// My own leaderboard row + (RR board only) my standing via the count aggregation. Fail-soft:
-    /// a failed position is nil (footer hides the position line, never the footer). Guest → (nil, nil).
-    func fetchMyLeaderboardRow() async -> (entry: GlobalLeaderboardDTO?, rrPosition: Int?) {
+    /// My own leaderboard row + my standing on the given board via the count aggregation. Fail-soft:
+    /// a failed position is nil (footer hides the position chip, never the footer). Guest → (nil, nil).
+    func fetchMyLeaderboardRow(metric: LeaderboardMetric, league: Int) async -> (entry: GlobalLeaderboardDTO?, position: Int?) {
         guard !isGuest, let userId = currentUserId, !userId.isEmpty else { return (nil, nil) }
         guard let entry = try? await firestoreService.fetchMyLeaderboardEntry(userId: userId) else { return (nil, nil) }
-        // UGC-1b (chokepoint 8, D3): my own row is never filtered. `rrPosition` is a
-        // server-side COUNT aggregation that still counts any blocked players ranked above
-        // me — an accepted, un-corrected skew (a client-side fix would require reading the
-        // very rows we refuse to read). The standings LIST renumbers naturally via
-        // chokepoint 7; only this single server-counted position can drift.
-        let position = try? await firestoreService.fetchLeaderboardPosition(myRR: entry.rr)
+        let field = LeaderboardMetric.orderField(metric: metric, league: league)
+        let myValue: Int
+        switch metric {
+        case .rr: myValue = entry.rr
+        case .wins: myValue = entry.wins(league: league)
+        case .streak: myValue = entry.streak(league: league)
+        }
+        // UGC-1b (chokepoint 8, D3): my own row is never filtered. `position` is a server-side
+        // COUNT aggregation that still counts any blocked players ranked above me — an accepted,
+        // un-corrected skew (a client fix would require reading the very rows we refuse to read).
+        // The standings LIST renumbers naturally via chokepoint 7; only this server-counted
+        // position can drift. LB-PAGE-1 generalized it from RR-only to any board via `field`.
+        let position = try? await firestoreService.fetchLeaderboardPosition(orderField: field, myValue: myValue)
         return (entry, position)
     }
 
