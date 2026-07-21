@@ -1143,7 +1143,11 @@ final class FirestoreServiceImpl: FirestoreService {
             "name": name,
             "ownerUid": ownerUid,
             "joinPolicy": joinPolicy,
-            "createdAt": FieldValue.serverTimestamp()
+            "createdAt": FieldValue.serverTimestamp(),
+            // GUILD-CAP-1: the founder is the first (and only) member at creation.
+            // A LITERAL 1 (not FieldValue.increment) — this guild doc is being
+            // created, and the rules pin the initial count to exactly 1.
+            "memberCount": 1
         ]
         if let description, !description.isEmpty {
             guildData["description"] = description
@@ -1248,6 +1252,11 @@ final class FirestoreServiceImpl: FirestoreService {
             "role": "member",
             "joinedAt": FieldValue.serverTimestamp()
         ], forDocument: guildMembershipDocument(for: uid))
+        // GUILD-CAP-1: bump the guild's member counter atomically in the SAME batch
+        // as the member-doc create. The rules require this pairing (a member create
+        // is invalid without its +1) and enforce the <= 40 ceiling on this update.
+        batch.updateData(["memberCount": FieldValue.increment(Int64(1))],
+                         forDocument: guildDocument(code: code))
         try await commitGuildBatch(batch)
     }
 
@@ -1289,6 +1298,10 @@ final class FirestoreServiceImpl: FirestoreService {
         ], forDocument: guildMembershipDocument(for: request.uid))
         // Consume the request.
         batch.deleteDocument(guildJoinRequests(code: code).document(request.uid))
+        // GUILD-CAP-1: +1 in the SAME batch as the approved member-doc create
+        // (rules-paired; the <= 40 ceiling is enforced on this update).
+        batch.updateData(["memberCount": FieldValue.increment(Int64(1))],
+                         forDocument: guildDocument(code: code))
         try await commitGuildBatch(batch)
     }
 
@@ -1300,6 +1313,10 @@ final class FirestoreServiceImpl: FirestoreService {
         let batch = db.batch()
         batch.deleteDocument(guildMembers(code: code).document(uid))
         batch.deleteDocument(guildMembershipDocument(for: uid))
+        // GUILD-CAP-1: -1 in the SAME batch as the member-doc delete. The rules
+        // require this pairing on a self-leave (the anti-inflation control).
+        batch.updateData(["memberCount": FieldValue.increment(Int64(-1))],
+                         forDocument: guildDocument(code: code))
         try await commitGuildBatch(batch)
     }
 
@@ -1307,6 +1324,10 @@ final class FirestoreServiceImpl: FirestoreService {
         let batch = db.batch()
         batch.deleteDocument(guildMembers(code: code).document(memberUid))
         batch.deleteDocument(guildMembershipDocument(for: memberUid))
+        // GUILD-CAP-1: -1 in the SAME batch as the kicked member-doc delete
+        // (owner-authorised on the count-only update branch).
+        batch.updateData(["memberCount": FieldValue.increment(Int64(-1))],
+                         forDocument: guildDocument(code: code))
         try await commitGuildBatch(batch)
     }
 

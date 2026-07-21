@@ -3236,11 +3236,14 @@ final class DataManager {
 
     // MARK: - Guilds (G1)
 
-    /// Soft member cap. Enforced reliably only where the caller can read the
-    /// roster (the owner, during approval). On open self-join the prospective
-    /// member cannot read the roster by the security rules, so the cap there is a
-    /// best-effort no-op and a rare over-cap race is accepted (per the G1 spec).
-    static let maxMembers = 30
+    /// Hard member cap (GUILD-CAP-1). The real enforcement is the RULES boundary,
+    /// checking every membership batch against the guild doc's `memberCount` field;
+    /// the client checks below are UX only, surfacing `GuildError.full` before the
+    /// write. Open self-join now pre-checks too — the guild doc is get-readable by
+    /// anyone authed, unlike the roster (the old best-effort no-op).
+    ///
+    /// KEEP IN SYNC WITH firestore.rules literal 40
+    static let maxMembers = 40
 
     /// 8-char uppercase code from an unambiguous alphabet (no 0/O/1/I). Created
     /// create-only; collisions are retried in createGuild.
@@ -3383,12 +3386,13 @@ final class DataManager {
         catch { throw GuildError.network(error.localizedDescription) }
         guard let guild = guildOpt, let guildCode = guild.id else { throw GuildError.notFound }
 
-        // Soft cap. Best-effort: the roster read is permitted only for members, so
-        // for an open self-join (the joiner is not yet a member) this read is
-        // typically denied — `try?` then skips the check and the join proceeds.
-        // The cap is enforced reliably in approveRequest, where the owner can read.
-        if let members = try? await firestoreService.fetchGuildMembers(code: guildCode),
-           members.count >= DataManager.maxMembers {
+        // GUILD-CAP-1: cap pre-check now reads the guild doc's `memberCount`
+        // (already fetched above; get-readable by anyone authed — the roster was
+        // NOT, which is why open self-join could never enforce the cap before). A
+        // KNOWN count at/over capacity throws `full`; nil = legacy pre-backfill doc
+        // = UNKNOWN (never 0), so we skip the UX pre-check and let the rules decide.
+        // The rules remain the enforcement boundary; this is UX.
+        if let count = guild.memberCount, count >= DataManager.maxMembers {
             throw GuildError.full
         }
 
@@ -3420,8 +3424,18 @@ final class DataManager {
         guard !isGuest, let me = currentUserId, !me.isEmpty else {
             throw GuildError.network("You must be signed in.")
         }
-        _ = try await requireOwnedGuild(code: code, me: me)
+        let guild = try await requireOwnedGuild(code: code, me: me)
 
+        // GUILD-CAP-1: primary pre-check on the guild doc's `memberCount` (fetched
+        // by requireOwnedGuild — no added read). nil = legacy pre-backfill doc =
+        // UNKNOWN, so fall through to the roster assert / server enforcement.
+        if let count = guild.memberCount, count >= DataManager.maxMembers {
+            throw GuildError.full
+        }
+
+        // Secondary assert on the roster the owner is already entitled to read (no
+        // read added beyond this pre-existing one): keeps a legacy nil-memberCount
+        // guild capped during the pre-backfill window. The rules are the real boundary.
         let members: [GuildMemberDTO]
         do { members = try await firestoreService.fetchGuildMembers(code: code) }
         catch { throw GuildError.network(error.localizedDescription) }

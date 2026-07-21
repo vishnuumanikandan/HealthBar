@@ -32,8 +32,8 @@ enum GuildConstants {
 ///
 /// `id` is the Firestore document ID (= the shareable guild code). It is NOT a
 /// stored field — the security rules pin the guild body to exactly
-/// `[name, ownerUid, joinPolicy, description, createdAt]` — so it is populated
-/// from `snapshot.documentID` on read and never encoded into the document.
+/// `[name, ownerUid, joinPolicy, description, createdAt, memberCount]` — so it is
+/// populated from `snapshot.documentID` on read and never encoded into the document.
 struct GuildDTO: Codable {
     /// The guild code (Firestore document ID). Set on read, absent in the body.
     var id: String?
@@ -47,6 +47,13 @@ struct GuildDTO: Codable {
     var joinPolicy: String
     var description: String?
     var createdAt: Date
+    /// Live roster size, maintained atomically by every membership batch
+    /// (GUILD-CAP-1). The rules enforce the hard cap against this field.
+    ///
+    /// `nil` means a pre-backfill LEGACY doc that predates this field — readers
+    /// MUST treat nil as UNKNOWN (fall through to server enforcement), NEVER as 0.
+    /// Backfilled by `scripts/backfill-member-count.js`.
+    var memberCount: Int?
 }
 
 /// The one-guild lock at `guildMemberships/{uid}` (uid == document ID).
