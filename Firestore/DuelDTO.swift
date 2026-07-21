@@ -138,9 +138,11 @@ enum DuelConstants {
         switch league { case 1: return 2; case 3: return 2; case 5: return 1; default: return 1 }
     }
 
-    // MARK: - D3: global leaderboard
-    /// Rows fetched per board.
-    static let leaderboardPageSize = 50
+    // MARK: - LB-PAGE-1: paginated leaderboard box
+    /// Rows fetched per page of the Battle global standings board (server-cursor pagination).
+    /// Exhaustion is keyed on the RAW fetched count against this length (a fetch returning fewer
+    /// than this many rows marks the board exhausted — see `GlobalLeaderboardViewModel`).
+    static let leaderboardPageLength = 10
 
     // MARK: - C1: RR-proximity challenge stream
     /// Rows the "Nearby Ranks" stream targets per Load-more page (the merge of both directions).

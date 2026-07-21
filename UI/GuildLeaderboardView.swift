@@ -55,7 +55,7 @@ struct GuildLeaderboardView: View {
                         if let error = viewModel.loadError {
                             inlineError(error)
                         }
-                        rankingList
+                        rankingBox
                         if viewModel.isSoloGuild {
                             inviteHint
                         }
@@ -99,6 +99,22 @@ struct GuildLeaderboardView: View {
     }
 
     // MARK: - Ranking List
+
+    /// LB-PAGE-1: the ranking wrapped in the compact, internally-scrolling box (no pager — guild
+    /// data is already fully fetched). The outer `ScrollView` + `refreshable` remain, so
+    /// pull-to-refresh still works from outside the box. Rows are NOT restyled.
+    private var rankingBox: some View {
+        // LB-PAGE-1: deliberate nested-scroll exception (user ruling; Clash-style boxed board). Revisit if it fights the outer scroll. DO NOT replace with outer scrolling.
+        ScrollView {
+            rankingList
+                .padding(.horizontal, DesignSystem.Spacing.sm)
+                .padding(.vertical, DesignSystem.Spacing.sm)
+        }
+        .frame(height: DesignSystem.Metrics.leaderboardBoxHeightCompact)
+        .background(RoundedRectangle(cornerRadius: 16).fill(tc.primaryBackground))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(DesignSystem.Erewhon.line, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
 
     private var rankingList: some View {
         LazyVStack(spacing: DesignSystem.Spacing.md) {

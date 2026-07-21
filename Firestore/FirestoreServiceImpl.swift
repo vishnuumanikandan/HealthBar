@@ -8,6 +8,15 @@
 import Foundation
 import FirebaseFirestore
 
+/// LB-PAGE-1: the compound page cursor for `fetchLeaderboardPage`. A named value type (never an
+/// anonymous tuple) because it crosses the service protocol, DataManager, and the VM's page cache.
+/// `value` is the last row's `orderField` value; `uid` is its document id — together they are the
+/// `start(after: [value, uid])` cursor (mirrors `fetchLeaderboardSlice`'s compound cursor).
+struct LeaderboardCursor: Equatable {
+    let value: Int
+    let uid: String
+}
+
 /// Concrete Firestore implementation of FirestoreService.
 ///
 /// **Singleton:** Ensures exactly one listener per model is ever active, even though
@@ -1752,12 +1761,21 @@ final class FirestoreServiceImpl: FirestoreService {
         try await leaderboardDocument(for: userId).setData(data)
     }
 
-    func fetchLeaderboard(orderField: String, limit: Int) async throws -> [GlobalLeaderboardDTO] {
-        // Single-field orderBy + limit — automatic single-field index, no composite (D8).
-        let snapshot = try await leaderboardCollection
+    func fetchLeaderboardPage(orderField: String, limit: Int, after: LeaderboardCursor?) async throws -> [GlobalLeaderboardDTO] {
+        // LB-PAGE-1: one page of a board, server-cursor paginated. Order by the metric field
+        // (descending), then documentID() as the tie-break, so `start(after: [value, uid])` lands
+        // exactly at the next row. Mirrors `fetchLeaderboardSlice`'s compound-cursor construction,
+        // parameterized by `orderField` instead of hard-coded `rr`. A single orderBy field (+ the
+        // implicit `__name__` secondary) runs on Firestore's automatic single-field index — no
+        // composite index (same reasoning as `fetchLeaderboardSlice`). If Firestore ever raises an
+        // index-required error here, STOP and report — do NOT add a composite index / edit indexes.
+        var query: Query = leaderboardCollection
             .order(by: orderField, descending: true)
-            .limit(to: limit)
-            .getDocuments()
+            .order(by: FieldPath.documentID(), descending: true)
+        if let after {
+            query = query.start(after: [after.value, after.uid])
+        }
+        let snapshot = try await query.limit(to: limit).getDocuments()
         return snapshot.documents.compactMap { doc in
             guard var dto = try? doc.data(as: GlobalLeaderboardDTO.self) else { return nil }
             dto.id = doc.documentID
@@ -1772,11 +1790,13 @@ final class FirestoreServiceImpl: FirestoreService {
         return dto
     }
 
-    func fetchLeaderboardPosition(myRR: Int) async throws -> Int {
-        // Standard competition ranking: count of higher-RR rows + 1. count() aggregation on a
-        // single inequality filter — automatic index, no composite.
+    func fetchLeaderboardPosition(orderField: String, myValue: Int) async throws -> Int {
+        // Standard competition ranking: count of higher-valued rows + 1. count() aggregation on a
+        // single inequality filter — automatic index, no composite. LB-PAGE-1 generalized this
+        // across all boards by parameterizing the field (was hard-coded `rr`), so `#N` renders on
+        // the Wins/Streak boards too.
         let snapshot = try await leaderboardCollection
-            .whereField("rr", isGreaterThan: myRR)
+            .whereField(orderField, isGreaterThan: myValue)
             .count
             .getAggregation(source: .server)
         return snapshot.count.intValue + 1

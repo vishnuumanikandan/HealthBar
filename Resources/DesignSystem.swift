@@ -457,6 +457,16 @@ enum DesignSystem {
         /// supplied separately by each screen's own bottom safe area, so it is NOT included
         /// here.)
         static let tabBarHeight: CGFloat = Erewhon.tabBarContentHeight + tabBarTopInset
+
+        // MARK: - LB-PAGE-1: leaderboard box heights
+
+        /// Fixed height of the Battle global-standings box (the internally-scrolling, paged
+        /// board). Sized so ~10 rows scroll within it, with the pager reached at the bottom.
+        static let leaderboardBoxHeight: CGFloat = 338
+
+        /// Fixed height of the compact leaderboard box (guild + friend boards). Shorter than
+        /// `leaderboardBoxHeight` — those boards are fully fetched and carry no pager.
+        static let leaderboardBoxHeightCompact: CGFloat = 280
     }
 }
 

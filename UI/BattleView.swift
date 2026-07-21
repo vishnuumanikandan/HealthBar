@@ -1054,34 +1054,28 @@ private struct BattleStandingsBlock: View {
     /// Standing whose read-only profile sheet is open (NAV-1b).
     @State private var profileStanding: Standing? = nil
 
-    /// One rendered standing: the projection, its rank-chip position (nil → "—"), and whether it's me.
+    /// One rendered standing: the projection and whether it's me. Position is computed from the
+    /// row's index within the current page (LB-PAGE-1), no longer stored on the standing.
     private struct Standing: Identifiable {
         let dto: GlobalLeaderboardDTO
-        let position: Int?
         let isMe: Bool
         var id: String { dto.id ?? "" }
     }
 
-    /// Top 10 + my row appended when I'm outside them. My appended row's chip uses `myRRPosition`
-    /// on the RR board and "—" on the wins/streak boards (no position API there).
-    private var standings: [Standing] {
-        let top = Array(viewModel.rows.prefix(10))
-        var list = top.enumerated().map {
-            Standing(dto: $0.element, position: $0.offset + 1, isMe: viewModel.isMe($0.element))
-        }
-        if let mine = viewModel.myEntry, let myId = mine.id, !top.contains(where: { $0.id == myId }) {
-            list.append(Standing(dto: mine,
-                                 position: (viewModel.metric == .rr) ? viewModel.myRRPosition : nil,
-                                 isMe: true))
-        }
-        return list
+    /// Scroll anchor pinned at the top of the box — a page change scrolls back to it.
+    private let topAnchorID = "lb-battle-top"
+
+    /// The current page's rows as `Standing`s. LB-PAGE-1: no appended my-row — the pinned footer
+    /// owns "me"; if I fall on the displayed page I still appear inline (self-highlighted, inert).
+    private var standingRows: [Standing] {
+        viewModel.rows.map { Standing(dto: $0, isMe: viewModel.isMe($0)) }
     }
 
     var body: some View {
         VStack(spacing: 0) {
             secHead
             pickers.padding(.bottom, 14)
-            rowsContent
+            boardContent
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         // NAV-1b: tap a non-self standing → read-only profile sheet.
@@ -1151,58 +1145,123 @@ private struct BattleStandingsBlock: View {
         }
     }
 
-    // MARK: rows
+    // MARK: board content (box + pinned footer, or a state outside the box)
 
+    /// The loading / empty states stay OUTSIDE the box (no box chrome around nothing); a populated
+    /// board renders the scrolling box with the pinned footer below it.
     @ViewBuilder
-    private var rowsContent: some View {
+    private var boardContent: some View {
         if viewModel.isLoading && !viewModel.hasLoaded {
             ProgressView().tint(tc.primary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, DesignSystem.Spacing.lg)
+        } else if standingRows.isEmpty {
+            // Empty board (day one) is not an error — a quiet empty row, no box chrome (D4/D6).
+            Text("No one on this board yet — finish a ranked duel.")
+                .font(AppFont.regular(13))
+                .foregroundColor(tc.textTertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 13)
         } else {
-            let rows = standings
-            if rows.isEmpty {
-                // Empty board (day one) is not an error — a quiet empty row (D4/D6).
-                Text("No one on this board yet — finish a ranked duel.")
-                    .font(AppFont.regular(13))
-                    .foregroundColor(tc.textTertiary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 13)
-            } else {
+            standingsBox
+            pinnedFooter.padding(.top, 10)
+        }
+    }
+
+    // MARK: the box (internally-scrolling, paged)
+
+    private var standingsBox: some View {
+        // LB-PAGE-1: deliberate nested-scroll exception (user ruling; Clash-style boxed board). Revisit if it fights the outer scroll. DO NOT replace with outer scrolling.
+        ScrollViewReader { proxy in
+            ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, s in
-                        standingRow(s, isLast: index == rows.count - 1)
+                    // Top anchor — a page change resets the scroll here (see onChange below).
+                    Color.clear.frame(height: 0).id(topAnchorID)
+                    ForEach(Array(standingRows.enumerated()), id: \.element.id) { index, s in
+                        standingRow(s,
+                                    position: viewModel.currentPageStartPosition + index,
+                                    isLast: index == standingRows.count - 1)
                     }
+                    pager   // the LAST element inside the scroll content (reached at the bottom)
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 2)
+            }
+            .onChange(of: viewModel.pageIndex) { _, _ in
+                proxy.scrollTo(topAnchorID, anchor: .top)
+            }
+        }
+        .frame(height: DesignSystem.Metrics.leaderboardBoxHeight)
+        .background(RoundedRectangle(cornerRadius: 16).fill(tc.cardBackground))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(DesignSystem.Erewhon.line, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    // MARK: pager
+
+    private var pager: some View {
+        VStack(spacing: 0) {
+            Rectangle().fill(DesignSystem.Erewhon.lineSoft).frame(height: 1)
+            HStack(spacing: 26) {
+                // `‹` fetches nothing (prev is always cache-served) so it never spins.
+                pagerArrow("chevron.left", enabled: viewModel.canGoPrev, loading: false) {
+                    Task { await viewModel.prevPage() }
+                }
+                Text("PAGE \(viewModel.pageIndex + 1)")
+                    .font(AppFont.display(14)).tracking(1.2)
+                    .foregroundColor(tc.textSecondary).monospacedDigit()
+                // Only the tapped `›` spins while its fetch is in flight; the other arrow is untouched.
+                pagerArrow("chevron.right", enabled: viewModel.canGoNext, loading: viewModel.isPageLoading) {
+                    Task { await viewModel.nextPage() }
+                }
+            }
+            .padding(.vertical, 14)
+        }
+    }
+
+    private func pagerArrow(_ system: String, enabled: Bool, loading: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 11)
+                    .fill(tc.segBackground)
+                    .frame(width: 34, height: 34)
+                    .overlay(RoundedRectangle(cornerRadius: 11).stroke(DesignSystem.Erewhon.line, lineWidth: 1))
+                if loading {
+                    ProgressView().controlSize(.small).tint(tc.textSecondary)
+                } else {
+                    Image(systemName: system).font(AppFont.bold(14)).foregroundColor(tc.textPrimary)
                 }
             }
         }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(!enabled || loading)   // isPageLoading also gates re-entrant taps
+        .opacity(enabled ? 1 : 0.32)
     }
 
-    /// NAV-1b: non-self rows carrying a real uid open the read-only profile sheet;
-    /// my appended row and any id-less row stay inert.
+    // MARK: rows
+
+    /// NAV-1b: non-self rows carrying a real uid open the read-only profile sheet; my own inline row
+    /// and any id-less row stay inert.
     @ViewBuilder
-    private func standingRow(_ s: Standing, isLast: Bool) -> some View {
+    private func standingRow(_ s: Standing, position: Int, isLast: Bool) -> some View {
         if !s.isMe, s.dto.id != nil {
             Button {
-                guard s.dto.id != nil else { return }
                 profileStanding = s
             } label: {
-                standingRowContent(s, isLast: isLast)
+                standingRowContent(s, position: position, isLast: isLast)
             }
             .buttonStyle(PlainButtonStyle())
         } else {
-            standingRowContent(s, isLast: isLast)
+            standingRowContent(s, position: position, isLast: isLast)
         }
     }
 
-    private func standingRowContent(_ s: Standing, isLast: Bool) -> some View {
-        // R7c §1: the shared standings pieces (this block's copies were their duplicates). A row
-        // with no position — my appended row on the wins/streak boards, which have no position
-        // API — is the canonical no-data chip.
-        let hasPosition = s.position != nil
-        let metal = StandingsPieces.podiumMetal(position: s.position ?? 0, hasData: hasPosition)
+    private func standingRowContent(_ s: Standing, position: Int, isLast: Bool) -> some View {
+        // R7c §1: the shared standings pieces. Every displayed row now has a real position (the
+        // no-position appended row is gone in LB-PAGE-1).
+        let metal = StandingsPieces.podiumMetal(position: position, hasData: true)
         let row = HStack(alignment: .center, spacing: 13) {
-            StandingsPieces.rankChip(position: s.position ?? 0, hasData: hasPosition, metal: metal)
+            StandingsPieces.rankChip(position: position, hasData: true, metal: metal)
             StandingsPieces.avatar(initial: initial(for: s.dto), tint: DesignSystem.Erewhon.rankMetal(forRR: s.dto.rr))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: DesignSystem.Spacing.xs) {
@@ -1210,8 +1269,7 @@ private struct BattleStandingsBlock: View {
                         .font(AppFont.bold(14)).foregroundColor(tc.textPrimary).lineLimit(1)
                     if s.isMe { youPill }
                 }
-                Text(Rank.rankTier(from: s.dto.rr).displayName)
-                    .font(AppFont.regular(11)).foregroundColor(tc.textTertiary).lineLimit(1)
+                subline(s.dto)
             }
             Spacer(minLength: DesignSystem.Spacing.sm)
             valueColumn(s.dto)
@@ -1233,6 +1291,80 @@ private struct BattleStandingsBlock: View {
         }
     }
 
+    /// Row sub-line. RR board: the tier word is dropped (the plaque + "Tier · RR" caption carry it —
+    /// the GLV/ChallengeSheet dedup precedent). `GlobalLeaderboardDTO` has no level field, so the
+    /// mockup's "Lv N" slot is realized as the @handle line (shown only when a displayName exists —
+    /// else the name row already IS the @handle). Wins/Streak keep the tier sub-line unchanged.
+    @ViewBuilder
+    private func subline(_ dto: GlobalLeaderboardDTO) -> some View {
+        switch viewModel.metric {
+        case .rr:
+            if !dto.displayName.isEmpty && !dto.username.isEmpty {
+                Text("@\(dto.username)")
+                    .font(AppFont.regular(11)).foregroundColor(tc.textTertiary).lineLimit(1)
+            }
+        case .wins, .streak:
+            Text(Rank.rankTier(from: dto.rr).displayName)
+                .font(AppFont.regular(11)).foregroundColor(tc.textTertiary).lineLimit(1)
+        }
+    }
+
+    /// Trailing value column. RR board (LB-PAGE-1 plaque swap, the ChallengeSheet precedent): the
+    /// shipped `RankPlaque` + the RR number, with the tier folded into the caption. Wins/Streak
+    /// stay numeric (unchanged).
+    @ViewBuilder
+    private func valueColumn(_ dto: GlobalLeaderboardDTO) -> some View {
+        switch viewModel.metric {
+        case .rr:
+            VStack(alignment: .trailing, spacing: 2) {
+                HStack(spacing: 5) {
+                    RankPlaque(rank: Rank.getRank(from: dto.rr), size: 18)
+                    Text("\(dto.rr)")
+                        .font(AppFont.display(18)).foregroundColor(tc.textPrimary).monospacedDigit()
+                }
+                Text("\(Rank.rankTier(from: dto.rr).displayName) · RR")
+                    .font(AppFont.regular(10)).foregroundColor(tc.textTertiary)
+            }
+        case .wins, .streak:
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(viewModel.valueText(dto))
+                    .font(AppFont.display(20)).foregroundColor(tc.textPrimary).lineLimit(1)
+                Text(viewModel.captionText(dto))
+                    .font(AppFont.regular(10)).foregroundColor(tc.textTertiary)
+            }
+        }
+    }
+
+    // MARK: pinned "You" footer (below the box, always visible)
+
+    /// You pill · name · `#N` position chip (aggregation-derived; hidden when nil) · metric-matched
+    /// value column. Reuses `myEntry`; hidden entirely when I have never dueled (`myEntry == nil`).
+    @ViewBuilder
+    private var pinnedFooter: some View {
+        if let entry = viewModel.myEntry {
+            HStack(spacing: 13) {
+                youPill
+                Text(entry.displayName.isEmpty ? "@\(entry.username)" : entry.displayName)
+                    .font(AppFont.bold(15)).foregroundColor(tc.textPrimary).lineLimit(1)
+                if let pos = viewModel.myBoardPosition { positionChip(pos) }
+                Spacer(minLength: DesignSystem.Spacing.sm)
+                valueColumn(entry)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(RoundedRectangle(cornerRadius: 14).fill(tc.cardBackground.mix(with: tc.primary, by: 0.10)))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(tc.primary.opacity(0.4), lineWidth: 1.5))
+        }
+    }
+
+    /// Mockup `.pos`: the accent-tinted "#N" standing chip.
+    private func positionChip(_ position: Int) -> some View {
+        Text("#\(position)")
+            .font(AppFont.display(13)).foregroundColor(tc.primary).monospacedDigit()
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(RoundedRectangle(cornerRadius: 7).fill(tc.primary.opacity(0.13)))
+    }
+
     private var youPill: some View {
         Text("You")
             .font(AppFont.bold(9))
@@ -1242,19 +1374,6 @@ private struct BattleStandingsBlock: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(RoundedRectangle(cornerRadius: 6).fill(tc.primary.opacity(0.13)))
-    }
-
-    /// Trailing value in `display` + its caption; no pips (RR/wins/streak are unbounded) (D5).
-    private func valueColumn(_ dto: GlobalLeaderboardDTO) -> some View {
-        VStack(alignment: .trailing, spacing: 2) {
-            Text(viewModel.valueText(dto))
-                .font(AppFont.display(viewModel.metric == .rr ? 17 : 20))
-                .foregroundColor(tc.textPrimary)
-                .lineLimit(1)
-            Text(viewModel.captionText(dto))
-                .font(AppFont.regular(10))
-                .foregroundColor(tc.textTertiary)
-        }
     }
 
     private func initial(for dto: GlobalLeaderboardDTO) -> String {
