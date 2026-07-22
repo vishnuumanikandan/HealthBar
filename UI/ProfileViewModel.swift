@@ -35,6 +35,12 @@ final class ProfileViewModel {
     /// The user's completed health profile (nil if not yet set up or not found).
     var existingProfile: UserProfile?
 
+    /// D3a preset avatar (icon id + color id), loaded from the profile record; nil ⇒
+    /// initials fallback in the header. Updated directly on a successful in-place picker
+    /// save (D8 — no full-page reload).
+    var avatarIcon: String?
+    var avatarColor: String?
+
     /// Loading state for UI
     var isLoading = false
 
@@ -171,6 +177,8 @@ final class ProfileViewModel {
             userProgress = try await coordinator.getUserProgress()
             currentGoal = try await coordinator.getCurrentGoal()
             existingProfile = try await coordinator.getUserProfile()
+            avatarIcon = existingProfile?.avatarIcon
+            avatarColor = existingProfile?.avatarColor
             badgeProgressList = (try? await coordinator.getAllBadgeProgress()) ?? []
             username = await coordinator.currentUsername()
 
@@ -219,6 +227,18 @@ final class ProfileViewModel {
     /// Refreshes the data (for pull-to-refresh)
     func refresh() async {
         await loadUserData()
+    }
+
+    /// D3a: persists the picked avatar via the coordinator and, on success, updates the VM's
+    /// avatar state directly — no full-page reload (D8). Returns success for the picker's
+    /// dismiss/retry contract. Works for guests (local-only).
+    func saveAvatar(iconId: String, colorId: String) async -> Bool {
+        let ok = await coordinator.updateAvatar(iconId: iconId, colorId: colorId)
+        if ok {
+            avatarIcon = iconId
+            avatarColor = colorId
+        }
+        return ok
     }
 
     // MARK: - Goal Calendar assembly (D7)

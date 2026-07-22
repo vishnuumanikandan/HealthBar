@@ -20,6 +20,10 @@ struct UserProfileDTO: Codable {
     // MARK: - Fields (mirrors UserProfile, minus userId and id)
 
     var displayName: String
+    /// Preset avatar (D3a): icon id + color id. Optional so pre-D3a profile docs
+    /// still decode; nil ⇒ initials fallback.
+    var avatarIcon: String?
+    var avatarColor: String?
     var sex: String
     var age: Int
     var weightKg: Double
@@ -41,6 +45,8 @@ struct UserProfileDTO: Codable {
 
     init(from profile: UserProfile) {
         self.displayName = profile.displayName
+        self.avatarIcon = profile.avatarIcon
+        self.avatarColor = profile.avatarColor
         self.sex = profile.sex
         self.age = profile.age
         self.weightKg = profile.weightKg
@@ -84,6 +90,8 @@ struct UserProfileDTO: Codable {
             updatedAt: updatedAt
         )
         profile.displayName = displayName
+        profile.avatarIcon = avatarIcon
+        profile.avatarColor = avatarColor
         return profile
     }
 
@@ -93,6 +101,8 @@ struct UserProfileDTO: Codable {
     /// Used by syncUserProfileFromFirestore to avoid unnecessary SwiftData rewrites.
     func differsFrom(_ profile: UserProfile) -> Bool {
         return displayName != profile.displayName
+            || avatarIcon != profile.avatarIcon
+            || avatarColor != profile.avatarColor
             || sex != profile.sex
             || age != profile.age
             || weightKg != profile.weightKg

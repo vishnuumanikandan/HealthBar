@@ -29,6 +29,16 @@ final class UserProfile {
     /// Inline default = lightweight SwiftData migration; no schema version bump needed.
     var displayName: String = ""
 
+    // MARK: - Avatar (D3a)
+
+    /// Preset-avatar selection: an icon id + a color id from `AvatarCatalog`.
+    /// Optional + inline nil default = lightweight SwiftData migration; nil (either
+    /// field) ⇒ initials fallback at every render site. Owner-authored via the
+    /// picker — like `displayName`, avatar is preserved across full-profile upserts
+    /// (deliberately excluded from `upsertUserProfile`'s in-place field copy).
+    var avatarIcon: String? = nil
+    var avatarColor: String? = nil
+
     // MARK: - Demographics
 
     /// "male" or "female"

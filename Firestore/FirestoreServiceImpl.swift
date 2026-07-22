@@ -1767,7 +1767,7 @@ final class FirestoreServiceImpl: FirestoreService {
         // Manual dict of EXACTLY the create/update rule's field set (keys().hasOnly). `id` is
         // never written; `updatedAt` is the server sentinel. setData WITHOUT merge — a full
         // overwrite keeps stale keys impossible.
-        let data: [String: Any] = [
+        var data: [String: Any] = [
             "username": entry.username,
             "displayName": entry.displayName,
             "rr": entry.rr,
@@ -1779,6 +1779,10 @@ final class FirestoreServiceImpl: FirestoreService {
             "streak5": entry.streak5,
             "updatedAt": FieldValue.serverTimestamp()
         ]
+        // D3a: avatar keys are added ONLY when non-nil — a nil-avatar row omits them
+        // entirely, so the write stays compatible with pre-D3a rules during the dev window.
+        if let icon = entry.avatarIcon { data["avatarIcon"] = icon }
+        if let color = entry.avatarColor { data["avatarColor"] = color }
         try await leaderboardDocument(for: userId).setData(data)
     }
 

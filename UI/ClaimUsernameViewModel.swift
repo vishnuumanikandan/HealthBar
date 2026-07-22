@@ -53,12 +53,16 @@ final class ClaimUsernameViewModel {
 
     // MARK: - Submit
 
-    func submit() async {
+    func submit(avatarIcon: String, avatarColor: String) async {
         isClaiming = true
         defer { isClaiming = false }
 
         do {
             try await coordinator.claimUsername(input)
+            // D7: best-effort preset-avatar save. Non-throwing, so the claim/error control
+            // flow is byte-identical with this line removed — a save failure never blocks
+            // onClaimed (the avatar self-heals on the next profile save).
+            _ = await coordinator.updateAvatar(iconId: avatarIcon, colorId: avatarColor)
             didClaim = true
         } catch let e as UsernameError {
             inlineError = e.errorDescription

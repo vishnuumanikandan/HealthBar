@@ -200,14 +200,18 @@ struct FriendProfileView: View {
     /// the published projection (if any) replaces it.
     private var identityHeader: some View {
         VStack(spacing: DesignSystem.Spacing.sm) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(accent.opacity(0.16))
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(accent.opacity(0.5), lineWidth: 2)
-                Text(initials)
-                    .font(AppFont.bold(26))
-                    .foregroundColor(accent)
+            // D9: preset avatar over the accent-tinted initials fallback. Avatar color tints the
+            // avatar only; the rank accent still owns the frame glow + the header card border below.
+            AvatarView(iconId: viewModel.stats?.avatarIcon, colorId: viewModel.stats?.avatarColor, size: 68) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(accent.opacity(0.16))
+                    RoundedRectangle(cornerRadius: 18)
+                        .stroke(accent.opacity(0.5), lineWidth: 2)
+                    Text(initials)
+                        .font(AppFont.bold(26))
+                        .foregroundColor(accent)
+                }
             }
             .frame(width: 68, height: 68)
             .shadow(color: accent.opacity(0.35), radius: 14, x: 0, y: 0)

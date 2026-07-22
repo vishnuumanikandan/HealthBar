@@ -119,3 +119,9 @@ of implementing.
   one, and flagging over silently deciding.
 
 Rank raw values are Firestore wire format — pinned forever. They appear in immutable feedEvents/rank_<rawValue> doc IDs and public/stats.rank. Rename Swift case identity only; never touch a raw value; new cases get an explicit pinned raw value from day one.
+
+## Lessons (D3a)
+- Per-tab DataManager instances: ContentView creates one DataManager per tab. Any state that must be consistent across tabs MUST be `static` or live on `FirestoreServiceImpl.shared` — instance state silently forks per tab (the `blockedUids` dead-filter bug).
+- Rank raw values are wire format: before touching `Rank`, read its type doc. Raw values are persisted in `public/stats.rank` and in immutable `feedEvents/rank_<rawValue>` doc ids — changing one orphans published milestones. Rename cases freely; NEVER change or "tidy" a raw value; new cases pin explicit raw values.
+- AppCoordinator rides every DataManager signature change: any change adding or altering a DataManager method signature lists AppCoordinator as MODIFIED and updates its passthrough in the same diff.
+- Git hygiene in agent sessions: NEVER `git reset --hard`. Use `git stash -u` for anything in the way (recoverable). If a hard reset ever seems necessary, STOP and ask before running it.
