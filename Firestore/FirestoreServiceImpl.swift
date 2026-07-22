@@ -894,6 +894,17 @@ final class FirestoreServiceImpl: FirestoreService {
     func publishPublicStats(_ stats: PublicStatsDTO, userId: String) async throws {
         // Merge so a future added field never clobbers existing ones — same
         // clobber protection as writeAccountInfo.
+        //
+        // Corollary (D3a) — merge:true is ASYMMETRIC: an omitted key never CLEARS a
+        // previously published value, it only leaves it untouched. That is exactly what
+        // makes the nil-avatar payload safe against pre-D3a rules (no avatar keys are
+        // written at all), and it is harmless today because an avatar is only ever set
+        // or changed, never un-set.
+        // TODO-avatar-clear: a future "remove avatar" (or ANY nullable projection field
+        // that must be erasable) cannot be published by sending nil — the key would
+        // simply persist. That path must write FieldValue.delete() for
+        // avatarIcon/avatarColor explicitly, which a Codable `setData(from:)` cannot
+        // express; it needs a manual merge dict like upsertLeaderboardEntry's.
         try publicStatsDocument(for: userId).setData(from: stats, merge: true)
     }
 
