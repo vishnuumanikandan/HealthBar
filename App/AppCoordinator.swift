@@ -586,6 +586,19 @@ final class AppCoordinator {
         return try await dataManager.fetchEntriesForDateRange(start: start, end: end)
     }
 
+    // MARK: - Profile Sections (D2)
+
+    /// Total food-entry count for the current user — the "Meals Logged" tile (F1a). See DataManager.
+    func countAllFoodEntries() async throws -> Int {
+        return try await dataManager.countAllFoodEntries()
+    }
+
+    /// Met day-starts for the current month — the Goal Calendar. Throws → the caller hides
+    /// the section (D10). Local SwiftData only; guest-safe.
+    func goalMetDaysForCurrentMonth() async throws -> Set<Date> {
+        return try await dataManager.goalMetDaysForCurrentMonth()
+    }
+
     // MARK: - User Progress
 
     /// Gets current user progress

@@ -41,6 +41,27 @@ final class ProfileViewModel {
     /// Error message to display (nil if no error)
     var errorMessage: String?
 
+    // MARK: - D2 Profile Section State
+    //
+    // Populated in loadUserData()/refresh(); each degrades INDEPENDENTLY (D10) — a failure in
+    // one of these sections never sets `errorMessage` and never blocks the page.
+
+    /// "Meals Logged" tile (D5). `nil` renders "—" (load failed).
+    var mealsLogged: Int?
+
+    /// The user's guild for the Guild row (D6). `nil` hides the whole section — guest, no
+    /// guild, or fetch failure (fail-to-hidden). Guest-gated BEFORE the fetch in loadUserData().
+    var loadedGuild: GuildDTO?
+
+    /// Goal Calendar state (D7). `calendarDays == nil` hides the section (load failed);
+    /// otherwise the view maps it 1:1 using `calendarLeadingBlanks` for the grid offset.
+    /// Regenerated on every load/refresh, never mutated in place.
+    var calendarDays: [DayCellState]?
+    var calendarLeadingBlanks: Int = 0
+    var calendarDaysHit: Int = 0
+    var calendarMonthTitle: String = ""
+    var weekdayInitials: [String] = []
+
     // MARK: - Computed Properties for UI
 
     /// Current level based on total XP
@@ -50,17 +71,24 @@ final class ProfileViewModel {
         return (progress.totalXP / 100) + 1
     }
 
-    /// Current rank, derived from RR (RR-0a invariant — never from XP).
-    var currentRank: Rank {
-        guard let progress = userProgress else { return .stone }
-        return Rank.getRank(from: progress.rr)
-    }
+    /// Rank Journey card data (D3), derived purely from `userProgress.rr` via Rank.swift's
+    /// existing API. `nil` before load — the journey card region participates in the page's
+    /// loading state; there is no invented default RR and no force-unwrap. (D2 retired the
+    /// header rank pill along with `currentRank` / `currentRankDisplay`; the journey card is
+    /// rank's single home.)
+    var rankJourney: RankJourney? { userProgress.map { RankJourney(rr: $0.rr) } }
 
-    /// Tiered rank label ("Copper 2") for display. Own data always has rr, so this
-    /// is always tiered; routes through the shared helper (RR-0b).
-    var currentRankDisplay: String {
-        Rank.displayString(rr: userProgress?.rr, legacyRank: userProgress?.rank ?? Rank.stone.rawValue)
-    }
+    /// Duel record (D5), the SAME local source `publishMyStats` publishes for the wins
+    /// leaderboard (`UserProgress.duelWins` / `.duelLosses` → UserProgressDTO → public/stats).
+    /// Both counters exist locally, so the cell renders W–L. The Duel cell is guest-hidden at
+    /// the view layer (D9); these stay a plain read of the already-loaded progress.
+    var duelWins: Int? { userProgress?.duelWins }
+    var duelLosses: Int? { userProgress?.duelLosses }
+
+    /// Badge counter for the section header (D2). Own page counts unlocked records from
+    /// `badgeProgressList` — NOT `publishedBadgeCount` (that is the friend-view concept).
+    var earnedBadgeCount: Int { badgeProgressList.filter { $0.isUnlocked }.count }
+    var totalBadgeCount: Int { BadgeDefinition.all.count }
 
     /// Formatted total XP (e.g., "1,250 XP")
     var totalXPText: String {
@@ -145,6 +173,30 @@ final class ProfileViewModel {
             existingProfile = try await coordinator.getUserProfile()
             badgeProgressList = (try? await coordinator.getAllBadgeProgress()) ?? []
             username = await coordinator.currentUsername()
+
+            // D2 sections — loaded in the same async flow but each degrades independently (D10):
+            // a failure here degrades ONLY that section (meals → "—", guild → hidden,
+            // calendar → hidden) and never touches errorMessage or the page.
+
+            // Meals Logged (F1a): count query; nil on failure → "—".
+            mealsLogged = try? await coordinator.countAllFoodEntries()
+
+            // Guild row (D6/D9): guest guard is the FIRST executable line — guests never reach
+            // the fetch. Any other outcome (no guild / fetch failure) also yields nil → hidden.
+            if authService.isGuest {
+                loadedGuild = nil
+            } else {
+                loadedGuild = await coordinator.myGuild()
+            }
+
+            // Goal Calendar (D7): local SwiftData; a throw hides the section (D10). Rebuilt from
+            // scratch each load (never mutated in place); guests keep the calendar (local data).
+            if let metDays = try? await coordinator.goalMetDaysForCurrentMonth() {
+                rebuildCalendar(metDays: metDays)
+            } else {
+                calendarDays = nil
+            }
+
             // First successful load for a new account — clear the new-user flag.
             if authService.isNewUser {
                 authService.isNewUser = false
@@ -168,4 +220,125 @@ final class ProfileViewModel {
     func refresh() async {
         await loadUserData()
     }
+
+    // MARK: - Goal Calendar assembly (D7)
+
+    /// Rebuilds the Goal Calendar view state for the CURRENT month from its met-day set.
+    /// All grid math runs here (off the render path) and is stored as a prebuilt array the
+    /// view maps 1:1 — zero per-cell computation in the view. The month is derived from
+    /// "today" at each call, so a refresh after midnight on the 1st renders the new month.
+    /// Future days are never "met"; a past/today day absent from `metDays` is unmet; leading
+    /// blanks align the 1st to `Calendar.current.firstWeekday` (never hardcode Sunday).
+    private func rebuildCalendar(metDays: Set<Date>) {
+        let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: Date())
+        guard let monthInterval = calendar.dateInterval(of: .month, for: todayStart),
+              let dayRange = calendar.range(of: .day, in: .month, for: todayStart) else {
+            calendarDays = nil
+            return
+        }
+        let firstOfMonth = monthInterval.start   // already a startOfDay
+        let weekday = calendar.component(.weekday, from: firstOfMonth)      // 1…7
+        calendarLeadingBlanks = ((weekday - calendar.firstWeekday) + 7) % 7
+
+        var days: [DayCellState] = []
+        var hit = 0
+        for dayNum in dayRange {                 // 1…daysInMonth
+            guard let dayStart = calendar.date(byAdding: .day, value: dayNum - 1, to: firstOfMonth) else { continue }
+            let isToday = dayStart == todayStart
+            let state: ProfileDayState
+            if dayStart > todayStart {
+                state = .future
+            } else if metDays.contains(dayStart) {
+                state = .met
+                hit += 1
+            } else {
+                state = .unmet
+            }
+            days.append(DayCellState(dayNumber: dayNum, state: state, isToday: isToday))
+        }
+        calendarDays = days
+        calendarDaysHit = hit
+
+        // Header: month + year from today (D7). Weekday initials ordered from firstWeekday.
+        let fmt = DateFormatter()
+        fmt.calendar = calendar
+        fmt.locale = Locale.current
+        fmt.dateFormat = "LLLL yyyy"
+        calendarMonthTitle = fmt.string(from: todayStart)
+
+        let symbols = calendar.veryShortStandaloneWeekdaySymbols   // index 0 = Sunday
+        let start = calendar.firstWeekday - 1                        // 0-based
+        weekdayInitials = (0..<7).map { symbols[(start + $0) % 7] }
+    }
+}
+
+// MARK: - Rank Journey (D3)
+
+/// Rank Journey card view-data, a pure function of `rr` through Rank.swift's existing API
+/// (no new math constants). Verified by a standalone TDD harness against Rank.swift.
+struct RankJourney {
+    let rr: Int
+
+    var rank: Rank { Rank.getRank(from: rr) }
+    private var tierInfo: RankTier { Rank.rankTier(from: rr) }
+    var tier: Int { tierInfo.tier }
+
+    /// Card title / caption-left: the current tier's name, e.g. "Copper 2".
+    var tierTitle: String { tierInfo.displayName }
+
+    /// Peak of the ladder: top rank, top tier — the bar + caption are replaced by one line.
+    var isPeak: Bool { rank == .zenith && tier == Rank.tiersPerRank }
+
+    /// Sub-line: "<rr> RR · Rank <i> of <count>" — `i` is the 1-based position of the current
+    /// rank in `Rank.allCases`, `<count>` is `Rank.allCases.count` (no hardcoded 9).
+    var rankIndex: Int { (Rank.allCases.firstIndex(of: rank) ?? 0) + 1 }
+    var rankCount: Int { Rank.allCases.count }
+    var subline: String { "\(rr) RR · Rank \(rankIndex) of \(rankCount)" }
+
+    /// RR at which the current tier begins: `rank.rrThreshold + (tier − 1) * Rank.rrPerTier`.
+    private var currentTierFloor: Int { rank.rrThreshold + (tier - 1) * Rank.rrPerTier }
+    private var nextTierFloor: Int { currentTierFloor + Rank.rrPerTier }
+
+    /// Progress through the current tier: `(rr − currentTierFloor) / Rank.rrPerTier`, clamped 0…1.
+    var fill: Double {
+        min(1, max(0, Double(rr - currentTierFloor) / Double(Rank.rrPerTier)))
+    }
+
+    /// RR still needed to reach the next tier.
+    var remaining: Int { max(0, nextTierFloor - rr) }
+
+    /// The next rank in ladder order (`Rank.allCases`), or nil at the top.
+    private var nextRank: Rank? {
+        let all = Rank.allCases
+        guard let idx = all.firstIndex(of: rank), idx + 1 < all.count else { return nil }
+        return all[idx + 1]
+    }
+
+    /// ASCENDING next-tier label: tier+1 in the same rank, or the NEXT rank's tier 1 when at
+    /// tier 3 (Copper 2 → Copper 3 → Iron 1). Fixes the mockup's descending "Copper 1" error.
+    var nextTierLabel: String {
+        if tier < Rank.tiersPerRank {
+            return "\(rank.displayName) \(tier + 1)"
+        } else if let nr = nextRank {
+            return "\(nr.displayName) 1"
+        } else {
+            return tierTitle   // zenith tier 3 = peak; caption is replaced upstream.
+        }
+    }
+
+    /// Caption-right: "<remaining> RR to <next>".
+    var captionRight: String { "\(remaining) RR to \(nextTierLabel)" }
+}
+
+// MARK: - Goal Calendar cell (D7)
+
+/// A single day's paint state in the Goal Calendar grid.
+enum ProfileDayState { case met, unmet, future }
+
+/// Fixed shape for a Goal Calendar day cell (D7). The view maps `calendarDays` 1:1 to these.
+struct DayCellState {
+    let dayNumber: Int
+    let state: ProfileDayState
+    let isToday: Bool
 }

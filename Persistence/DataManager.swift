@@ -2384,6 +2384,10 @@ final class DataManager {
     }
 
     /// Returns the total number of food entries for the current user (across all dates).
+    ///
+    /// D2 "Meals Logged" tile (F1a): a `fetchCount` — never materializes rows. The value
+    /// reflects LOCALLY SYNCED entries and can read low immediately after a reinstall until
+    /// Firestore sync catches up — accepted (F1a), no UI caveat.
     func countAllFoodEntries() async throws -> Int {
         guard let userId = currentUserId, !userId.isEmpty else { return 0 }
         let descriptor = FetchDescriptor<FoodEntry>(
@@ -3579,16 +3583,63 @@ final class DataManager {
         var goalsMet = 0
         for offset in 0..<7 {
             guard let dayStart = calendar.date(byAdding: .day, value: -offset, to: todayStart) else { continue }
-            // No entries that day → not met (do not skip the day).
-            guard let dayEntries = entriesByDay[dayStart], !dayEntries.isEmpty else { continue }
-            guard let goal = goalInEffect(on: dayStart, calendar: calendar, goalsByRecency: goalsByRecency) else { continue }
-            if nutritionManager.didMeetGoals(entries: dayEntries, goal: goal) {
+            if dayGoalMet(dayStart: dayStart, entriesByDay: entriesByDay, goalsByRecency: goalsByRecency, calendar: calendar) {
                 goalsMet += 1
             }
         }
 
         // Explicit Double conversion — integer division would collapse to 0 or 1.
         return (goalsMet, Double(goalsMet) / 7.0)
+    }
+
+    /// The per-day goal-met decision, shared by weekly adherence (the streak / weeklyGoalsMet
+    /// pipeline) and the D2 Goal Calendar. A day with NO entries is NOT met (absence is
+    /// non-adherence, never skipped); a day with no goal on record is NOT met; otherwise the
+    /// one shared predicate `NutritionManager.didMeetGoals` decides. Extracted so the calendar
+    /// and streaks can never disagree — both call THIS.
+    private func dayGoalMet(dayStart: Date,
+                            entriesByDay: [Date: [FoodEntry]],
+                            goalsByRecency: [DailyGoal],
+                            calendar: Calendar) -> Bool {
+        guard let dayEntries = entriesByDay[dayStart], !dayEntries.isEmpty else { return false }
+        guard let goal = goalInEffect(on: dayStart, calendar: calendar, goalsByRecency: goalsByRecency) else { return false }
+        return nutritionManager.didMeetGoals(entries: dayEntries, goal: goal)
+    }
+
+    /// The set of day-starts in the CURRENT calendar month whose daily goal was MET, for the
+    /// D2 Goal Calendar. LOCAL SwiftData only — no network. Guest-safe: reads the caller's own
+    /// `userId`-scoped rows (guests get their local days), so this is NOT a Firestore entry point
+    /// and needs no `isGuest` gate. Future days are never included.
+    ///
+    /// single met-predicate — calendar must never disagree with streaks: each day is decided by
+    /// `dayGoalMet(...)`, the SAME per-day rule the weekly-adherence / streak pipeline uses
+    /// (didMeetGoals + goalInEffect + startOfDay bucketing). Reuses that exact day-bucketing
+    /// (`Calendar.current`, `startOfDay`) so a day counted for a streak is the same day painted
+    /// green. Throws on a local read failure so the caller can hide the section (D10).
+    func goalMetDaysForCurrentMonth() async throws -> Set<Date> {
+        guard let userId = currentUserId, !userId.isEmpty else { return [] }
+
+        let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: Date())
+        guard let monthInterval = calendar.dateInterval(of: .month, for: todayStart) else { return [] }
+
+        let entries = try await fetchEntriesForDateRange(start: monthInterval.start, end: monthInterval.end)
+        let entriesByDay = Dictionary(grouping: entries) { calendar.startOfDay(for: $0.date) }
+        let goals = try await fetchAllDailyGoalsForSync(userId: userId)
+        let goalsByRecency = goals.sorted { $0.date > $1.date }
+
+        var met: Set<Date> = []
+        var day = monthInterval.start
+        while day < monthInterval.end {
+            // Evaluate only up to and including today — future days are never "met".
+            if day <= todayStart,
+               dayGoalMet(dayStart: day, entriesByDay: entriesByDay, goalsByRecency: goalsByRecency, calendar: calendar) {
+                met.insert(day)
+            }
+            guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+            day = next
+        }
+        return met
     }
 
     /// The DailyGoal in effect on a given day: that day's own goal when one was
