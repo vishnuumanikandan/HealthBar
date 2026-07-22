@@ -243,7 +243,8 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(
              ['username', 'displayName', 'level', 'totalXP', 'currentStreak',
               'rank', 'rr', 'weeklyGoalsMet', 'weeklyAdherence', 'updatedAt',
-              'longestStreak', 'joinedAt', 'badgeCount', 'earnedBadgeIds'])
+              'longestStreak', 'joinedAt', 'badgeCount', 'earnedBadgeIds',
+              'avatarIcon', 'avatarColor'])
         && request.resource.data.username is string
         && request.resource.data.displayName is string
         && request.resource.data.rank is string
@@ -270,7 +271,13 @@ service cloud.firestore {
         // D5: rr ceiling mirrors the duelQueue ticket bound (rr <= 100000).
         && (!('rr' in request.resource.data)
             || (request.resource.data.rr is int && request.resource.data.rr >= 0
-                && request.resource.data.rr <= 100000));
+                && request.resource.data.rr <= 100000))
+        // D3a preset avatar. size() < 40 is a SANITY bound, not a catalog contract — the
+        // catalog grows without rules changes; unknown ids fall back client-side.
+        && (!('avatarIcon' in request.resource.data)
+            || (request.resource.data.avatarIcon is string && request.resource.data.avatarIcon.size() < 40))
+        && (!('avatarColor' in request.resource.data)
+            || (request.resource.data.avatarColor is string && request.resource.data.avatarColor.size() < 40));
 
       // Owner-only delete: no field validation is possible on delete, and
       // account deletion must be able to remove this doc.
@@ -682,7 +689,8 @@ service cloud.firestore {
         && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(
              ['username','displayName','rr','wins1','wins3','wins5',
-              'streak1','streak3','streak5','updatedAt'])
+              'streak1','streak3','streak5','updatedAt',
+              'avatarIcon','avatarColor'])
         && request.resource.data.username is string && request.resource.data.username.size() < 300
         && request.resource.data.displayName is string && request.resource.data.displayName.size() < 300
         && request.resource.data.rr is int && request.resource.data.rr >= 0 && request.resource.data.rr <= 100000
@@ -691,7 +699,11 @@ service cloud.firestore {
         && request.resource.data.wins5 is int && request.resource.data.wins5 >= 0
         && request.resource.data.streak1 is int && request.resource.data.streak1 >= 0
         && request.resource.data.streak3 is int && request.resource.data.streak3 >= 0
-        && request.resource.data.streak5 is int && request.resource.data.streak5 >= 0;
+        && request.resource.data.streak5 is int && request.resource.data.streak5 >= 0
+        && (!('avatarIcon' in request.resource.data)
+            || (request.resource.data.avatarIcon is string && request.resource.data.avatarIcon.size() < 40))
+        && (!('avatarColor' in request.resource.data)
+            || (request.resource.data.avatarColor is string && request.resource.data.avatarColor.size() < 40));
       // updatedAt intentionally not type-checked (serverTimestamp sentinel precedent).
 
       allow delete: if request.auth != null && request.auth.uid == uid;

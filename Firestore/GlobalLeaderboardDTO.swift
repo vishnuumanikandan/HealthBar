@@ -42,6 +42,12 @@ struct GlobalLeaderboardDTO: Codable, Identifiable, Equatable {
     var streak3: Int
     var streak5: Int
 
+    /// Preset avatar (D3a): icon id + color id. Optional (back-compat). Written to
+    /// the manual dict ONLY when non-nil (see `upsertLeaderboardEntry`), so a
+    /// nil-avatar row stays compatible with pre-D3a rules during the dev window.
+    var avatarIcon: String? = nil
+    var avatarColor: String? = nil
+
     @ServerTimestamp var updatedAt: Date?
 
     // MARK: - Convenience (client-side)

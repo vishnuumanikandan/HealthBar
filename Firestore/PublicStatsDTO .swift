@@ -53,5 +53,11 @@ struct PublicStatsDTO: Codable {
     var joinedAt: Date?
     var badgeCount: Int?
     var earnedBadgeIds: [String]?
+    /// Preset avatar (D3a): icon id + color id. Optional so pre-D3a projections
+    /// still decode; nil ⇒ initials fallback. The Firestore Codable encoder omits
+    /// nil optionals, so a nil-avatar publish carries no avatar keys — old rules
+    /// still accept it during the dev window (see FirestoreServiceImpl.publishPublicStats).
+    var avatarIcon: String? = nil
+    var avatarColor: String? = nil
     @ServerTimestamp var updatedAt: Date?
 }

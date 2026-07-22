@@ -2195,7 +2195,11 @@ final class DataManager {
         let existing = try await getUserProfile()
 
         if let existing = existing {
-            // Update in-place — preserve the existing SwiftData object
+            // Update in-place — preserve the existing SwiftData object. avatarIcon/
+            // avatarColor and displayName are deliberately NOT copied here: they are
+            // owner-authored (avatar via the picker; displayName synced from account/info)
+            // and must survive a full-profile upsert (D3a — the onboarding-completion upsert
+            // preserves a claim-time avatar).
             existing.sex = profile.sex
             existing.age = profile.age
             existing.weightKg = profile.weightKg
@@ -2225,6 +2229,53 @@ final class DataManager {
             Task {
                 try? await firestoreService.uploadUserProfile(dto, userId: userId)
             }
+        }
+    }
+
+    /// Persists the preset-avatar selection (D3a) onto the user's profile record and
+    /// syncs it through the EXISTING profile write (`uploadUserProfile`) — no new save
+    /// chokepoint. Returns whether the LOCAL save succeeded (the picker's dismiss/retry
+    /// signal); the Firestore sync is fire-and-forget, so a dev-window permission-denied
+    /// never fails the local save. Guest-safe: the `!isGuest` guard keeps Firestore
+    /// untouched — a guest's avatar stays local-only.
+    ///
+    /// Creates a minimal profile when none exists yet: the onboarding username claim
+    /// happens BEFORE the health profile is built, so a claim-time avatar would otherwise
+    /// have nowhere to land. Onboarding's later `upsertUserProfile` fills demographics
+    /// in-place and preserves this avatar (avatar is not in that in-place field list).
+    func updateAvatar(iconId: String, colorId: String) async -> Bool {
+        guard let userId = currentUserId, !userId.isEmpty else { return false }
+        do {
+            let profile: UserProfile
+            if let existing = try await getUserProfile() {
+                profile = existing
+            } else {
+                // Minimal record carrying only the avatar; demographics use the model's
+                // own defaults and are filled in by onboarding's later upsert.
+                profile = UserProfile(
+                    userId: userId, sex: "male", age: 25, weightKg: 70.0, heightCm: 170.0,
+                    goalWeightKg: 65.0, weeklyPaceLbs: 1.0, activityLevel: "moderate",
+                    dietStyle: "standard", mealsPerDay: 3, allergies: [],
+                    sleepQuality: "fair", stressLevel: "moderate"
+                )
+                modelContext.insert(profile)
+            }
+            profile.avatarIcon = iconId
+            profile.avatarColor = colorId
+            profile.updatedAt = Date()
+            try modelContext.save()
+
+            // Firestore sync via the existing profile write. Skipped for guests.
+            // Fire-and-forget: a failed/denied sync self-heals on the next profile save.
+            if !isGuest {
+                let dto = UserProfileDTO(from: profile)
+                Task {
+                    try? await firestoreService.uploadUserProfile(dto, userId: userId)
+                }
+            }
+            return true
+        } catch {
+            return false
         }
     }
 
@@ -3683,6 +3734,7 @@ final class DataManager {
                 rr: max(0, progress.rr),
                 wins1: progress.duelWins1, wins3: progress.duelWins3, wins5: progress.duelWins5,
                 streak1: progress.winStreak1, streak3: progress.winStreak3, streak5: progress.winStreak5,
+                avatarIcon: dto.avatarIcon, avatarColor: dto.avatarColor,
                 updatedAt: nil
             )
             try? await firestoreService.upsertLeaderboardEntry(entry, userId: userId)
@@ -3728,6 +3780,10 @@ final class DataManager {
         // No username yet (pre-claim-gate edge) → nothing to publish under.
         guard let identity = try? await fetchMyFriendIdentity(userId: userId) else { return nil }
 
+        // D3a: preset avatar from the local profile record (nil ⇒ initials fallback at
+        // readers). Read after the identity guard (a pre-claim edge already returned above).
+        let profile = try? await getUserProfile()
+
         return PublicStatsDTO(
             username: identity.username,
             displayName: identity.displayName,
@@ -3742,6 +3798,8 @@ final class DataManager {
             joinedAt: identity.createdAt, // nil (field omitted) for legacy accounts
             badgeCount: earnedBadgeIds.count,
             earnedBadgeIds: earnedBadgeIds,
+            avatarIcon: profile?.avatarIcon,
+            avatarColor: profile?.avatarColor,
             updatedAt: nil // encoded as FieldValue.serverTimestamp() via @ServerTimestamp
         )
     }

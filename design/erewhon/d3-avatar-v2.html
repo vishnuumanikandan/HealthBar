@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>HealthBar — D3a Preset Avatars (reference)</title>
+<style>
+body{background:#0E1116;color:#EDEFF3;font-family:-apple-system,Helvetica,sans-serif;padding:28px;max-width:880px;margin:auto}
+h1{font-size:18px} h2{font-size:13px;letter-spacing:1.6px;color:#8A8F98;margin:28px 0 12px;font-weight:600}
+.note{font-size:12px;color:#8A8F98;line-height:1.55}
+code{color:#9AA1AC}
+table{border-collapse:collapse;font-size:12px;width:100%} td,th{border:1px solid #232833;padding:6px 9px;text-align:left} th{color:#8A8F98;font-weight:600}
+.card{background:#161A22;border:1px solid #232833;border-radius:14px;padding:18px}
+.bebas{font-family:'Arial Narrow',sans-serif;font-weight:600;letter-spacing:.5px}
+.grid{display:grid;gap:12px}
+.sw{aspect-ratio:1;border-radius:26%;display:flex;align-items:center;justify-content:center;font-size:26px;color:#fff;box-shadow:inset 0 0 0 2px rgba(255,255,255,.22)}
+.cap{font-size:10px;color:#8A8F98;text-align:center;margin-top:4px}
+.cap b{color:#EDEFF3;font-weight:600}
+.sel{outline:3px solid #4882FF;outline-offset:2px}
+/* Avatar palette — ids are the wire contract; these hexes live only in AvatarKit (artwork, like RankPlaque Ink). */
+.verdant{background:#2FA25B}.sky{background:#3A8FDE}.violet{background:#8560D6}.ember{background:#E06438}.rose{background:#E0537E}.gold{background:#C0902F}
+.aurora{background:linear-gradient(135deg,#2FA25B,#2BB8A8,#7357D8)}
+.dusk{background:linear-gradient(135deg,#3E52C4,#8560D6,#DE5A86)}
+.sunfire{background:linear-gradient(135deg,#E7B23E,#E06438,#DA3A5C)}
+.pill{font-size:9px;letter-spacing:.4px;text-transform:uppercase;color:#4882FF;background:rgba(72,130,255,.13);border-radius:6px;padding:2px 6px}
+</style></head><body>
+
+<h1>D3a — Preset Avatars: Core (implementation reference)</h1>
+<p class="note">Precedence per the standing rule: the D3a prompt decisions outrank this file on behavior/ids/tokens.
+The original <code>d3-avatar-v2.html</code> ground-truth mockup was not present in the repo at build time, so this
+file documents the <b>shipped</b> D3a design (catalog ids, the picker layout, and the render sites) as a reference —
+it was authored to match the implementation, not the other way round. Glyphs below are emoji stand-ins for the
+placeholder SF Symbols; D-ART swaps custom emblems behind the same ids later. The rounded-square + white glyph here
+approximates the in-app <code>AvatarView</code> (which uses <code>AdaptiveCardShapeStyle</code> — pixel corners in the
+Pixel family, rounded in Clean).</p>
+
+<h2>WIRE CONTRACT</h2>
+<p class="note">Two optional strings everywhere: <code>avatarIcon: String?</code> + <code>avatarColor: String?</code>.
+Default = <code>sword</code> + <code>verdant</code>. nil (either field) OR an unknown id ⇒ initials fallback at every
+render site, silently. Hex/gradient definitions NEVER enter Firestore. Rules validate type + <code>size() &lt; 40</code>
+only, never membership — the catalog grows with no rules change.</p>
+
+<h2>COLORS (9) — 6 solids + 3 gradients</h2>
+<div class="grid" style="grid-template-columns:repeat(9,1fr)">
+<div><div class="sw verdant sel">🤺</div><div class="cap"><b>verdant</b><br>default</div></div>
+<div><div class="sw sky">🤺</div><div class="cap"><b>sky</b></div></div>
+<div><div class="sw violet">🤺</div><div class="cap"><b>violet</b></div></div>
+<div><div class="sw ember">🤺</div><div class="cap"><b>ember</b></div></div>
+<div><div class="sw rose">🤺</div><div class="cap"><b>rose</b></div></div>
+<div><div class="sw gold">🤺</div><div class="cap"><b>gold</b></div></div>
+<div><div class="sw aurora">🤺</div><div class="cap"><b>aurora</b><br>gradient</div></div>
+<div><div class="sw dusk">🤺</div><div class="cap"><b>dusk</b><br>gradient</div></div>
+<div><div class="sw sunfire">🤺</div><div class="cap"><b>sunfire</b><br>gradient</div></div>
+</div>
+
+<h2>ICONS (10) — id → placeholder SF Symbol</h2>
+<div class="grid" style="grid-template-columns:repeat(10,1fr)">
+<div><div class="sw verdant sel">🤺</div><div class="cap"><b>sword</b><br>figure.fencing</div></div>
+<div><div class="sw verdant">🛡️</div><div class="cap"><b>shield</b><br>shield.fill</div></div>
+<div><div class="sw verdant">🏛️</div><div class="cap"><b>rook</b><br>building.columns</div></div>
+<div><div class="sw verdant">⚜️</div><div class="cap"><b>fleur</b><br>seal.fill</div></div>
+<div><div class="sw verdant">✨</div><div class="cap"><b>spark</b><br>sparkles</div></div>
+<div><div class="sw verdant">🌙</div><div class="cap"><b>moon</b><br>moon.stars.fill</div></div>
+<div><div class="sw verdant">☀️</div><div class="cap"><b>sun</b><br>sun.max.fill</div></div>
+<div><div class="sw verdant">💎</div><div class="cap"><b>gem</b><br>diamond.fill</div></div>
+<div><div class="sw verdant">⚡</div><div class="cap"><b>bolt</b><br>bolt.fill</div></div>
+<div><div class="sw verdant">🍃</div><div class="cap"><b>leaf</b><br>leaf.fill</div></div>
+</div>
+
+<h2>PICKER SHEET — one component, two presenters (onboarding + Profile)</h2>
+<div class="card" style="max-width:360px">
+  <div style="display:flex;justify-content:center;margin-bottom:18px">
+    <div class="sw dusk" style="width:96px;height:96px;font-size:44px">⚔️</div>
+  </div>
+  <div style="font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#8A8F98;margin-bottom:8px">Color</div>
+  <div class="grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px">
+    <div class="sw verdant" style="font-size:0">&nbsp;</div><div class="sw sky" style="font-size:0">&nbsp;</div>
+    <div class="sw violet" style="font-size:0">&nbsp;</div><div class="sw ember" style="font-size:0">&nbsp;</div>
+    <div class="sw rose" style="font-size:0">&nbsp;</div><div class="sw gold" style="font-size:0">&nbsp;</div>
+    <div class="sw aurora" style="font-size:0">&nbsp;</div><div class="sw dusk sel" style="font-size:0">&nbsp;</div>
+    <div class="sw sunfire" style="font-size:0">&nbsp;</div>
+  </div>
+  <div style="font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#8A8F98;margin-bottom:8px">Icon</div>
+  <div class="grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:18px">
+    <div class="sw dusk sel">⚔️</div><div class="sw dusk">🛡️</div><div class="sw dusk">🏛️</div>
+    <div class="sw dusk">⚜️</div><div class="sw dusk">✨</div><div class="sw dusk">🌙</div>
+    <div class="sw dusk">☀️</div><div class="sw dusk">💎</div><div class="sw dusk">⚡</div><div class="sw dusk">🍃</div>
+  </div>
+  <div style="background:#4882FF;color:#fff;text-align:center;padding:12px;border-radius:12px;font-weight:600">Save</div>
+  <p class="note" style="margin-top:10px">Save awaits <code>onSave(iconId,colorId) async -&gt; Bool</code> — true dismisses,
+  false surfaces an inline "Couldn't save. Try again." and stays open. Icon cells preview the glyph on the chosen color.</p>
+</div>
+
+<h2>RENDER SITES (D7–D10)</h2>
+<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+  <div class="card" style="text-align:center">
+    <div class="sw dusk" style="width:88px;height:88px;font-size:40px;margin:auto;position:relative">⚔️
+      <span style="position:absolute;bottom:-4px;right:-4px;width:28px;height:28px;border-radius:50%;background:#4882FF;box-shadow:0 0 0 3px #0E1116;display:flex;align-items:center;justify-content:center;font-size:12px">✎</span></div>
+    <div class="cap" style="margin-top:10px">D7 onboarding + Profile (D8)<br>tappable, edit affordance</div>
+  </div>
+  <div class="card" style="text-align:center;box-shadow:0 0 14px rgba(201,120,74,.35);border-color:rgba(201,120,74,.4)">
+    <div class="sw sunfire" style="width:68px;height:68px;font-size:30px;margin:auto">💎</div>
+    <div class="bebas" style="font-size:20px;margin-top:8px">@rival</div>
+    <div class="cap">D9 FriendProfileView — avatar color tints the<br>avatar only; rank accent still owns the card glow</div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <div style="display:flex;align-items:center;gap:13px;padding:8px 0;border-bottom:1px solid #20242E">
+    <div class="bebas" style="width:26px;height:26px;background:#C0902F;border-radius:8px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px">1</div>
+    <div class="sw sunfire" style="width:38px;height:38px;font-size:17px">⚡</div>
+    <div style="flex:1"><div class="bebas" style="font-size:14px">Aria</div><div class="cap" style="text-align:left">@aria</div></div>
+    <div class="bebas" style="font-size:18px">1420 <span style="font-size:10px;color:#8A8F98">RR</span></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:13px;padding:12px 8px;margin-top:10px;background:rgba(72,130,255,.10);border:1.5px solid rgba(72,130,255,.4);border-radius:14px">
+    <div class="sw dusk" style="width:38px;height:38px;font-size:17px">⚔️</div>
+    <span class="pill">You</span>
+    <div class="bebas" style="flex:1;font-size:15px">Me</div>
+    <div class="bebas" style="font-size:18px">980 <span style="font-size:10px;color:#8A8F98">RR</span></div>
+  </div>
+  <div class="cap" style="text-align:left;margin-top:10px">D10 Battle GLOBAL standings rows + pinned "You" footer — leading <code>AvatarView</code> at the 38pt slot
+  (over the rank-tinted initials fallback). Guild/friend boards render from other doc types → untouched (D3b).</div>
+</div>
+
+<h2>FALLBACK (nil / unknown id) — byte-preserved per site</h2>
+<p class="note">Every existing user (no avatar) renders exactly today's initials view: the Profile header's gradient block,
+FriendProfileView's accent-tinted block, and the standings' rank-tinted initials avatar are each passed to
+<code>AvatarView</code> as its <code>fallback</code> verbatim — the diff is a no-op for nil data.</p>
+
+</body></html>

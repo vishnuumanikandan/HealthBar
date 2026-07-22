@@ -31,6 +31,9 @@ struct ProfileView: View {
     /// Selected badge for detail sheet
     @State private var selectedBadge: BadgeDefinition? = nil
 
+    /// D3a: presents the avatar picker from the header tap.
+    @State private var showAvatarPicker = false
+
     /// Settings manager for app-wide settings
     @State private var settings = SettingsManager.shared
 
@@ -233,17 +236,34 @@ struct ProfileView: View {
     /// Journey card is now rank's single home.
     private var headerSection: some View {
         VStack(spacing: DesignSystem.Spacing.md) {
-            // Avatar — pixel-bordered square portrait
-            ZStack {
-                AdaptiveCardShapeStyle()
-                    .fill(DesignSystem.Colors.adaptiveGradient(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark))
-                    .frame(width: 100, height: 100)
+            // Avatar (D3a) — preset avatar over the pixel-bordered square portrait fallback.
+            // Tapping opens the shared picker; a successful save updates the VM directly (no reload).
+            Button {
+                showAvatarPicker = true
+            } label: {
+                AvatarView(iconId: viewModel.avatarIcon, colorId: viewModel.avatarColor, size: 100) {
+                    // Byte-preserved: today's gradient-initials header when no avatar is set.
+                    ZStack {
+                        AdaptiveCardShapeStyle()
+                            .fill(DesignSystem.Colors.adaptiveGradient(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark))
+                            .frame(width: 100, height: 100)
 
-                Text(viewModel.userInitials)
-                    .font(AppFont.bold(42))
-                    .foregroundColor(.white)
+                        Text(viewModel.userInitials)
+                            .font(AppFont.bold(42))
+                            .foregroundColor(.white)
+                    }
+                    .clipShape(AdaptiveCardShapeStyle())
+                }
             }
-            .clipShape(AdaptiveCardShapeStyle())
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showAvatarPicker) {
+                AvatarPickerSheet(
+                    iconId: viewModel.avatarIcon ?? AvatarCatalog.defaultIcon,
+                    colorId: viewModel.avatarColor ?? AvatarCatalog.defaultColor
+                ) { icon, color in
+                    await viewModel.saveAvatar(iconId: icon, colorId: color)
+                }
+            }
 
             Text(viewModel.displayName)
                 .font(AppFont.bold(22))

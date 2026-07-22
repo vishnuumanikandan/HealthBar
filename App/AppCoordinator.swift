@@ -764,6 +764,13 @@ final class AppCoordinator {
         return try await dataManager.getUserProfile()
     }
 
+    /// D3a: persists the preset-avatar selection via the profile save path. Returns
+    /// local-save success (the picker's dismiss/retry signal); Firestore sync is
+    /// best-effort. Guest-safe (local-only for guests).
+    func updateAvatar(iconId: String, colorId: String) async -> Bool {
+        return await dataManager.updateAvatar(iconId: iconId, colorId: colorId)
+    }
+
     /// Returns true if the current user has a completed UserProfile.
     /// Returns false on any error or if no profile exists.
     func checkOnboardingCompleted() async -> Bool {

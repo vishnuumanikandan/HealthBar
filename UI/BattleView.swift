@@ -1262,7 +1262,10 @@ private struct BattleStandingsBlock: View {
         let metal = StandingsPieces.podiumMetal(position: position, hasData: true)
         let row = HStack(alignment: .center, spacing: 13) {
             StandingsPieces.rankChip(position: position, hasData: true, metal: metal)
-            StandingsPieces.avatar(initial: initial(for: s.dto), tint: DesignSystem.Erewhon.rankMetal(forRR: s.dto.rr))
+            // D10: preset avatar over the rank-tinted initials fallback (byte-preserved 38pt slot).
+            AvatarView(iconId: s.dto.avatarIcon, colorId: s.dto.avatarColor, size: 38) {
+                StandingsPieces.avatar(initial: initial(for: s.dto), tint: DesignSystem.Erewhon.rankMetal(forRR: s.dto.rr))
+            }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     Text(s.dto.displayName.isEmpty ? "@\(s.dto.username)" : s.dto.displayName)
@@ -1343,6 +1346,10 @@ private struct BattleStandingsBlock: View {
     private var pinnedFooter: some View {
         if let entry = viewModel.myEntry {
             HStack(spacing: 13) {
+                // D10: leading preset avatar over the rank-tinted initials fallback.
+                AvatarView(iconId: entry.avatarIcon, colorId: entry.avatarColor, size: 38) {
+                    StandingsPieces.avatar(initial: initial(for: entry), tint: DesignSystem.Erewhon.rankMetal(forRR: entry.rr))
+                }
                 youPill
                 Text(entry.displayName.isEmpty ? "@\(entry.username)" : entry.displayName)
                     .font(AppFont.bold(15)).foregroundColor(tc.textPrimary).lineLimit(1)
