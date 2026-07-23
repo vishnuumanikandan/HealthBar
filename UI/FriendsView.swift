@@ -303,10 +303,13 @@ struct FriendsView: View {
         let metal = StandingsPieces.podiumMetal(position: position, hasData: hasData)
         let row = HStack(alignment: .center, spacing: 13) {
             StandingsPieces.rankChip(position: position, hasData: hasData, metal: metal)
-            StandingsPieces.avatar(
-                initial: initials(for: friend),
-                tint: hasData ? DesignSystem.Erewhon.rankMetal(forRR: friend.rr) : nil
-            )
+            // D3b: preset avatar over the rank-tinted initials fallback (byte-preserved 38pt slot).
+            AvatarView(iconId: friend.avatarIcon, colorId: friend.avatarColor, size: 38) {
+                StandingsPieces.avatar(
+                    initial: initials(for: friend),
+                    tint: hasData ? DesignSystem.Erewhon.rankMetal(forRR: friend.rr) : nil
+                )
+            }
             who(friend)
             Spacer(minLength: DesignSystem.Spacing.sm)
             statsColumn(friend)
@@ -376,7 +379,13 @@ struct FriendsView: View {
     }
 
     private func initials(for friend: FriendsViewModel.FriendRow) -> String {
-        let name = friend.displayName.isEmpty ? friend.username : friend.displayName
+        initials(displayName: friend.displayName, username: friend.username)
+    }
+
+    /// Shared initials builder (name, else @username, else "?") — used by the friend row and the
+    /// incoming-request row's avatar fallback.
+    private func initials(displayName: String, username: String) -> String {
+        let name = displayName.isEmpty ? username : displayName
         let letters = name.split(separator: " ").prefix(2).compactMap { $0.first }
         return letters.isEmpty ? "?" : String(letters).uppercased()
     }
@@ -445,7 +454,13 @@ struct FriendsView: View {
             Button {
                 profileRequest = request
             } label: {
-                identityLabel(displayName: request.displayName ?? "", username: request.username)
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    // D3b: leading preset avatar over the shared standings initials fallback (38pt).
+                    AvatarView(iconId: request.avatarIcon, colorId: request.avatarColor, size: 38) {
+                        StandingsPieces.avatar(initial: initials(displayName: request.displayName ?? "", username: request.username), tint: nil)
+                    }
+                    identityLabel(displayName: request.displayName ?? "", username: request.username)
+                }
             }
             .buttonStyle(PlainButtonStyle())
 

@@ -154,11 +154,17 @@ service cloud.firestore {
         && fromUid != ownerUid
         && request.resource.data.fromUid == fromUid
         && request.resource.data.keys().hasOnly(
-             ['fromUid', 'fromUsername', 'fromDisplayName', 'createdAt'])
+             ['fromUid', 'fromUsername', 'fromDisplayName', 'createdAt',
+              'fromAvatarIcon', 'fromAvatarColor'])
         && request.resource.data.fromUsername is string
         && request.resource.data.fromDisplayName is string
         && request.resource.data.fromUsername.size() < 300
         && request.resource.data.fromDisplayName.size() < 300
+        // D3b avatar fields — bounds per the D3a note at public/stats.
+        && (!('fromAvatarIcon' in request.resource.data)
+            || (request.resource.data.fromAvatarIcon is string && request.resource.data.fromAvatarIcon.size() < 40))
+        && (!('fromAvatarColor' in request.resource.data)
+            || (request.resource.data.fromAvatarColor is string && request.resource.data.fromAvatarColor.size() < 40))
         // UGC-1a: no friend request if either party blocks the other.
         && !blockedEither(ownerUid, fromUid);
 
@@ -196,12 +202,18 @@ service cloud.firestore {
 
       allow create: if request.auth != null
         && request.resource.data.keys().hasOnly(
-             ['friendUid', 'friendUsername', 'friendDisplayName', 'since'])
+             ['friendUid', 'friendUsername', 'friendDisplayName', 'since',
+              'friendAvatarIcon', 'friendAvatarColor'])
         && request.resource.data.friendUid == friendUid
         && request.resource.data.friendUsername is string
         && request.resource.data.friendDisplayName is string
         && request.resource.data.friendUsername.size() < 300
         && request.resource.data.friendDisplayName.size() < 300
+        // D3b avatar fields (snapshot per edge).
+        && (!('friendAvatarIcon' in request.resource.data)
+            || (request.resource.data.friendAvatarIcon is string && request.resource.data.friendAvatarIcon.size() < 40))
+        && (!('friendAvatarColor' in request.resource.data)
+            || (request.resource.data.friendAvatarColor is string && request.resource.data.friendAvatarColor.size() < 40))
         && (
              (request.auth.uid == ownerUid
                && pendingReq(ownerUid, friendUid))
@@ -466,9 +478,15 @@ service cloud.firestore {
         // Create — three legitimate paths, all stamping uid == doc id, exact shape:
         allow create: if request.auth != null
                       && request.resource.data.uid == memberUid
-                      && request.resource.data.keys().hasOnly(['uid','username','displayName','role','joinedAt'])
+                      && request.resource.data.keys().hasOnly(['uid','username','displayName','role','joinedAt',
+                           'avatarIcon','avatarColor'])
                       && request.resource.data.username is string && request.resource.data.username.size() < 300
                       && request.resource.data.displayName is string && request.resource.data.displayName.size() < 300
+                      // D3b avatar fields (member snapshot).
+                      && (!('avatarIcon' in request.resource.data)
+                          || (request.resource.data.avatarIcon is string && request.resource.data.avatarIcon.size() < 40))
+                      && (!('avatarColor' in request.resource.data)
+                          || (request.resource.data.avatarColor is string && request.resource.data.avatarColor.size() < 40))
                       && (
                            // a) founder adds self as owner (they own the guild).
                            //    getAfter (NOT get): createGuild batches guild+member+lock in ONE
@@ -544,9 +562,15 @@ service cloud.firestore {
         allow create: if request.auth != null
                       && request.resource.data.uid == requesterUid
                       && request.auth.uid == requesterUid
-                      && request.resource.data.keys().hasOnly(['uid','username','displayName','createdAt'])
+                      && request.resource.data.keys().hasOnly(['uid','username','displayName','createdAt',
+                           'avatarIcon','avatarColor'])
                       && request.resource.data.username is string && request.resource.data.username.size() < 300
                       && request.resource.data.displayName is string && request.resource.data.displayName.size() < 300
+                      // D3b avatar fields (requester snapshot; copied into the member doc on approval).
+                      && (!('avatarIcon' in request.resource.data)
+                          || (request.resource.data.avatarIcon is string && request.resource.data.avatarIcon.size() < 40))
+                      && (!('avatarColor' in request.resource.data)
+                          || (request.resource.data.avatarColor is string && request.resource.data.avatarColor.size() < 40))
                       && get(/databases/$(database)/documents/guilds/$(guildId)).data.joinPolicy == 'request'
                       && !exists(/databases/$(database)/documents/guilds/$(guildId)/members/$(requesterUid))
                       && !exists(/databases/$(database)/documents/guildMemberships/$(requesterUid));
@@ -572,9 +596,15 @@ service cloud.firestore {
         allow create: if request.auth != null
                       && exists(/databases/$(database)/documents/guilds/$(guildId)/members/$(request.auth.uid))
                       && request.resource.data.senderUid == request.auth.uid
-                      && request.resource.data.keys().hasOnly(['senderUid','senderUsername','senderDisplayName','text','createdAt'])
+                      && request.resource.data.keys().hasOnly(['senderUid','senderUsername','senderDisplayName','text','createdAt',
+                           'senderAvatarIcon','senderAvatarColor'])
                       && request.resource.data.senderUsername is string && request.resource.data.senderUsername.size() < 300
                       && request.resource.data.senderDisplayName is string && request.resource.data.senderDisplayName.size() < 300
+                      // D3b avatar fields (per-message sender snapshot).
+                      && (!('senderAvatarIcon' in request.resource.data)
+                          || (request.resource.data.senderAvatarIcon is string && request.resource.data.senderAvatarIcon.size() < 40))
+                      && (!('senderAvatarColor' in request.resource.data)
+                          || (request.resource.data.senderAvatarColor is string && request.resource.data.senderAvatarColor.size() < 40))
                       && request.resource.data.text is string
                       && request.resource.data.text.size() >= 1
                       && request.resource.data.text.size() <= 500;
@@ -741,7 +771,17 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['participantUids','challengerUid','opponentUid',
                'challengerUsername','challengerDisplayName','opponentUsername','opponentDisplayName',
                'league','status','createdAt','respondBy','challengerScore','opponentScore',
-               'rematchOfDuelId'])
+               'rematchOfDuelId',
+               'challengerAvatarIcon','challengerAvatarColor','opponentAvatarIcon','opponentAvatarColor'])
+          // D3b avatar fields (both sides' snapshot, stamped at challenge create only).
+          && (!('challengerAvatarIcon' in request.resource.data)
+                || (request.resource.data.challengerAvatarIcon is string && request.resource.data.challengerAvatarIcon.size() < 40))
+          && (!('challengerAvatarColor' in request.resource.data)
+                || (request.resource.data.challengerAvatarColor is string && request.resource.data.challengerAvatarColor.size() < 40))
+          && (!('opponentAvatarIcon' in request.resource.data)
+                || (request.resource.data.opponentAvatarIcon is string && request.resource.data.opponentAvatarIcon.size() < 40))
+          && (!('opponentAvatarColor' in request.resource.data)
+                || (request.resource.data.opponentAvatarColor is string && request.resource.data.opponentAvatarColor.size() < 40))
           // UGC-1a: neither party may block the other.
           && !blockedEither(request.auth.uid, request.resource.data.opponentUid);
       }

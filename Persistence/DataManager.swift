@@ -292,16 +292,22 @@ final class DataManager {
 
         firestoreService.listenForIncomingRequests(userId: userId) { dtos in
             let snapshots = dtos.map {
+                // D3b: carry the sender's avatar snapshot from IncomingRequestDTO into the local
+                // row so the incoming-request row renders it (and the accept can pass it on).
                 RequestSnapshot(otherUid: $0.fromUid, username: $0.fromUsername,
-                                displayName: $0.fromDisplayName, createdAt: $0.createdAt)
+                                displayName: $0.fromDisplayName, createdAt: $0.createdAt,
+                                avatarIcon: $0.fromAvatarIcon, avatarColor: $0.fromAvatarColor)
             }
             Task { try? await self.reconcileRequests(snapshots, direction: "incoming", userId: userId) }
         }
 
         firestoreService.listenForSentRequests(userId: userId) { dtos in
             let snapshots = dtos.map {
+                // Outgoing mirrors carry no avatar (SentRequestDTO untouched — the sender never
+                // reads the recipient's avatar).
                 RequestSnapshot(otherUid: $0.toUid, username: $0.toUsername,
-                                displayName: nil, createdAt: $0.createdAt)
+                                displayName: nil, createdAt: $0.createdAt,
+                                avatarIcon: nil, avatarColor: nil)
             }
             Task { try? await self.reconcileRequests(snapshots, direction: "outgoing", userId: userId) }
         }
@@ -2722,6 +2728,10 @@ final class DataManager {
         let username: String
         let displayName: String?
         let createdAt: Date
+        /// D3b: the counterparty's avatar snapshot — populated for incoming (from the request
+        /// DTO), nil for outgoing mirrors.
+        var avatarIcon: String? = nil
+        var avatarColor: String? = nil
     }
 
     /// Reconciles the Firestore friends snapshot into local SwiftData.
@@ -2745,9 +2755,14 @@ final class DataManager {
             if let local = localByUid[dto.friendUid] {
                 if local.username != dto.friendUsername
                     || local.displayName != dto.friendDisplayName
+                    || local.avatarIcon != dto.friendAvatarIcon
+                    || local.avatarColor != dto.friendAvatarColor
                     || local.since != dto.since {
                     local.username = dto.friendUsername
                     local.displayName = dto.friendDisplayName
+                    // D3b: mirror the friend's avatar snapshot (nil for a pre-D3b edge).
+                    local.avatarIcon = dto.friendAvatarIcon
+                    local.avatarColor = dto.friendAvatarColor
                     local.since = dto.since
                     didChange = true
                 }
@@ -2757,7 +2772,9 @@ final class DataManager {
                     friendUid: dto.friendUid,
                     username: dto.friendUsername,
                     displayName: dto.friendDisplayName,
-                    since: dto.since
+                    since: dto.since,
+                    avatarIcon: dto.friendAvatarIcon,
+                    avatarColor: dto.friendAvatarColor
                 ))
                 didChange = true
             }
@@ -2793,9 +2810,14 @@ final class DataManager {
             if let local = localByUid[snapshot.otherUid] {
                 if local.username != snapshot.username
                     || local.displayName != snapshot.displayName
+                    || local.avatarIcon != snapshot.avatarIcon
+                    || local.avatarColor != snapshot.avatarColor
                     || local.createdAt != snapshot.createdAt {
                     local.username = snapshot.username
                     local.displayName = snapshot.displayName
+                    // D3b: mirror the sender's avatar snapshot (incoming only; nil for outgoing).
+                    local.avatarIcon = snapshot.avatarIcon
+                    local.avatarColor = snapshot.avatarColor
                     local.createdAt = snapshot.createdAt
                     didChange = true
                 }
@@ -2806,7 +2828,9 @@ final class DataManager {
                     direction: direction,
                     username: snapshot.username,
                     displayName: snapshot.displayName,
-                    createdAt: snapshot.createdAt
+                    createdAt: snapshot.createdAt,
+                    avatarIcon: snapshot.avatarIcon,
+                    avatarColor: snapshot.avatarColor
                 ))
                 didChange = true
             }
@@ -3027,13 +3051,18 @@ final class DataManager {
         }
 
         let identity = try await fetchMyFriendIdentity(userId: me)
+        // D3b: my own avatar snapshot from the local profile record (D3a accessor) — stamped
+        // into the incoming-request doc. nil ⇒ omitted (guest / no avatar / no profile).
+        let myProfile = try? await getUserProfile()
         do {
             try await firestoreService.sendFriendRequest(
                 toUid: toUid,
                 toUsername: username,
                 fromUid: me,
                 fromUsername: identity.username,
-                fromDisplayName: identity.displayName
+                fromDisplayName: identity.displayName,
+                fromAvatarIcon: myProfile?.avatarIcon,
+                fromAvatarColor: myProfile?.avatarColor
             )
         } catch {
             // UGC-1b (D8): a permission-denied on this FRESH create is treated as a block — the
@@ -3098,13 +3127,22 @@ final class DataManager {
         }
 
         let identity = try await fetchMyFriendIdentity(userId: me)
+        // D3b: my own avatar from the local profile record (D3a accessor). The sender's avatar
+        // comes from the local `request` row — the reconciled mirror of the incoming-request doc
+        // (the same source as `request.username`/`displayName`); the accept flow does NOT fetch
+        // either user's profile or public/stats. nil on either side ⇒ that edge omits its keys.
+        let myProfile = try? await getUserProfile()
         try await firestoreService.acceptFriendRequest(
             fromUid: fromUid,
             fromUsername: request.username,
             fromDisplayName: request.displayName ?? "",
             meUid: me,
             meUsername: identity.username,
-            meDisplayName: identity.displayName
+            meDisplayName: identity.displayName,
+            fromAvatarIcon: request.avatarIcon,
+            fromAvatarColor: request.avatarColor,
+            meAvatarIcon: myProfile?.avatarIcon,
+            meAvatarColor: myProfile?.avatarColor
         )
     }
 
@@ -3366,13 +3404,17 @@ final class DataManager {
 
         let fields = try validatedGuildFields(name: name, joinPolicy: joinPolicy, description: description)
         let identity = try await fetchMyFriendIdentity(userId: me)
+        // D3b: my own avatar from the local profile record (D3a accessor) — stamped into the
+        // founder's owner member doc. nil ⇒ omitted.
+        let myProfile = try? await getUserProfile()
 
         for _ in 0..<5 {
             let code = DataManager.generateGuildCode()
             do {
                 try await firestoreService.createGuild(
                     code: code, name: fields.name, joinPolicy: joinPolicy, description: fields.description,
-                    ownerUid: me, ownerUsername: identity.username, ownerDisplayName: identity.displayName
+                    ownerUid: me, ownerUsername: identity.username, ownerDisplayName: identity.displayName,
+                    ownerAvatarIcon: myProfile?.avatarIcon, ownerAvatarColor: myProfile?.avatarColor
                 )
                 // Prefer the authoritative server copy; fall back to a local build.
                 if let created = try? await firestoreService.fetchGuild(code: code) {
@@ -3452,16 +3494,21 @@ final class DataManager {
         }
 
         let identity = try await fetchMyFriendIdentity(userId: me)
+        // D3b: my own avatar from the local profile record (D3a accessor) — stamped into my
+        // member doc (open/private) or my join-request doc (request). nil ⇒ omitted.
+        let myProfile = try? await getUserProfile()
         // R7d D2: "private" routes like "open" — a direct join. Private guilds are hidden
         // from the directory, not harder to join once you hold the code; the members-create
         // rule mirrors this (`joinPolicy in ['open','private']`). Only "request" defers to
         // an approval. Without this branch a valid private code would error.
         if guild.joinPolicy == "open" || guild.joinPolicy == "private" {
             try await firestoreService.joinOpenGuild(code: guildCode, uid: me,
-                                                     username: identity.username, displayName: identity.displayName)
+                                                     username: identity.username, displayName: identity.displayName,
+                                                     avatarIcon: myProfile?.avatarIcon, avatarColor: myProfile?.avatarColor)
         } else {
             try await firestoreService.requestToJoinGuild(code: guildCode, uid: me,
-                                                          username: identity.username, displayName: identity.displayName)
+                                                          username: identity.username, displayName: identity.displayName,
+                                                          avatarIcon: myProfile?.avatarIcon, avatarColor: myProfile?.avatarColor)
         }
     }
 
@@ -3587,10 +3634,14 @@ final class DataManager {
         guard trimmed.count <= 500 else { throw GuildChatError.tooLong }
 
         let identity = try await fetchMyFriendIdentity(userId: me)
+        // D3b: stamp my own avatar (local profile, D3a accessor) per message. nil ⇒ omitted.
+        let myProfile = try? await getUserProfile()
         let msg = GuildMessageDTO(
             senderUid: me,
             senderUsername: identity.username,
             senderDisplayName: identity.displayName,
+            senderAvatarIcon: myProfile?.avatarIcon,
+            senderAvatarColor: myProfile?.avatarColor,
             text: trimmed,
             createdAt: nil
         )
@@ -3822,20 +3873,23 @@ final class DataManager {
 
         var byUid: [String: DuelOpponentCandidate] = [:]
 
-        // Friends first (they win the dedup).
+        // Friends first (they win the dedup). D3b: avatar from the stamped Friend snapshot.
         let friends = (try? await fetchFriends()) ?? []
         for f in friends where f.friendUid != me && !f.friendUid.isEmpty {
             byUid[f.friendUid] = DuelOpponentCandidate(
-                uid: f.friendUid, username: f.username, displayName: f.displayName, source: .friend, rr: nil
+                uid: f.friendUid, username: f.username, displayName: f.displayName, source: .friend, rr: nil,
+                avatarIcon: f.avatarIcon, avatarColor: f.avatarColor
             )
         }
 
-        // Guild roster (add only uids not already present as a friend).
+        // Guild roster (add only uids not already present as a friend). D3b: avatar from the
+        // stamped GuildMemberDTO snapshot.
         if let guild = await myGuild(), let code = guild.id {
             for m in await guildMembers(code: code) where m.uid != me && !m.uid.isEmpty {
                 if byUid[m.uid] == nil {
                     byUid[m.uid] = DuelOpponentCandidate(
-                        uid: m.uid, username: m.username, displayName: m.displayName, source: .guild, rr: nil
+                        uid: m.uid, username: m.username, displayName: m.displayName, source: .guild, rr: nil,
+                        avatarIcon: m.avatarIcon, avatarColor: m.avatarColor
                     )
                 }
             }
@@ -3928,8 +3982,10 @@ final class DataManager {
             .map { dto in
                 // `.directory` now means "the ranked directory" (leaderboard-backed) — it carries
                 // a real displayName + rr, unlike the retired usernames-index directory.
+                // D3b: avatar from the leaderboard row's D3a fields.
                 DuelOpponentCandidate(uid: dto.id ?? "", username: dto.username,
-                                      displayName: dto.displayName, source: .directory, rr: dto.rr)
+                                      displayName: dto.displayName, source: .directory, rr: dto.rr,
+                                      avatarIcon: dto.avatarIcon, avatarColor: dto.avatarColor)
             }
         return ProximityPage(rows: rows, upCursor: newUp, downCursor: newDown)
     }
@@ -3957,8 +4013,10 @@ final class DataManager {
         // uid — reused here for an arbitrary uid (not just "my" row). Absent/undecodable → unranked.
         if let row = try? await firestoreService.fetchMyLeaderboardEntry(userId: uid) {
             let uname = row.username.isEmpty ? handleKey : row.username
+            // D3b: avatar from the leaderboard row's D3a fields.
             return DuelOpponentCandidate(uid: uid, username: uname, displayName: row.displayName,
-                                         source: .directory, rr: row.rr)
+                                         source: .directory, rr: row.rr,
+                                         avatarIcon: row.avatarIcon, avatarColor: row.avatarColor)
         }
         return DuelOpponentCandidate(uid: uid, username: handleKey, displayName: "",
                                      source: .directory, rr: nil)
@@ -4030,6 +4088,10 @@ final class DataManager {
         } catch {
             throw DuelError.network((error as? FriendError)?.errorDescription ?? "Couldn't load your profile.")
         }
+        // D3b: my own avatar (local profile, D3a accessor) → challenger snapshot; the opponent's
+        // avatar rides on the candidate (leaderboard row / stamped friend|guild model) → opponent
+        // snapshot. No cross-user read. nil on either side ⇒ that side's keys are omitted at write.
+        let myProfile = try? await getUserProfile()
 
         let duel = DuelDTO(
             challengerUid: me,
@@ -4040,7 +4102,11 @@ final class DataManager {
             opponentDisplayName: opponent.displayName,
             league: league,
             respondBy: Date().addingTimeInterval(DuelConstants.responseWindow),
-            rematchOfDuelId: rematchOfDuelId
+            rematchOfDuelId: rematchOfDuelId,
+            challengerAvatarIcon: myProfile?.avatarIcon,
+            challengerAvatarColor: myProfile?.avatarColor,
+            opponentAvatarIcon: opponent.avatarIcon,
+            opponentAvatarColor: opponent.avatarColor
         )
         do {
             _ = try await firestoreService.createDuel(duel)
@@ -4822,7 +4888,11 @@ final class DataManager {
             username: opponentIsChallenger ? duel.challengerUsername : duel.opponentUsername,
             displayName: opponentIsChallenger ? duel.challengerDisplayName : duel.opponentDisplayName,
             source: .friend, // display-only for the picker; irrelevant on the direct rematch path
-            rr: nil
+            rr: nil,
+            // D3b: carry the opponent's avatar snapshot from the original duel (a doc I already
+            // hold — no cross-user read), so the rematch duel keeps the opponent's avatar.
+            avatarIcon: opponentIsChallenger ? duel.challengerAvatarIcon : duel.opponentAvatarIcon,
+            avatarColor: opponentIsChallenger ? duel.challengerAvatarColor : duel.opponentAvatarColor
         )
         try await sendChallenge(to: candidate, league: duel.league, rematchOfDuelId: originalId)
     }
@@ -5299,6 +5369,8 @@ final class DataManager {
                     weeklyGoalsMet: stats.weeklyGoalsMet,
                     weeklyAdherence: stats.weeklyAdherence,
                     isCurrentUser: false,
+                    avatarIcon: stats.avatarIcon,     // D3b/D7: live avatar from the published projection
+                    avatarColor: stats.avatarColor,
                     hasData: true
                 )
             } else {
@@ -5370,6 +5442,9 @@ final class DataManager {
             ?? authService.currentUserDisplayName
             ?? username
 
+        // D3b/D7: my own leaderboard-row avatar from the local profile record (D3a accessor).
+        let myProfile = try? await getUserProfile()
+
         return LeaderboardEntry(
             uid: userId,
             username: username,
@@ -5382,6 +5457,8 @@ final class DataManager {
             weeklyGoalsMet: goalsMet,
             weeklyAdherence: adherence,
             isCurrentUser: true,
+            avatarIcon: myProfile?.avatarIcon,
+            avatarColor: myProfile?.avatarColor,
             hasData: true
         )
     }
@@ -5445,6 +5522,8 @@ final class DataManager {
                     weeklyGoalsMet: stats.weeklyGoalsMet,
                     weeklyAdherence: stats.weeklyAdherence,
                     isCurrentUser: false,
+                    avatarIcon: stats.avatarIcon,     // D3b/D7: live avatar from the published projection
+                    avatarColor: stats.avatarColor,
                     hasData: true,
                     isFriend: isFriend
                 )
@@ -5813,6 +5892,13 @@ struct LeaderboardEntry: Identifiable, Equatable {
     let weeklyGoalsMet: Int
     let weeklyAdherence: Double
     let isCurrentUser: Bool
+
+    /// Preset avatar (D3b/D7): icon id + color id from the row's backing PublicStatsDTO (the
+    /// LIVE owner-published projection, D3a) — so a leaderboard row's avatar heals on publish,
+    /// unlike the frozen friend/roster snapshots. My own row reads my local profile; no-data
+    /// and preview rows are nil ⇒ initials. Rendered by `LeaderboardSection`.
+    var avatarIcon: String? = nil
+    var avatarColor: String? = nil
 
     /// False when this friend has not published a projection yet — rendered as
     /// "no data yet" and always sorted to the bottom.

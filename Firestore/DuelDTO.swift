@@ -179,6 +179,14 @@ struct DuelOpponentCandidate: Identifiable, Equatable {
     /// Ranked Rating — non-nil only where the backing model carries it (see the type doc).
     let rr: Int?
 
+    /// Preset avatar (D3b): icon/color id flowing alongside `username`/`rr` per source —
+    /// `.directory` from the leaderboard row (D3a fields), `.friend`/`.guild` from the stamped
+    /// Friend/GuildMemberDTO snapshots. nil for pre-D3b docs. Rendered in the lobby; copied into
+    /// the created duel's `opponentAvatar*` at `sendChallenge` (so the counterparty snapshot is
+    /// this candidate's avatar, no cross-user read).
+    var avatarIcon: String? = nil
+    var avatarColor: String? = nil
+
     var id: String { uid }
 
     /// Best label for display: the display name, falling back to `@username`.
@@ -217,6 +225,17 @@ struct DuelDTO: Codable, Identifiable, Equatable {
     var challengerDisplayName: String
     var opponentUsername: String
     var opponentDisplayName: String
+
+    /// Preset avatar snapshots (D3b): each side's icon/color id, stamped at CREATE only
+    /// (challenger's own from the local profile; opponent's copied from the challenge
+    /// candidate). Display-only, never rewritten. Optional so pre-D3b / matchmade duels decode
+    /// nil ⇒ initials. Each Arena/featured head reads the COUNTERPARTY side (the viewer's own
+    /// head comes from the live local profile), so both sides are stamped. Written to the
+    /// challenge-create dict ONLY when non-nil; the matchmade-create path never stamps them.
+    var challengerAvatarIcon: String? = nil
+    var challengerAvatarColor: String? = nil
+    var opponentAvatarIcon: String? = nil
+    var opponentAvatarColor: String? = nil
 
     /// League duration in days — one of `DuelConstants.leagues`.
     var league: Int
@@ -282,7 +301,11 @@ struct DuelDTO: Codable, Identifiable, Equatable {
         opponentDisplayName: String,
         league: Int,
         respondBy: Date,
-        rematchOfDuelId: String? = nil
+        rematchOfDuelId: String? = nil,
+        challengerAvatarIcon: String? = nil,
+        challengerAvatarColor: String? = nil,
+        opponentAvatarIcon: String? = nil,
+        opponentAvatarColor: String? = nil
     ) {
         self.id = nil
         self.participantUids = [challengerUid, opponentUid]
@@ -292,6 +315,10 @@ struct DuelDTO: Codable, Identifiable, Equatable {
         self.challengerDisplayName = challengerDisplayName
         self.opponentUsername = opponentUsername
         self.opponentDisplayName = opponentDisplayName
+        self.challengerAvatarIcon = challengerAvatarIcon
+        self.challengerAvatarColor = challengerAvatarColor
+        self.opponentAvatarIcon = opponentAvatarIcon
+        self.opponentAvatarColor = opponentAvatarColor
         self.league = league
         self.status = DuelStatus.pending.rawValue
         self.createdAt = nil

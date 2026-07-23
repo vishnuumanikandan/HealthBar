@@ -82,6 +82,13 @@ struct GuildMemberDTO: Codable {
     var role: String
     var joinedAt: Date
 
+    /// Preset avatar (D3b): a display-only identity snapshot stamped when the member doc is
+    /// created (self-join / founder / owner-approval), never rewritten. Optional so pre-D3b
+    /// roster docs decode nil ⇒ initials fallback (roster row + `.guild` challenge candidate).
+    /// Written to the manual member-create dict ONLY when non-nil.
+    var avatarIcon: String? = nil
+    var avatarColor: String? = nil
+
     /// Firestore document ID — always the member's uid.
     var id: String { uid }
 }
@@ -92,6 +99,12 @@ struct GuildJoinRequestDTO: Codable {
     var username: String
     var displayName: String
     var createdAt: Date
+
+    /// Preset avatar (D3b): the requester's icon/color id, a display-only snapshot stamped at
+    /// request time; copied into the member doc on owner-approval. Optional (pre-D3b nil ⇒
+    /// initials). Written to the manual request dict ONLY when non-nil.
+    var avatarIcon: String? = nil
+    var avatarColor: String? = nil
 
     /// Firestore document ID — always the requester's uid.
     var id: String { uid }

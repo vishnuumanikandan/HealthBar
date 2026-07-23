@@ -118,10 +118,9 @@ of implementing.
   behavior, the existing pattern over a new one, the boring option over the clever
   one, and flagging over silently deciding.
 
-Rank raw values are Firestore wire format — pinned forever. They appear in immutable feedEvents/rank_<rawValue> doc IDs and public/stats.rank. Rename Swift case identity only; never touch a raw value; new cases get an explicit pinned raw value from day one.
-
 ## Lessons (D3a)
 - Per-tab DataManager instances: ContentView creates one DataManager per tab. Any state that must be consistent across tabs MUST be `static` or live on `FirestoreServiceImpl.shared` — instance state silently forks per tab (the `blockedUids` dead-filter bug).
-- Rank raw values are wire format: before touching `Rank`, read its type doc. Raw values are persisted in `public/stats.rank` and in immutable `feedEvents/rank_<rawValue>` doc ids — changing one orphans published milestones. Rename cases freely; NEVER change or "tidy" a raw value; new cases pin explicit raw values.
+- Rank raw values are Firestore wire format — pinned forever: before touching `Rank`, read its type doc. They appear in immutable `feedEvents/rank_<rawValue>` doc IDs and in `public/stats.rank`; changing one orphans published milestones (decoded back via `Rank(rawValue:)` → nil → the row is silently dropped forever). Rename the Swift case identity only; NEVER change or "tidy" a raw value; new cases pin an explicit raw value from day one.
 - AppCoordinator rides every DataManager signature change: any change adding or altering a DataManager method signature lists AppCoordinator as MODIFIED and updates its passthrough in the same diff.
 - Git hygiene in agent sessions: NEVER `git reset --hard`. Use `git stash -u` for anything in the way (recoverable). If a hard reset ever seems necessary, STOP and ask before running it.
+- Active duels persist through a block: the Arena opponent head still opens the shared duel surface for both participants (SMOKE-5C finding, accepted). `TODO-block-active-duel`: proper resolution is block-forfeits/ends-the-duel — a duel-lifecycle pass, post-2.1.

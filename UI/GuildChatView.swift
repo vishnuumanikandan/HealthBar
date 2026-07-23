@@ -191,31 +191,24 @@ struct GuildChatView: View {
         HStack {
             if isOwn { Spacer(minLength: DesignSystem.Spacing.xl) }
 
-            VStack(alignment: isOwn ? .trailing : .leading, spacing: 2) {
-                // Sender line (others only). NAV-1b: tappable to their read-only profile.
-                if !isOwn {
-                    senderLabel(message)
+            if isOwn {
+                // Own messages: layout untouched (D5 — no avatar on own bubbles).
+                bubbleColumn(message, isOwn: true)
+            } else {
+                // D6: non-own bubbles gain a leading 24pt sender avatar (the one new layout). The
+                // avatar taps route through the SAME profileSender presentation as the sender label.
+                HStack(alignment: .top, spacing: DesignSystem.Spacing.xs) {
+                    Button {
+                        profileSender = message
+                    } label: {
+                        AvatarView(iconId: message.senderAvatarIcon, colorId: message.senderAvatarColor, size: 24) {
+                            senderAvatarFallback(message)
+                        }
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    bubbleColumn(message, isOwn: false)
                 }
-
-                Text(message.text)
-                    .font(AppFont.regular(15))
-                    .foregroundColor(isOwn ? .white : tc.textPrimary)
-                    .padding(.horizontal, DesignSystem.Spacing.md)
-                    .padding(.vertical, DesignSystem.Spacing.sm)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(isOwn ? tc.primary : tc.cardBackground)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(isOwn ? tc.primaryDark : tc.primary.opacity(0.25), lineWidth: 1)
-                    )
-
-                Text(timeText(message.createdAt))
-                    .font(AppFont.regular(10))
-                    .foregroundColor(tc.textTertiary)
             }
-            .frame(maxWidth: 280, alignment: isOwn ? .trailing : .leading)
 
             if !isOwn { Spacer(minLength: DesignSystem.Spacing.xl) }
         }
@@ -243,6 +236,48 @@ struct GuildChatView: View {
                 }
             }
         }
+    }
+
+    /// The message's text column (sender line for others + bubble + time). Byte-preserved from the
+    /// prior inline VStack; extracted only so D6 can wrap it beside the leading avatar for non-own.
+    private func bubbleColumn(_ message: GuildMessageDTO, isOwn: Bool) -> some View {
+        VStack(alignment: isOwn ? .trailing : .leading, spacing: 2) {
+            // Sender line (others only). NAV-1b: tappable to their read-only profile.
+            if !isOwn {
+                senderLabel(message)
+            }
+
+            Text(message.text)
+                .font(AppFont.regular(15))
+                .foregroundColor(isOwn ? .white : tc.textPrimary)
+                .padding(.horizontal, DesignSystem.Spacing.md)
+                .padding(.vertical, DesignSystem.Spacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(isOwn ? tc.primary : tc.cardBackground)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(isOwn ? tc.primaryDark : tc.primary.opacity(0.25), lineWidth: 1)
+                )
+
+            Text(timeText(message.createdAt))
+                .font(AppFont.regular(10))
+                .foregroundColor(tc.textTertiary)
+        }
+        .frame(maxWidth: 280, alignment: isOwn ? .trailing : .leading)
+    }
+
+    /// D6 avatar fallback: a 24pt circle of the sender's initial in the sender-label colour scheme
+    /// (`tc.primary`). The one initials construction the prompt specifies for this new bubble layout.
+    private func senderAvatarFallback(_ message: GuildMessageDTO) -> some View {
+        let name = message.senderDisplayName.isEmpty ? message.senderUsername : message.senderDisplayName
+        let initial = name.first.map { String($0).uppercased() } ?? "?"
+        return Text(initial)
+            .font(AppFont.bold(11))
+            .foregroundColor(tc.primary)
+            .frame(width: 24, height: 24)
+            .background(Circle().fill(tc.primary.opacity(0.15)))
     }
 
     @ViewBuilder

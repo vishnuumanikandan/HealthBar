@@ -77,12 +77,9 @@ final class ProfileViewModel {
         return (progress.totalXP / 100) + 1
     }
 
-    /// Rank Journey card data (D3), derived purely from `userProgress.rr` via Rank.swift's
-    /// existing API. `nil` before load — the journey card region participates in the page's
-    /// loading state; there is no invented default RR and no force-unwrap. (D2 retired the
-    /// header rank pill along with `currentRank` / `currentRankDisplay`; the journey card is
-    /// rank's single home.)
-    var rankJourney: RankJourney? { userProgress.map { RankJourney(rr: $0.rr) } }
+    /// D9 (D3b): the Rank Journey card + its RR/tier math moved to the shared `RankJourneyCard`
+    /// component (also consumed by FriendProfileView). ProfileView now passes `userProgress.rr`
+    /// straight into `RankJourneyCard(rr:)` — this VM carries no journey-card computation.
 
     /// Duel record (D5), the SAME local source `publishMyStats` publishes for the wins
     /// leaderboard (`UserProgress.duelWins` / `.duelLosses` → UserProgressDTO → public/stats).
@@ -291,64 +288,6 @@ final class ProfileViewModel {
         let start = calendar.firstWeekday - 1                        // 0-based
         weekdayInitials = (0..<7).map { symbols[(start + $0) % 7] }
     }
-}
-
-// MARK: - Rank Journey (D3)
-
-/// Rank Journey card view-data, a pure function of `rr` through Rank.swift's existing API
-/// (no new math constants). Verified by a standalone TDD harness against Rank.swift.
-struct RankJourney {
-    let rr: Int
-
-    var rank: Rank { Rank.getRank(from: rr) }
-    private var tierInfo: RankTier { Rank.rankTier(from: rr) }
-    var tier: Int { tierInfo.tier }
-
-    /// Card title / caption-left: the current tier's name, e.g. "Copper 2".
-    var tierTitle: String { tierInfo.displayName }
-
-    /// Peak of the ladder: top rank, top tier — the bar + caption are replaced by one line.
-    var isPeak: Bool { rank == .zenith && tier == Rank.tiersPerRank }
-
-    /// Sub-line: "<rr> RR · Rank <i> of <count>" — `i` is the 1-based position of the current
-    /// rank in `Rank.allCases`, `<count>` is `Rank.allCases.count` (no hardcoded 9).
-    var rankIndex: Int { (Rank.allCases.firstIndex(of: rank) ?? 0) + 1 }
-    var rankCount: Int { Rank.allCases.count }
-    var subline: String { "\(rr) RR · Rank \(rankIndex) of \(rankCount)" }
-
-    /// RR at which the current tier begins: `rank.rrThreshold + (tier − 1) * Rank.rrPerTier`.
-    private var currentTierFloor: Int { rank.rrThreshold + (tier - 1) * Rank.rrPerTier }
-    private var nextTierFloor: Int { currentTierFloor + Rank.rrPerTier }
-
-    /// Progress through the current tier: `(rr − currentTierFloor) / Rank.rrPerTier`, clamped 0…1.
-    var fill: Double {
-        min(1, max(0, Double(rr - currentTierFloor) / Double(Rank.rrPerTier)))
-    }
-
-    /// RR still needed to reach the next tier.
-    var remaining: Int { max(0, nextTierFloor - rr) }
-
-    /// The next rank in ladder order (`Rank.allCases`), or nil at the top.
-    private var nextRank: Rank? {
-        let all = Rank.allCases
-        guard let idx = all.firstIndex(of: rank), idx + 1 < all.count else { return nil }
-        return all[idx + 1]
-    }
-
-    /// ASCENDING next-tier label: tier+1 in the same rank, or the NEXT rank's tier 1 when at
-    /// tier 3 (Copper 2 → Copper 3 → Iron 1). Fixes the mockup's descending "Copper 1" error.
-    var nextTierLabel: String {
-        if tier < Rank.tiersPerRank {
-            return "\(rank.displayName) \(tier + 1)"
-        } else if let nr = nextRank {
-            return "\(nr.displayName) 1"
-        } else {
-            return tierTitle   // zenith tier 3 = peak; caption is replaced upstream.
-        }
-    }
-
-    /// Caption-right: "<remaining> RR to <next>".
-    var captionRight: String { "\(remaining) RR to \(nextTierLabel)" }
 }
 
 // MARK: - Goal Calendar cell (D7)

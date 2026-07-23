@@ -23,6 +23,13 @@ struct IncomingRequestDTO: Codable {
     var fromDisplayName: String
     var createdAt: Date
 
+    /// Preset avatar (D3b): the sender's icon id + color id, stamped from the sender's
+    /// local profile at send time — a display-only identity snapshot, exactly like
+    /// `fromUsername`/`fromDisplayName`. Optional so pre-D3b requests still decode; nil ⇒
+    /// initials fallback at every render. Written to the manual send dict ONLY when non-nil.
+    var fromAvatarIcon: String? = nil
+    var fromAvatarColor: String? = nil
+
     /// Firestore document ID — always the sender's uid.
     var id: String { fromUid }
 }

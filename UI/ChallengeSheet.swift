@@ -240,8 +240,11 @@ struct ChallengeSheet: View {
             select(person)
         } label: {
             VStack(spacing: DesignSystem.Spacing.sm) {
-                StandingsPieces.avatar(initial: initial(person),
-                                       tint: DesignSystem.Erewhon.rankMetal(forRR: person.rr))
+                // D3b: preset avatar over the rank-tinted initials fallback (byte-preserved 38pt slot).
+                AvatarView(iconId: person.avatarIcon, colorId: person.avatarColor, size: 38) {
+                    StandingsPieces.avatar(initial: initial(person),
+                                           tint: DesignSystem.Erewhon.rankMetal(forRR: person.rr))
+                }
                 Text(person.displayLabel)
                     .font(AppFont.bold(13))
                     .foregroundColor(tc.textPrimary)
@@ -343,8 +346,11 @@ struct ChallengeSheet: View {
             select(person)
         } label: {
             HStack(spacing: DesignSystem.Spacing.md) {
-                StandingsPieces.avatar(initial: initial(person),
-                                       tint: DesignSystem.Erewhon.rankMetal(forRR: person.rr))
+                // D3b: preset avatar over the rank-tinted initials fallback (byte-preserved 38pt slot).
+                AvatarView(iconId: person.avatarIcon, colorId: person.avatarColor, size: 38) {
+                    StandingsPieces.avatar(initial: initial(person),
+                                           tint: DesignSystem.Erewhon.rankMetal(forRR: person.rr))
+                }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(person.displayLabel)
                         .font(AppFont.bold(15))
