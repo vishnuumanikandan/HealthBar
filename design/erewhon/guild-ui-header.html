@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<title>HealthBar — Guild Pages (GUILD-UI-1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+if (localStorage.getItem('hb-theme') === 'dark') document.documentElement.setAttribute('data-theme','dark');
+</script>
+<!--
+  GUILD-UI-1 — Guild Pages: de-capsule sweep + roster box + spectator page.
+  GROUND TRUTH for LAYOUT ONLY. The Swift build renders through DesignSystem tokens
+  (Erewhon Light/Dark ThemeColors + AppFont Bebas/Hanken). Where a hex here disagrees
+  with a token, THE TOKEN WINS.
+
+  The sweep kills every capsule metadata chip:
+    - header metaPills          → hairline-flanked tracked-uppercase META LINE
+    - directory policyPill       → right-aligned stacked POLICY micro-label + "N members"
+    - member/request tag()       → KEYLINE tags (2pt left rule + tracked-uppercase, no fill)
+  The roster is boxed: an internally-scrolling RoundedRectangle(16) + Erewhon.line board,
+  UNPAGINATED (bounded by the 40-member GUILD-CAP).
+-->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+:root{
+  --font:'Hanken Grotesk',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --font-display:'Bebas Neue','Hanken Grotesk',system-ui,sans-serif;
+
+  --bg:#F3F4F6;
+  --surface:#FFFFFF;
+  --surface-2:#FAFBFD;
+  --board:#E4E7EC;
+
+  --ink:#111318;
+  --muted:#57606F;
+  --faint:#8A93A6;
+
+  --line:color-mix(in oklab, var(--ink) 11%, transparent);
+  --line-soft:color-mix(in oklab, var(--ink) 5%, transparent);
+
+  --accent:oklch(0.44 0.23 264);
+  --on-accent:#FFFFFF;
+  --gold:#CE9A33;
+
+  --shadow-1:0 1px 2px rgba(17,22,50,0.05), 0 5px 14px rgba(17,22,50,0.06);
+  --shadow-phone:0 2px 8px rgba(10,15,40,0.14), 0 50px 100px -24px rgba(10,15,40,0.32);
+  --ease:cubic-bezier(0.16,1,0.3,1);
+}
+
+:root[data-theme="dark"]{
+  --bg:#0D0F13;
+  --surface:#161A22;
+  --surface-2:#1D2230;
+  --board:#09090E;
+
+  --ink:#E8EBF2;
+  --muted:#8B94A8;
+  --faint:#55607A;
+
+  --line:color-mix(in oklab, #E8EBF2 13%, transparent);
+  --line-soft:color-mix(in oklab, #E8EBF2 6%, transparent);
+
+  --accent:oklch(0.64 0.21 264);
+  --on-accent:#060A1A;
+  --gold:#E0B047;
+
+  --shadow-1:0 1px 2px rgba(0,0,0,0.5);
+  --shadow-phone:0 2px 8px rgba(0,0,0,0.6), 0 50px 110px -24px rgba(0,0,0,0.92);
+}
+
+html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{
+  font-family:var(--font);
+  min-height:100dvh;
+  display:flex; flex-direction:column; align-items:center; gap:22px;
+  padding:44px 20px 60px;
+  color:var(--ink);
+  background:
+    radial-gradient(1200px 680px at 50% -14%, color-mix(in oklab, var(--accent) 6%, transparent), transparent 62%),
+    var(--board);
+  background-attachment:fixed;
+  transition:background .4s var(--ease), color .4s var(--ease);
+}
+
+.theme-toggle{
+  position:fixed; top:18px; right:18px; z-index:80;
+  width:44px; height:44px; border-radius:13px; cursor:pointer;
+  display:grid; place-items:center;
+  background:var(--surface); color:var(--ink);
+  border:1px solid var(--line); box-shadow:var(--shadow-1);
+}
+.theme-toggle .sun{display:none}
+:root[data-theme="dark"] .theme-toggle .moon{display:none}
+:root[data-theme="dark"] .theme-toggle .sun{display:block}
+
+.rail{display:flex; flex-wrap:wrap; gap:26px; justify-content:center; align-items:flex-start}
+.col{display:flex; flex-direction:column; gap:12px; align-items:center}
+.col > .cap{max-width:300px; text-align:center; color:var(--muted); font-size:12px; line-height:1.55}
+.col > .cap b{color:var(--ink); font-weight:700}
+
+.phone{
+  width:330px; background:var(--bg); border-radius:34px; padding:20px 16px 26px;
+  border:1px solid var(--line); box-shadow:var(--shadow-phone);
+  display:flex; flex-direction:column; gap:16px;
+}
+
+/* ---------- shared card ---------- */
+.card{background:var(--surface); border:1px solid var(--line); border-radius:18px; box-shadow:var(--shadow-1)}
+
+/* ---------- header (de-capsuled) ---------- */
+.hdr{padding:20px 18px; text-align:center; display:flex; flex-direction:column; gap:12px; align-items:center}
+.hdr h1{font-family:var(--font-display); font-weight:400; font-size:30px; letter-spacing:.5px; line-height:1}
+
+/* META LINE: hairline — tracked-uppercase — hairline */
+.meta-line{display:flex; align-items:center; gap:12px; width:100%; justify-content:center}
+.meta-line .rule{height:1px; background:var(--line); flex:1; max-width:64px}
+.meta-line .txt{
+  font-size:10.5px; font-weight:700; letter-spacing:1.1px; text-transform:uppercase;
+  color:var(--muted); white-space:nowrap;
+}
+.hdr p.desc{font-size:13px; color:var(--muted); line-height:1.5; max-width:250px}
+
+/* ---------- directory rows ---------- */
+.dir{padding:2px 14px}
+.dir-row{display:flex; align-items:center; gap:12px; padding:14px 0}
+.dir-row + .dir-row{border-top:1px solid var(--line-soft)}
+.dir-info{flex:1; min-width:0; display:flex; align-items:center; gap:12px}
+.dir-text{flex:1; min-width:0}
+.dir-text h3{font-size:15px; font-weight:700; line-height:1.2}
+.dir-text p{font-size:11.5px; color:var(--muted); line-height:1.4; margin-top:3px;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+/* right-aligned stacked micro-labels */
+.dir-meta{display:flex; flex-direction:column; align-items:flex-end; gap:2px; text-align:right; flex-shrink:0}
+.dir-meta .policy{font-size:9.5px; font-weight:700; letter-spacing:.9px; text-transform:uppercase; color:var(--faint)}
+.dir-meta .count{font-size:11px; font-weight:600; color:var(--muted); white-space:nowrap}
+/* the Join/Request button is a SIBLING of the navigable info area (own tap) */
+.join-btn{
+  flex-shrink:0; font-size:12px; font-weight:700; padding:8px 14px; border-radius:999px;
+  background:var(--accent); color:var(--on-accent); border:1px solid transparent; cursor:pointer;
+}
+.join-btn.req{background:var(--surface); color:var(--muted); border:1px solid var(--line)}
+
+/* ---------- roster box ---------- */
+.sect-label{font-size:13px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--muted); padding:0 2px}
+.roster-box{
+  height:260px; overflow-y:auto; border-radius:16px; border:1px solid var(--line);
+  background:var(--bg); padding:8px 12px; display:flex; flex-direction:column; gap:8px;
+}
+.mrow{
+  display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:14px;
+  background:var(--surface); border:1px solid var(--line);
+}
+.avatar{width:40px; height:40px; border-radius:12px; flex-shrink:0; display:grid; place-items:center;
+  font-weight:700; font-size:15px; color:var(--on-accent); background:var(--accent)}
+.avatar.n2{background:#C7402E} .avatar.n3{background:#2E7D5B} .avatar.n4{background:#8F7BE8}
+.avatar.n5{background:#B06A3C}
+.mrow .who{flex:1; min-width:0}
+.mrow .who .name-line{display:flex; align-items:center; gap:8px}
+.mrow .who h4{font-size:14.5px; font-weight:700; line-height:1.15}
+.mrow .who .handle{font-size:10.5px; color:var(--muted); margin-top:1px}
+
+/* KEYLINE tag: 2pt left rule + tracked-uppercase text, NO fill */
+.keytag{
+  display:inline-flex; align-items:center; padding-left:7px; position:relative;
+  font-size:9px; font-weight:800; letter-spacing:1px; text-transform:uppercase; line-height:1;
+}
+.keytag::before{content:""; position:absolute; left:0; top:0; bottom:0; width:2px; border-radius:1px; background:currentColor}
+.keytag.you{color:var(--faint)}
+.keytag.owner{color:var(--gold)}
+
+.chev{color:var(--faint); font-size:15px; flex-shrink:0}
+
+.tag-note{font-size:10.5px;color:var(--muted);text-align:center;line-height:1.5;max-width:280px;margin-top:2px}
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="const d=document.documentElement;const n=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',n);localStorage.setItem('hb-theme',n)">
+  <span class="moon">🌙</span><span class="sun">☀️</span>
+</button>
+
+<div class="rail">
+
+  <!-- ===== Guild detail header (member OR spectator) ===== -->
+  <div class="col">
+    <div class="phone">
+      <div class="card hdr">
+        <h1>IRON WOLVES</h1>
+        <div class="meta-line">
+          <span class="rule"></span>
+          <span class="txt">Open&nbsp;·&nbsp;2 Members</span>
+          <span class="rule"></span>
+        </div>
+        <p class="desc">Daily accountability crew. We log every meal and never break the streak.</p>
+      </div>
+
+      <div class="sect-label">Members</div>
+      <div class="roster-box">
+        <div class="mrow">
+          <div class="avatar">R</div>
+          <div class="who"><div class="name-line"><h4>Ravi</h4></div><div class="handle">@ravi</div></div>
+          <span class="keytag owner">Owner</span>
+        </div>
+        <div class="mrow">
+          <div class="avatar n2">Y</div>
+          <div class="who"><div class="name-line"><h4>You</h4><span class="keytag you">You</span></div><div class="handle">@you</div></div>
+          <span class="chev">›</span>
+        </div>
+        <div class="mrow">
+          <div class="avatar n3">MK</div>
+          <div class="who"><div class="name-line"><h4>Mika K.</h4></div><div class="handle">@mika</div></div>
+          <span class="chev">›</span>
+        </div>
+        <div class="mrow">
+          <div class="avatar n4">JD</div>
+          <div class="who"><div class="name-line"><h4>Jordan</h4></div><div class="handle">@jordan</div></div>
+          <span class="chev">›</span>
+        </div>
+        <div class="mrow">
+          <div class="avatar n5">SL</div>
+          <div class="who"><div class="name-line"><h4>Sam L.</h4></div><div class="handle">@saml</div></div>
+          <span class="chev">›</span>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Header + roster.</b> No capsules: the meta line is hairline&#8209;flanked tracked&#8209;uppercase; the roster is an internally&#8209;scrolling board. <b>OWNER / YOU</b> are keyline tags (2pt rule + tracked text, no fill).</div>
+  </div>
+
+  <!-- ===== Directory rows ===== -->
+  <div class="col">
+    <div class="phone">
+      <div class="sect-label">Open Guilds</div>
+      <div class="card dir">
+        <div class="dir-row">
+          <div class="dir-info">
+            <div class="dir-text">
+              <h3>Iron Wolves</h3>
+              <p>Daily accountability crew. We log every meal.</p>
+            </div>
+            <div class="dir-meta"><span class="policy">Open</span><span class="count">2 members</span></div>
+          </div>
+          <button class="join-btn">Join</button>
+        </div>
+        <div class="dir-row">
+          <div class="dir-info">
+            <div class="dir-text">
+              <h3>Macro Monks</h3>
+              <p>Precision tracking. Approval required to keep the signal clean.</p>
+            </div>
+            <div class="dir-meta"><span class="policy">Request</span><span class="count">18 members</span></div>
+          </div>
+          <button class="join-btn req">Request</button>
+        </div>
+        <div class="dir-row">
+          <div class="dir-info">
+            <div class="dir-text">
+              <h3>Fresh Start</h3>
+              <p>New here, no pressure.</p>
+            </div>
+            <!-- legacy doc: memberCount nil ⇒ count line OMITTED (nil is UNKNOWN, never 0) -->
+            <div class="dir-meta"><span class="policy">Open</span></div>
+          </div>
+          <button class="join-btn">Join</button>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Directory rows.</b> Right side = stacked <b>POLICY</b> micro&#8209;label + <b>N members</b> (from <code>memberCount</code>). Tapping the info area opens the spectator page; the Join/Request button is a sibling that consumes its own tap. A legacy <code>nil</code> count omits the line entirely.</div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -916,6 +916,8 @@ final class AppCoordinator {
         try await dataManager.createGuild(name: name, joinPolicy: joinPolicy, description: description)
     }
     func myGuild() async -> GuildDTO? { await dataManager.myGuild() }
+    /// GUILD-UI-1 (D1): read-only guild-doc-by-code passthrough for spectator mode.
+    func guild(code: String) async -> GuildDTO? { await dataManager.guild(code: code) }
     func fetchGuildDirectory() async throws -> [GuildDTO] { try await dataManager.fetchGuildDirectory() }
     func guildMembers(code: String) async -> [GuildMemberDTO] { await dataManager.guildMembers(code: code) }
     func joinRequests(code: String) async -> [GuildJoinRequestDTO] { await dataManager.joinRequests(code: code) }

@@ -3436,6 +3436,16 @@ final class DataManager {
         return try? await firestoreService.fetchMyGuild(uid: me)
     }
 
+    /// GUILD-UI-1 (D1): a read-only guild-doc-by-code fetch for spectator mode. This is the SAME
+    /// `fetchGuild(code:)` read the join path already uses (`joinGuild` above) — exposed as a
+    /// passthrough because spectator mode needs the guild doc without initiating a join. Guest-gated
+    /// (D9). Non-throwing optional, mirroring `myGuild()`: nil ⇒ absent / disbanded / not permitted,
+    /// which the spectator page renders as its "no longer available" state (never a crash).
+    func guild(code: String) async -> GuildDTO? {
+        guard !isGuest else { return nil }
+        return try? await firestoreService.fetchGuild(code: code)
+    }
+
     /// The browsable directory of joinable guilds (R7d): open + request policies only,
     /// name-ordered, capped. Empty for guests (D5) and on failure — the view model
     /// surfaces the error separately via the throwing path it wraps.
