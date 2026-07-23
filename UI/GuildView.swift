@@ -260,25 +260,39 @@ struct GuildView: View {
 
     private func directoryRow(_ row: GuildViewModel.GuildDirectoryRow, isLast: Bool) -> some View {
         VStack(spacing: 0) {
+            // GUILD-UI-1 (D4): the info area navigates to the spectator page; the Join/Request
+            // button is a SIBLING (not nested), so each consumes its own tap — the established
+            // buttonStyle-isolation resolution of the Button-inside-link conflict. The spectator's
+            // onJoin routes back through this VM's join core (single in-flight flag preserved).
             HStack(alignment: .center, spacing: DesignSystem.Spacing.md) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(row.name)
-                        .font(AppFont.bold(16))
-                        .foregroundColor(tc.textPrimary)
-                        .lineLimit(1)
+                NavigationLink {
+                    GuildDetailView(coordinator: coordinator, spectatorCode: row.id,
+                                    onJoin: { await viewModel.joinFromDirectory(row) })
+                } label: {
+                    HStack(alignment: .center, spacing: DesignSystem.Spacing.md) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(row.name)
+                                .font(AppFont.bold(16))
+                                .foregroundColor(tc.textPrimary)
+                                .lineLimit(1)
 
-                    if let description = row.description, !description.isEmpty {
-                        Text(description)
-                            .font(AppFont.regular(12))
-                            .foregroundColor(tc.textSecondary)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
+                            if let description = row.description, !description.isEmpty {
+                                Text(description)
+                                    .font(AppFont.regular(12))
+                                    .foregroundColor(tc.textSecondary)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                            }
+                        }
+
+                        Spacer(minLength: DesignSystem.Spacing.sm)
+
+                        // D5: policyPill → right-aligned stacked POLICY micro-label + "N members".
+                        directoryMicroLabels(row)
                     }
-
-                    policyPill(row.joinPolicy)
+                    .contentShape(Rectangle())
                 }
-
-                Spacer(minLength: DesignSystem.Spacing.sm)
+                .buttonStyle(PlainButtonStyle())
 
                 directoryAction(row)
             }
@@ -332,30 +346,32 @@ struct GuildView: View {
         }
     }
 
-    /// The in-guild header badge's style, on a directory row. (`inlineError` is likewise
-    /// mirrored across these two structs — the file's existing convention.)
-    ///
-    /// Exhaustive over the three policies. `private` cannot appear here (the rules' `list`
-    /// clause excludes it), but it is mapped rather than folded into a default that would
-    /// silently label it "Request".
-    private func policyPill(_ joinPolicy: String) -> some View {
-        let icon: String
-        let label: String
-        switch joinPolicy {
-        case "open":     icon = "lock.open.fill";  label = "Open"
-        case "private":  icon = "lock.fill";       label = "Private"
-        default:         icon = "hand.raised.fill"; label = "Request"
+    /// GUILD-UI-1 (D4/D5): the directory row's right-side stack — a tracked-uppercase POLICY
+    /// micro-label over an "N members" line (from `GuildDirectoryRow.memberCount`), replacing the
+    /// swept-away capsule `policyPill`. Exhaustive over the three policies — `private` cannot appear
+    /// here (the rules' `list` clause excludes it) but is mapped, never folded into a "Request"
+    /// default (R7d lesson). A `nil` count (legacy pre-backfill doc) is UNKNOWN, never 0, so the
+    /// count line is OMITTED entirely rather than rendered as "0 members".
+    private func directoryMicroLabels(_ row: GuildViewModel.GuildDirectoryRow) -> some View {
+        let word: String
+        switch row.joinPolicy {
+        case "open":    word = "Open"
+        case "private": word = "Private"
+        default:        word = "Request"
         }
-        return HStack(spacing: DesignSystem.Spacing.xs) {
-            Image(systemName: icon)
-                .font(.system(size: 10))
-            Text(label)
-                .font(AppFont.bold(11))
+        return VStack(alignment: .trailing, spacing: 2) {
+            Text(word)
+                .font(AppFont.bold(9.5))
+                .tracking(0.9)
+                .textCase(.uppercase)
+                .foregroundColor(tc.textTertiary)
+            if let count = row.memberCount {
+                Text("\(count) member\(count == 1 ? "" : "s")")
+                    .font(AppFont.regular(11))
+                    .foregroundColor(tc.textSecondary)
+            }
         }
-        .foregroundColor(tc.textSecondary)
-        .padding(.horizontal, DesignSystem.Spacing.sm)
-        .padding(.vertical, DesignSystem.Spacing.xs)
-        .adaptivePill(borderColor: tc.primary.opacity(0.3), fillColor: tc.primary.opacity(0.08))
+        .fixedSize()
     }
 
     private func pendingRequestCard(code: String) -> some View {
@@ -412,8 +428,33 @@ struct GuildView: View {
 /// member/owner actions. Shares the parent's GuildViewModel.
 struct GuildDetailView: View {
 
-    let viewModel: GuildViewModel
+    /// The shared tab ViewModel — MEMBER mode only. Implicitly-unwrapped because spectator mode
+    /// (GUILD-UI-1 D1) MUST NOT instantiate any member-only ViewModel state: it is `nil` there and
+    /// the spectator body never touches it (the member arms below are unchanged, still reading
+    /// `viewModel` directly). Read only inside the `!isSpectator` execution path.
+    private let viewModel: GuildViewModel!
     let coordinator: AppCoordinator
+
+    // MARK: - Spectator mode (GUILD-UI-1 D1) — lightweight @State, no ViewModel.
+
+    /// Non-nil ⇒ spectator mode: a read-only page for the guild with this code. `nil` ⇒ member mode.
+    private let spectatorCode: String?
+    /// Wired by the directory presenter to the tab VM's `joinFromDirectory` core (D3). `nil` in
+    /// member mode AND for the D7 own-guild entry (read-only, no join button).
+    private let onSpectatorJoin: (() async -> Void)?
+
+    private var isSpectator: Bool { spectatorCode != nil }
+
+    @State private var spectatorGuild: GuildDTO? = nil
+    @State private var spectatorMembers: [GuildViewModel.MemberRow] = []
+    @State private var spectatorLoading = true
+    /// Set when the guild doc can't be read (disbanded mid-view, or a pre-deploy permission-deny).
+    @State private var spectatorUnavailable = false
+    /// Local button-disable flag while the wired join runs; the single in-flight guard itself lives
+    /// in the tab VM's `performJoin` (D3) — this only greys the spectator button during the await.
+    @State private var spectatorJoining = false
+
+    @Environment(\.dismiss) private var dismiss
 
     @State private var settings = SettingsManager.shared
     private var tc: ThemeColors { settings.activeColors }
@@ -426,11 +467,44 @@ struct GuildDetailView: View {
     @State private var showingEdit = false
     @State private var didCopyCode = false
 
+    // MARK: - Init
+
+    /// Member mode — the in-guild experience over the shared tab ViewModel. Signature unchanged.
+    init(viewModel: GuildViewModel, coordinator: AppCoordinator) {
+        self.viewModel = viewModel
+        self.coordinator = coordinator
+        self.spectatorCode = nil
+        self.onSpectatorJoin = nil
+    }
+
+    /// Spectator mode (D1) — a read-only page for a guild the viewer is NOT in. No member-only
+    /// ViewModel is instantiated; loaded state is fetched once in `.task` via existing fetch shapes.
+    /// `onJoin` (nil for the D7 own-guild entry) routes a Join/Request tap to the tab VM's join core.
+    init(coordinator: AppCoordinator, spectatorCode: String, onJoin: (() async -> Void)? = nil) {
+        self.viewModel = nil
+        self.coordinator = coordinator
+        self.spectatorCode = spectatorCode
+        self.onSpectatorJoin = onJoin
+    }
+
+    // MARK: - Body
+
+    @ViewBuilder
     var body: some View {
+        if isSpectator {
+            spectatorBody
+        } else {
+            memberBody
+        }
+    }
+
+    // MARK: - Member Body
+
+    private var memberBody: some View {
         ScrollView {
             VStack(spacing: DesignSystem.Spacing.lg) {
                 if let guild = viewModel.guild {
-                    headerCard(guild)
+                    headerCard(guild, memberCount: viewModel.memberCount, isSpectator: false)
                 }
 
                 leaderboardLink
@@ -526,25 +600,152 @@ struct GuildDetailView: View {
         }
     }
 
+    // MARK: - Spectator Body (GUILD-UI-1 D1/D2/D3)
+
+    /// A read-only page for a guild the viewer is NOT in: name · meta line · description · roster,
+    /// plus a Join/Request action (D3). No member-only ViewModel, no invite code / requests /
+    /// settings / leave / disband / chat / guild-leaderboard (D2). State is the lightweight @State
+    /// above, fetched once in `.task` via existing fetch shapes (D1).
+    private var spectatorBody: some View {
+        ScrollView {
+            VStack(spacing: DesignSystem.Spacing.lg) {
+                if spectatorLoading {
+                    // D1: reuse the guild tab's ProgressView loading treatment.
+                    ProgressView()
+                        .scaleEffect(1.4)
+                        .padding(.top, 60)
+                } else if spectatorUnavailable || spectatorGuild == nil {
+                    spectatorUnavailableCard
+                } else if let guild = spectatorGuild {
+                    headerCard(guild, memberCount: spectatorMembers.count, isSpectator: true)
+
+                    spectatorJoinAction(guild)
+
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+                        sectionHeader("Members")
+                        // Spectator rows reuse the SAME builder — kick disabled everywhere (D2).
+                        rosterBox(spectatorMembers) { _ in false }
+                    }
+                    // TODO-spectator-leaderboard: the guild leaderboard is my-guild-bound (its VM
+                    // reads the current user's own guild), so it is hidden for spectators (D2).
+                }
+            }
+            .padding(DesignSystem.Spacing.lg)
+        }
+        // Same bottom clearance as the member page: the spectator page is pushed inside the Guilds
+        // tab's NavigationStack, under the safeAreaInset tab bar (harmless when shown as the D7 sheet).
+        .contentMargins(.bottom, DesignSystem.Metrics.tabBarHeight, for: .scrollContent)
+        .refreshable { await loadSpectator() }
+        .task { await loadSpectator() }
+        .sheet(item: $profileMember) { member in
+            // NAV-1b: roster rows keep their profile tap gating; a removal reloads the spectator roster.
+            FriendProfileView(
+                coordinator: coordinator,
+                friendUid: member.id,
+                username: member.username,
+                displayName: member.displayName,
+                onRemoved: { Task { await loadSpectator() } }
+            )
+        }
+    }
+
+    /// The spectator Join/Request action (D3), routed to the tab VM's join core via `onSpectatorJoin`.
+    /// Absent when there is no join closure (the D7 own-guild read-only entry) and for `private`
+    /// guilds (join-by-code stays the code-entry path — the fetched policy decides, per the edge case).
+    @ViewBuilder
+    private func spectatorJoinAction(_ guild: GuildDTO) -> some View {
+        if onSpectatorJoin != nil, guild.joinPolicy != "private" {
+            AppButton(
+                title: guild.joinPolicy == "request" ? "Request to Join" : "Join Guild",
+                style: guild.joinPolicy == "request" ? .secondary : .primary,
+                action: { Task { await performSpectatorJoin() } },
+                isLoading: spectatorJoining,
+                isDisabled: spectatorJoining
+            )
+        }
+    }
+
+    private var spectatorUnavailableCard: some View {
+        VStack(spacing: DesignSystem.Spacing.md) {
+            Image(systemName: "shield.slash")
+                .font(AppFont.regular(40))
+                .foregroundColor(tc.textTertiary)
+            Text("This guild is no longer available.")
+                .font(AppFont.bold(16))
+                .foregroundColor(tc.textPrimary)
+                .multilineTextAlignment(.center)
+            AppButton(title: "Go Back", style: .secondary, action: { dismiss() })
+        }
+        .frame(maxWidth: .infinity)
+        .padding(DesignSystem.Spacing.lg)
+        .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
+        .padding(.top, 40)
+    }
+
+    /// Routes the spectator's Join/Request tap through the tab VM's join core (`onSpectatorJoin`),
+    /// then dismisses back so the tab's normal reload shows the resulting stage — the in-guild page
+    /// on an open join, or the not-in-guild "Request sent" banner via the VM's session-local state
+    /// (D3). The single in-flight guard lives in the VM's `performJoin`; `spectatorJoining` only
+    /// greys the button during the await.
+    private func performSpectatorJoin() async {
+        guard let onSpectatorJoin, !spectatorJoining else { return }
+        spectatorJoining = true
+        await onSpectatorJoin()
+        spectatorJoining = false
+        dismiss()
+    }
+
+    /// Fetches the spectator guild doc + roster ONCE per presentation via the existing fetch shapes
+    /// (`coordinator.guild(code:)` + `guildMembers(code:)`); no new fetch shapes, no listeners (D1).
+    /// nil guild ⇒ the "no longer available" state (disbanded, or a pre-deploy permission-deny).
+    private func loadSpectator() async {
+        guard let code = spectatorCode else { return }
+        if spectatorGuild == nil { spectatorLoading = true }
+        spectatorUnavailable = false
+        guard let g = await coordinator.guild(code: code) else {
+            spectatorLoading = false
+            spectatorUnavailable = true
+            return
+        }
+        spectatorGuild = g
+        let me = coordinator.currentUserId
+        // Same DTO → row mapping + sort as GuildViewModel.load() (owner first, then title).
+        spectatorMembers = (await coordinator.guildMembers(code: code))
+            .map { dto in
+                GuildViewModel.MemberRow(
+                    id: dto.uid,
+                    username: dto.username,
+                    displayName: dto.displayName,
+                    role: dto.role,
+                    isMe: dto.uid == me,
+                    isFriend: coordinator.friendshipState(with: dto.uid) == .friends,
+                    avatarIcon: dto.avatarIcon,
+                    avatarColor: dto.avatarColor
+                )
+            }
+            .sorted { a, b in
+                if a.isOwnerRole != b.isOwnerRole { return a.isOwnerRole }
+                return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
+            }
+        spectatorLoading = false
+    }
+
     // MARK: - Header
 
-    private func headerCard(_ guild: GuildDTO) -> some View {
+    /// The guild header — shared by member mode (`isSpectator: false`) and spectator mode
+    /// (D2: name · meta line · description only). `memberCount` is the roster count (the tab VM's
+    /// in member mode, the fetched spectator roster's in spectator mode — same meaning). The
+    /// invite-code block and the Report overflow are member-only and gated off in spectator mode.
+    private func headerCard(_ guild: GuildDTO, memberCount: Int, isSpectator: Bool) -> some View {
         VStack(spacing: DesignSystem.Spacing.md) {
             Text(guild.name)
                 .font(AppFont.bold(24))
                 .foregroundColor(tc.textPrimary)
                 .multilineTextAlignment(.center)
 
-            // Join policy + member count. R7d: exhaustive over the three policies — the
-            // binary ternary this replaced would have labelled a `private` guild
-            // "Request to join", which is the one thing it isn't.
-            HStack(spacing: DesignSystem.Spacing.sm) {
-                metaPill(icon: policyIcon(guild.joinPolicy), text: policyLabel(guild.joinPolicy))
-                metaPill(
-                    icon: "person.2.fill",
-                    text: "\(viewModel.memberCount) member\(viewModel.memberCount == 1 ? "" : "s")"
-                )
-            }
+            // GUILD-UI-1 (D5): the two capsule metaPills → ONE hairline-flanked, tracked-uppercase
+            // meta line ("OPEN · 2 MEMBERS"). Exhaustive over the three policies (the R7d lesson).
+            metaLine(policy: guild.joinPolicy, count: memberCount)
 
             if let description = guild.description, !description.isEmpty {
                 Text(description)
@@ -553,8 +754,8 @@ struct GuildDetailView: View {
                     .multilineTextAlignment(.center)
             }
 
-            // Code with copy + share
-            if let code = guild.id {
+            // Code with copy + share — member-only (D2: spectators don't see the invite code).
+            if !isSpectator, let code = guild.id {
                 VStack(spacing: DesignSystem.Spacing.xs) {
                     Text("Invite code")
                         .font(AppFont.regular(11))
@@ -605,7 +806,10 @@ struct GuildDetailView: View {
             // UGC-1b-FIX: the ellipsis carries an accessibilityLabel so VoiceOver / UI automation
             // can identify it (it was an unlabeled button — the reason SMOKE-3 "couldn't find"
             // the affordance, which does render for a non-owner member).
-            if !viewModel.isOwner {
+            // GUILD-UI-1 (D2): Report is member machinery — absent in spectator mode (the directory
+            // row carries its own Report affordance). `!isSpectator` short-circuits before the
+            // `viewModel` access, keeping the IUO safe.
+            if !isSpectator && !viewModel.isOwner {
                 Menu {
                     Button(role: .destructive) {
                         Task {
@@ -626,33 +830,31 @@ struct GuildDetailView: View {
         }
     }
 
-    private func policyIcon(_ joinPolicy: String) -> String {
-        switch joinPolicy {
-        case "open":    return "lock.open.fill"
-        case "private": return "lock.fill"
-        default:        return "hand.raised.fill"
-        }
-    }
-
-    private func policyLabel(_ joinPolicy: String) -> String {
+    /// Short policy word for the tracked-uppercase meta line + spectator/directory micro-labels.
+    /// Exhaustive over the three policies (R7d lesson — never fold `private` into a "Request"
+    /// default). `textCase(.uppercase)` at the render site supplies the casing.
+    private func policyWord(_ joinPolicy: String) -> String {
         switch joinPolicy {
         case "open":    return "Open"
         case "private": return "Private"
-        default:        return "Request to join"
+        default:        return "Request"
         }
     }
 
-    private func metaPill(icon: String, text: String) -> some View {
-        HStack(spacing: DesignSystem.Spacing.xs) {
-            Image(systemName: icon)
-                .font(.system(size: 10))
-            Text(text)
-                .font(AppFont.bold(11))
+    /// GUILD-UI-1 (D5): the de-capsuled header meta line — a hairline rule, tracked-uppercase
+    /// "POLICY · N MEMBERS" text, a hairline rule. Typography mirrors the ProfileView section-label
+    /// / ArenaView league-subline family (AppFont.bold ~10.5pt, tracking, uppercase, textSecondary).
+    private func metaLine(policy: String, count: Int) -> some View {
+        HStack(spacing: DesignSystem.Spacing.sm) {
+            Rectangle().fill(DesignSystem.Erewhon.line).frame(height: 1).frame(maxWidth: 64)
+            Text("\(policyWord(policy)) · \(count) member\(count == 1 ? "" : "s")")
+                .font(AppFont.bold(10.5))
+                .tracking(1.1)
+                .textCase(.uppercase)
+                .foregroundColor(tc.textSecondary)
+                .fixedSize()
+            Rectangle().fill(DesignSystem.Erewhon.line).frame(height: 1).frame(maxWidth: 64)
         }
-        .foregroundColor(tc.textSecondary)
-        .padding(.horizontal, DesignSystem.Spacing.sm)
-        .padding(.vertical, DesignSystem.Spacing.xs)
-        .adaptivePill(borderColor: tc.primary.opacity(0.3), fillColor: tc.primary.opacity(0.08))
     }
 
     // MARK: - Leaderboard Entry
@@ -774,16 +976,42 @@ struct GuildDetailView: View {
     private var rosterSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
             sectionHeader("Members")
-            ForEach(viewModel.members) { member in
-                memberRow(member)
+            // GUILD-UI-1 (D6): the roster in the boxed, internally-scrolling board. Only the owner
+            // (member mode) can kick, so canKick is computed per row at the member call site — the
+            // shared row builder itself never reads the ViewModel (so spectator mode reuses it).
+            rosterBox(viewModel.members) { m in
+                viewModel.isOwner && !m.isMe && !m.isOwnerRole
             }
         }
     }
 
-    private func memberRow(_ member: GuildViewModel.MemberRow) -> some View {
+    /// GUILD-UI-1 (D6): the members list inside an internally-scrolling box (member AND spectator
+    /// mode). Box language mirrors GuildLeaderboardView's LB-PAGE board (RoundedRectangle(16) +
+    /// Erewhon.line stroke, `leaderboardBoxHeightCompact`; rows are NOT restyled). The list is
+    /// UNPAGINATED, PERMANENTLY: the fetch is bounded by the 40-member GUILD-CAP hard cap, so it can
+    /// never exceed one screen's worth of data (no member-pagination TODO exists to delete).
+    /// `canKick` is supplied by the caller so this builder is ViewModel-free and mode-agnostic.
+    private func rosterBox(_ members: [GuildViewModel.MemberRow],
+                           canKick: @escaping (GuildViewModel.MemberRow) -> Bool) -> some View {
+        // LB-PAGE-1: deliberate nested-scroll exception (user ruling; Clash-style boxed board). Revisit if it fights the outer scroll. DO NOT replace with outer scrolling.
+        ScrollView {
+            LazyVStack(spacing: DesignSystem.Spacing.sm) {
+                ForEach(members) { member in
+                    memberRow(member, canKick: canKick(member))
+                }
+            }
+            .padding(.horizontal, DesignSystem.Spacing.sm)
+            .padding(.vertical, DesignSystem.Spacing.sm)
+        }
+        .frame(height: DesignSystem.Metrics.leaderboardBoxHeightCompact)
+        .background(RoundedRectangle(cornerRadius: 16).fill(tc.primaryBackground))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(DesignSystem.Erewhon.line, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func memberRow(_ member: GuildViewModel.MemberRow, canKick: Bool) -> some View {
         // NAV-1b: every non-self guild-mate opens their profile, friend or not.
         let tappable = !member.isMe
-        let canKick = viewModel.isOwner && !member.isMe && !member.isOwnerRole
         return Button {
             if tappable { profileMember = member }
         } label: {
@@ -822,17 +1050,8 @@ struct GuildDetailView: View {
                 Spacer()
 
                 if member.isOwnerRole {
-                    HStack(spacing: 3) {
-                        Image(systemName: "crown.fill")
-                            .font(.system(size: 9))
-                        Text("Owner")
-                            .font(AppFont.bold(10))
-                    }
-                    .foregroundColor(DesignSystem.Colors.goldMid)
-                    .padding(.horizontal, DesignSystem.Spacing.sm)
-                    .padding(.vertical, DesignSystem.Spacing.xs)
-                    .adaptivePill(borderColor: DesignSystem.Colors.goldMid.opacity(0.5),
-                                  fillColor: DesignSystem.Colors.goldMid.opacity(0.12))
+                    // GUILD-UI-1 (D5): the OWNER capsule → a keyline tag in the role colour (gold).
+                    tag("Owner", color: DesignSystem.Colors.goldMid)
                 } else if tappable {
                     Image(systemName: "chevron.right")
                         .font(AppFont.bold(13))
@@ -921,13 +1140,20 @@ struct GuildDetailView: View {
         return letters.isEmpty ? "?" : String(letters).uppercased()
     }
 
+    /// GUILD-UI-1 (D5): the OWNER/YOU role tags — rewritten in place from a filled capsule to a
+    /// KEYLINE tag: a 2pt left rule + tracked-uppercase text in the role colour, no background shape
+    /// (mockup `.keytag`). Same name, same call sites (the member row's "You" and "Owner").
     private func tag(_ text: String, color: Color) -> some View {
-        Text(text)
-            .font(AppFont.bold(9))
-            .foregroundColor(color)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(color.opacity(0.15)))
+        HStack(spacing: 5) {
+            RoundedRectangle(cornerRadius: 1)
+                .fill(color)
+                .frame(width: 2, height: 11)
+            Text(text)
+                .font(AppFont.bold(9))
+                .tracking(1)
+                .textCase(.uppercase)
+                .foregroundColor(color)
+        }
     }
 
     private func identityLabel(displayName: String, username: String) -> some View {

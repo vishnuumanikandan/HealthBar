@@ -34,6 +34,11 @@ struct ProfileView: View {
     /// D3a: presents the avatar picker from the header tap.
     @State private var showAvatarPicker = false
 
+    /// GUILD-UI-1 (D7): presents the user's own guild page (spectator mode, read-only) as a sheet.
+    /// ProfileView receives no cross-tab `selectedTab` binding (only HomeView does), so there is no
+    /// existing cross-tab convention to route to the Guilds tab — the sheet is the taken path.
+    @State private var showGuildPage = false
+
     /// Settings manager for app-wide settings
     @State private var settings = SettingsManager.shared
 
@@ -366,23 +371,46 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
                 sectionRule
                 sectionLabel("Guild")
-                HStack(spacing: DesignSystem.Spacing.md) {
-                    Image(systemName: "shield.fill")
-                        .font(AppFont.bold(20))
-                        .foregroundColor(tc.primary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(guild.name)
-                            .font(AppFont.bold(16))
-                            .foregroundColor(tc.textPrimary)
-                        Text("Guild")
-                            .font(AppFont.regular(12))
-                            .foregroundColor(tc.textSecondary)
+                // GUILD-UI-1 (D7): the row now opens the user's own guild page (spectator mode,
+                // read-only) as a sheet — see `showGuildPage`. onJoin is nil (already a member).
+                Button {
+                    showGuildPage = true
+                } label: {
+                    HStack(spacing: DesignSystem.Spacing.md) {
+                        Image(systemName: "shield.fill")
+                            .font(AppFont.bold(20))
+                            .foregroundColor(tc.primary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(guild.name)
+                                .font(AppFont.bold(16))
+                                .foregroundColor(tc.textPrimary)
+                            Text("Guild")
+                                .font(AppFont.regular(12))
+                                .foregroundColor(tc.textSecondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(AppFont.bold(13))
+                            .foregroundColor(tc.textTertiary)
                     }
-                    Spacer()
+                    .padding(DesignSystem.Spacing.md)
+                    .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
                 }
-                // TODO-guild-row-tap: GUILD-UI-1 — display-only, no tap action this prompt.
-                .padding(DesignSystem.Spacing.md)
-                .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
+                .buttonStyle(PlainButtonStyle())
+            }
+            .sheet(isPresented: $showGuildPage) {
+                if let code = guild.id {
+                    NavigationStack {
+                        GuildDetailView(coordinator: coordinator, spectatorCode: code)
+                            .background(tc.primaryBackground.ignoresSafeArea())
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button("Done") { showGuildPage = false }
+                                }
+                            }
+                    }
+                }
             }
         }
     }

@@ -67,6 +67,10 @@ final class GuildViewModel {
         let joinPolicy: String
         /// UGC-1b: the guild owner's uid — the report target for a directory-row report (D5).
         let ownerUid: String
+        /// GUILD-UI-1 (D4): the guild's live roster size from `GuildDTO.memberCount`, rendered as
+        /// the "N members" line on the directory row. `nil` = a legacy pre-backfill doc = UNKNOWN
+        /// (never 0), so the count line is OMITTED entirely rather than shown as "0 members".
+        let memberCount: Int?
 
         /// Request-policy guilds send an approval request rather than joining directly.
         var isRequestPolicy: Bool { joinPolicy == "request" }
@@ -224,7 +228,7 @@ final class GuildViewModel {
                 guard let code = dto.id else { return nil }
                 return GuildDirectoryRow(id: code, name: dto.name,
                                          description: dto.description, joinPolicy: dto.joinPolicy,
-                                         ownerUid: dto.ownerUid)
+                                         ownerUid: dto.ownerUid, memberCount: dto.memberCount)
             }
         } catch {
             directoryError = friendlyMessage(for: error)
