@@ -39,6 +39,11 @@ final class BattleViewModel {
     /// R7a folded its second `getUserProgress()` call into `load()`'s).
     private var myStreak: Int = 0
 
+    /// D3b/D8: MY featured-card fighter-head avatar, from the LIVE local profile (freshest; never
+    /// the possibly stale/absent duel snapshot). Loaded on `load()`; nil ⇒ the initials fallback.
+    private(set) var myAvatarIcon: String?
+    private(set) var myAvatarColor: String?
+
     /// The rank-up celebration currently owed to the user (R7a §4), destination tier last.
     ///
     /// A CACHE of the stored-RR vs current-RR tier-scalar comparison — never presentation
@@ -334,7 +339,11 @@ final class BattleViewModel {
             myStreak: myStreak,
             theirStreak: theirStats?.currentStreak ?? 0,
             candidate: DuelOpponentCandidate(uid: pick.uid, username: pick.username,
-                                             displayName: pick.displayName, source: .friend, rr: nil)
+                                             displayName: pick.displayName, source: .friend, rr: nil,
+                                             // D3b: carry the friend's avatar (from the public-stats-backed
+                                             // leaderboard row) so the "Challenge" preselect + the resulting
+                                             // duel keep it.
+                                             avatarIcon: pick.avatarIcon, avatarColor: pick.avatarColor)
         )
     }
 
@@ -364,6 +373,11 @@ final class BattleViewModel {
         let progress = try? await coordinator.getUserProgress()
         myRR = progress?.rr
         myStreak = progress?.currentStreak ?? 0
+        // D3b/D8: my own avatar from the local profile record (D3a accessor) for the featured-card
+        // fighter head. One extra local read per load; nil ⇒ initials.
+        let myProfile = try? await coordinator.getUserProfile()
+        myAvatarIcon = myProfile?.avatarIcon
+        myAvatarColor = myProfile?.avatarColor
         isLoading = false
         didLoadOnce = true
         // Viewing the Battle list clears the pulse + "since you looked" deltas. The recap

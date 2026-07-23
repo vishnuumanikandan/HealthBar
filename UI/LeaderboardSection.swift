@@ -295,7 +295,11 @@ struct LeaderboardSection: View {
         let metal = StandingsPieces.podiumMetal(position: position, hasData: entry.hasData)
         let row = HStack(alignment: .center, spacing: 13) {
             StandingsPieces.rankChip(position: position, hasData: entry.hasData, metal: metal)
-            StandingsPieces.avatar(initial: initial(for: entry), tint: entry.hasData ? DesignSystem.Erewhon.rankMetal(forRR: entry.rr) : nil)
+            // D3b/D7: preset avatar (from the row's PublicStatsDTO projection) over the rank-tinted
+            // initials fallback (byte-preserved 38pt slot).
+            AvatarView(iconId: entry.avatarIcon, colorId: entry.avatarColor, size: 38) {
+                StandingsPieces.avatar(initial: initial(for: entry), tint: entry.hasData ? DesignSystem.Erewhon.rankMetal(forRR: entry.rr) : nil)
+            }
             who(entry)
             Spacer(minLength: DesignSystem.Spacing.sm)
             adherenceColumn(entry)

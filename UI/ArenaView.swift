@@ -87,7 +87,9 @@ struct ArenaView: View {
     /// replacing the plain name/name row.
     private var versusHeader: some View {
         HStack(alignment: .center, spacing: 0) {
-            fighterColumn(initial: "Y", isMe: true, name: nil, subline: leagueSubline)
+            // D3b/D4: MY head from the live local profile (VM); THEIR head is the opponent column.
+            fighterColumn(initial: "Y", isMe: true, name: nil, subline: leagueSubline,
+                          avatarIcon: viewModel.myAvatarIcon, avatarColor: viewModel.myAvatarColor)
             vsMid
             opponentColumn
         }
@@ -98,8 +100,10 @@ struct ArenaView: View {
     /// styling, no hint; visually indistinguishable). My own column is never tappable.
     @ViewBuilder
     private var opponentColumn: some View {
+        // D3b/D4: THEIR head from the duel's counterparty-side snapshot (VM ownership logic).
         let column = fighterColumn(initial: initial(for: viewModel.theirLabel), isMe: false,
-                                   name: viewModel.theirLabel, subline: leagueSubline)
+                                   name: viewModel.theirLabel, subline: leagueSubline,
+                                   avatarIcon: viewModel.theirAvatarIcon, avatarColor: viewModel.theirAvatarColor)
         if viewModel.canOpenOpponentProfile {
             Button {
                 showOpponentProfile = true
@@ -119,9 +123,11 @@ struct ArenaView: View {
     private var leagueSubline: String { "\(viewModel.league)-DAY RANKED" }
 
     /// Mockup `.fighter`: initials avatar, name (mine = the `.you-tag` pill), league sub-line.
-    private func fighterColumn(initial: String, isMe: Bool, name: String?, subline: String) -> some View {
+    /// D3b: `avatarIcon`/`avatarColor` are the preset-avatar ids for this head (nil ⇒ initials).
+    private func fighterColumn(initial: String, isMe: Bool, name: String?, subline: String,
+                               avatarIcon: String? = nil, avatarColor: String? = nil) -> some View {
         VStack(spacing: 10) {
-            favAvatar(initial: initial)
+            favAvatar(initial: initial, avatarIcon: avatarIcon, avatarColor: avatarColor)
             if isMe {
                 youTag
             } else if let name {
@@ -141,13 +147,16 @@ struct ArenaView: View {
 
     /// Mockup `.fav`: rounded-square initials avatar. Neutral fill + hairline (no rank
     /// metal — opponent rank isn't tracked; D4 deviation).
-    private func favAvatar(initial: String) -> some View {
-        Text(initial)
-            .font(AppFont.bold(23))
-            .foregroundColor(tc.textPrimary)
-            .frame(width: 60, height: 60)
-            .background(RoundedRectangle(cornerRadius: 19).fill(tc.segBackground))
-            .overlay(RoundedRectangle(cornerRadius: 19).stroke(DesignSystem.Erewhon.line, lineWidth: 1))
+    /// D3b: the preset avatar over the existing 60pt/radius-19 initials fallback (byte-preserved).
+    private func favAvatar(initial: String, avatarIcon: String? = nil, avatarColor: String? = nil) -> some View {
+        AvatarView(iconId: avatarIcon, colorId: avatarColor, size: 60) {
+            Text(initial)
+                .font(AppFont.bold(23))
+                .foregroundColor(tc.textPrimary)
+                .frame(width: 60, height: 60)
+                .background(RoundedRectangle(cornerRadius: 19).fill(tc.segBackground))
+                .overlay(RoundedRectangle(cornerRadius: 19).stroke(DesignSystem.Erewhon.line, lineWidth: 1))
+        }
     }
 
     /// Mockup `.you-tag`: social-tinted "YOU" pill (a badge — stays Hanken per D1).

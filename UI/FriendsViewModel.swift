@@ -26,6 +26,12 @@ final class FriendsViewModel {
         let displayName: String
         let since: Date
 
+        // D3b preset avatar — the accept-time SNAPSHOT from the Friend edge (NOT the live
+        // published stats, deliberately: a pre-D3b friendship has no snapshot and renders
+        // initials permanently — no backfill). nil ⇒ initials.
+        var avatarIcon: String? = nil
+        var avatarColor: String? = nil
+
         // Published-stats detail (Friend System Phase 4 rich rows).
         // nil ⇒ this friend hasn't published a projection yet.
         var level: Int? = nil
@@ -39,6 +45,10 @@ final class FriendsViewModel {
         let username: String
         let displayName: String?
         let createdAt: Date
+        // D3b preset avatar — the sender's snapshot (incoming only; outgoing is nil since
+        // SentRequestDTO carries no avatar). nil ⇒ initials.
+        var avatarIcon: String? = nil
+        var avatarColor: String? = nil
     }
 
     /// One user from the public usernames directory, plus the locally
@@ -102,7 +112,8 @@ final class FriendsViewModel {
     func load() async {
         let friendModels = (try? await coordinator.fetchFriends()) ?? []
         var friendRows = friendModels
-            .map { FriendRow(id: $0.friendUid, username: $0.username, displayName: $0.displayName, since: $0.since) }
+            .map { FriendRow(id: $0.friendUid, username: $0.username, displayName: $0.displayName, since: $0.since,
+                             avatarIcon: $0.avatarIcon, avatarColor: $0.avatarColor) }
         // Merge the cached published stats into each row (nil = unpublished).
         friendRows = friendRows.map { row in
             var row = row
@@ -128,12 +139,14 @@ final class FriendsViewModel {
 
         let incomingModels = (try? await coordinator.fetchRequests(direction: "incoming")) ?? []
         incomingRequests = incomingModels
-            .map { RequestRow(id: $0.otherUid, username: $0.username, displayName: $0.displayName, createdAt: $0.createdAt) }
+            .map { RequestRow(id: $0.otherUid, username: $0.username, displayName: $0.displayName, createdAt: $0.createdAt,
+                              avatarIcon: $0.avatarIcon, avatarColor: $0.avatarColor) }
             .sorted { $0.createdAt > $1.createdAt }
 
         let outgoingModels = (try? await coordinator.fetchRequests(direction: "outgoing")) ?? []
         outgoingRequests = outgoingModels
-            .map { RequestRow(id: $0.otherUid, username: $0.username, displayName: $0.displayName, createdAt: $0.createdAt) }
+            .map { RequestRow(id: $0.otherUid, username: $0.username, displayName: $0.displayName, createdAt: $0.createdAt,
+                              avatarIcon: $0.avatarIcon, avatarColor: $0.avatarColor) }
             .sorted { $0.createdAt > $1.createdAt }
 
         // Recompute every directory row's relationship from the local cache so

@@ -275,16 +275,26 @@ protocol FirestoreService {
 
     /// Atomic (WriteBatch): create the incoming request in the recipient's space AND the
     /// sender's own sentRequests mirror. Caller passes its own identity for stamping.
+    /// D3b: `fromAvatar*` is the sender's own preset avatar (from its local profile), stamped
+    /// into the incoming-request doc only (the sentRequests mirror is untouched — SentRequestDTO
+    /// carries no avatar). nil ⇒ the avatar keys are omitted from the write.
     func sendFriendRequest(toUid: String, toUsername: String,
-                           fromUid: String, fromUsername: String, fromDisplayName: String) async throws
+                           fromUid: String, fromUsername: String, fromDisplayName: String,
+                           fromAvatarIcon: String?, fromAvatarColor: String?) async throws
 
     /// Atomic (WriteBatch): create both friend edges, delete the incoming request and the
     /// sender's mirror. `me*` = accepter identity, `from*` = original sender identity (from the request doc).
     /// Also deletes the reverse request pair (users/{fromUid}/friendRequests/{meUid} and
     /// users/{meUid}/sentRequests/{fromUid}) — a no-op when absent — so no pending request
     /// survives becoming friends, even after a simultaneous cross-send.
+    /// D3b: the edge in the SENDER's space (friend == me) is stamped with MY avatar (`meAvatar*`,
+    /// from my local profile); the edge in MY space (friend == sender) is stamped with the
+    /// sender's avatar (`fromAvatar*`, copied from the request snapshot — no profile/public-stats
+    /// fetch). Either nil ⇒ that edge's avatar keys are omitted.
     func acceptFriendRequest(fromUid: String, fromUsername: String, fromDisplayName: String,
-                             meUid: String, meUsername: String, meDisplayName: String) async throws
+                             meUid: String, meUsername: String, meDisplayName: String,
+                             fromAvatarIcon: String?, fromAvatarColor: String?,
+                             meAvatarIcon: String?, meAvatarColor: String?) async throws
 
     /// Atomic (WriteBatch): delete the incoming request and the sender's mirror.
     func declineFriendRequest(fromUid: String, meUid: String) async throws
@@ -382,8 +392,11 @@ protocol FirestoreService {
     /// Create a guild + the founder's owner member doc + the founder's guildMemberships lock,
     /// all in one batch. Caller supplies a candidate guildCode and its own stamped identity.
     /// Throws on code collision OR if the lock already exists (caller already in a guild).
+    /// D3b: `ownerAvatar*` is the founder's own preset avatar (from its local profile), stamped
+    /// into the owner member doc only (the lock carries no avatar). nil ⇒ keys omitted.
     func createGuild(code: String, name: String, joinPolicy: String, description: String?,
-                     ownerUid: String, ownerUsername: String, ownerDisplayName: String) async throws
+                     ownerUid: String, ownerUsername: String, ownerDisplayName: String,
+                     ownerAvatarIcon: String?, ownerAvatarColor: String?) async throws
 
     /// Read a guild by code (for the join screen). nil if not found.
     func fetchGuild(code: String) async throws -> GuildDTO?
@@ -405,10 +418,14 @@ protocol FirestoreService {
     func fetchJoinRequests(code: String) async throws -> [GuildJoinRequestDTO]
 
     /// Open-policy self-join: batch create my member doc (role "member") + my guildMemberships lock.
-    func joinOpenGuild(code: String, uid: String, username: String, displayName: String) async throws
+    /// D3b: `avatar*` = my own preset avatar (local profile), stamped into the member doc only; nil ⇒ keys omitted.
+    func joinOpenGuild(code: String, uid: String, username: String, displayName: String,
+                       avatarIcon: String?, avatarColor: String?) async throws
 
     /// Request-policy: create my own join-request doc (no lock yet — lock is written on approval).
-    func requestToJoinGuild(code: String, uid: String, username: String, displayName: String) async throws
+    /// D3b: `avatar*` = my own preset avatar (local profile), stamped into the request doc; nil ⇒ keys omitted.
+    func requestToJoinGuild(code: String, uid: String, username: String, displayName: String,
+                            avatarIcon: String?, avatarColor: String?) async throws
 
     /// Cancel my own pending request.
     func cancelJoinRequest(code: String, uid: String) async throws

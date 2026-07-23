@@ -365,12 +365,18 @@ struct BattleView: View {
         let iLead = viewModel.iAmLeading(duel)
         let theyLead = Int((theirs * 10).rounded()) > Int((mine * 10).rounded())
         let subline = leagueSubline(duel.league)
+        // D3b/D8: MY head from the live local profile (VM); THEIR head from the duel's
+        // counterparty side via the SAME challenger/opponent ownership logic as the scores.
+        let theirIcon = duel.isChallenger(myUid) ? duel.opponentAvatarIcon : duel.challengerAvatarIcon
+        let theirColor = duel.isChallenger(myUid) ? duel.opponentAvatarColor : duel.challengerAvatarColor
         return VStack(spacing: 0) {
             // .duel — fighters + vs-mid
             HStack(alignment: .center, spacing: 0) {
-                fighterColumn(initial: "Y", isMe: true, name: nil, subline: subline)
+                fighterColumn(initial: "Y", isMe: true, name: nil, subline: subline,
+                              avatarIcon: viewModel.myAvatarIcon, avatarColor: viewModel.myAvatarColor)
                 vsMid
-                fighterColumn(initial: initial(for: name), isMe: false, name: name, subline: subline)
+                fighterColumn(initial: initial(for: name), isMe: false, name: name, subline: subline,
+                              avatarIcon: theirIcon, avatarColor: theirColor)
             }
             // .compare — one crow + paired share bars
             VStack(spacing: 14) {
@@ -591,9 +597,12 @@ struct BattleView: View {
     // MARK: - Fighter pieces (D4)
 
     /// Mockup `.fighter`: initials avatar, name (mine = the `.you-tag` pill), league sub-line.
-    private func fighterColumn(initial: String, isMe: Bool, name: String?, subline: String, tint: Color? = nil) -> some View {
+    /// D3b: `avatarIcon`/`avatarColor` are the preset-avatar ids for this head (nil ⇒ initials —
+    /// e.g. the matchup preview, which isn't a duel snapshot, passes none).
+    private func fighterColumn(initial: String, isMe: Bool, name: String?, subline: String, tint: Color? = nil,
+                               avatarIcon: String? = nil, avatarColor: String? = nil) -> some View {
         VStack(spacing: 10) {
-            favAvatar(initial: initial, tint: tint)
+            favAvatar(initial: initial, tint: tint, avatarIcon: avatarIcon, avatarColor: avatarColor)
             if isMe {
                 youTag
             } else if let name {
@@ -613,17 +622,20 @@ struct BattleView: View {
 
     /// Mockup `.fav`: rounded-square initials avatar. Neutral fill + hairline (no rank
     /// metal — opponent rank isn't tracked; D4 deviation).
-    private func favAvatar(initial: String, tint: Color? = nil) -> some View {
-        Text(initial)
-            .font(AppFont.bold(23))
-            .foregroundColor(tint != nil ? .white : tc.textPrimary)
-            .frame(width: 60, height: 60)
-            .background(RoundedRectangle(cornerRadius: 19).fill(tint ?? tc.segBackground))
-            .overlay(
-                RoundedRectangle(cornerRadius: tint != nil ? 14 : 19)
-                    .stroke(tint != nil ? Color.white.opacity(0.25) : DesignSystem.Erewhon.line, lineWidth: 1)
-                    .padding(tint != nil ? 5 : 0)
-            )
+    /// D3b: the preset avatar over the existing 60pt/radius-19 initials fallback (byte-preserved).
+    private func favAvatar(initial: String, tint: Color? = nil, avatarIcon: String? = nil, avatarColor: String? = nil) -> some View {
+        AvatarView(iconId: avatarIcon, colorId: avatarColor, size: 60) {
+            Text(initial)
+                .font(AppFont.bold(23))
+                .foregroundColor(tint != nil ? .white : tc.textPrimary)
+                .frame(width: 60, height: 60)
+                .background(RoundedRectangle(cornerRadius: 19).fill(tint ?? tc.segBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: tint != nil ? 14 : 19)
+                        .stroke(tint != nil ? Color.white.opacity(0.25) : DesignSystem.Erewhon.line, lineWidth: 1)
+                        .padding(tint != nil ? 5 : 0)
+                )
+        }
     }
 
     /// Mockup `.you-tag`: social-tinted "YOU" pill (a badge — stays Hanken per D1).

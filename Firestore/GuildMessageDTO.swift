@@ -31,6 +31,12 @@ struct GuildMessageDTO: Codable, Identifiable {
     var senderUid: String
     var senderUsername: String
     var senderDisplayName: String
+    /// Preset avatar (D3b): the sender's icon/color id, a display-only identity snapshot
+    /// stamped per message at send time (like `senderUsername`/`senderDisplayName`), never
+    /// rewritten. Optional so pre-D3b messages decode nil ⇒ initials fallback in the non-own
+    /// chat bubble. Written to the manual send dict ONLY when non-nil.
+    var senderAvatarIcon: String? = nil
+    var senderAvatarColor: String? = nil
     var text: String
     /// Server time; `nil` while the write is still pending (drives "sending…").
     var createdAt: Date?

@@ -36,6 +36,9 @@ final class GuildViewModel {
         let isMe: Bool
         /// True when this member is a friend (only friends are tappable to a profile).
         let isFriend: Bool
+        /// D3b preset avatar — the member's snapshot from `GuildMemberDTO`. nil ⇒ initials.
+        var avatarIcon: String? = nil
+        var avatarColor: String? = nil
 
         var isOwnerRole: Bool { role == "owner" }
 
@@ -47,6 +50,9 @@ final class GuildViewModel {
         let id: String          // requester uid
         let username: String
         let displayName: String
+        /// D3b preset avatar — the requester's snapshot from `GuildJoinRequestDTO`. nil ⇒ initials.
+        var avatarIcon: String? = nil
+        var avatarColor: String? = nil
 
         var title: String { displayName.isEmpty ? "@\(username)" : displayName }
     }
@@ -167,7 +173,9 @@ final class GuildViewModel {
                     displayName: dto.displayName,
                     role: dto.role,
                     isMe: dto.uid == me,
-                    isFriend: coordinator.friendshipState(with: dto.uid) == .friends
+                    isFriend: coordinator.friendshipState(with: dto.uid) == .friends,
+                    avatarIcon: dto.avatarIcon,
+                    avatarColor: dto.avatarColor
                 )
             }
             .sorted { a, b in
@@ -179,7 +187,8 @@ final class GuildViewModel {
         if isOwner && g.joinPolicy == "request" {
             let requestDTOs = await coordinator.joinRequests(code: code)
             requests = requestDTOs
-                .map { RequestRow(id: $0.uid, username: $0.username, displayName: $0.displayName) }
+                .map { RequestRow(id: $0.uid, username: $0.username, displayName: $0.displayName,
+                                  avatarIcon: $0.avatarIcon, avatarColor: $0.avatarColor) }
                 .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         } else {
             requests = []

@@ -64,6 +64,16 @@ struct FriendProfileView: View {
                     VStack(spacing: DesignSystem.Spacing.md) {
                         identityHeader
 
+                        // D9: rank journey card (own-page parity via the shared RankJourneyCard),
+                        // a section between the header and the stats card mirroring ProfileView's
+                        // order. rr present → the card; rr nil (pre-RR-0b projection) → today's
+                        // legacy rank-string line verbatim (no invented RR, no card).
+                        if let rr = viewModel.stats?.rr {
+                            RankJourneyCard(rr: rr)
+                        } else if let rankRaw = viewModel.stats?.rank {
+                            rankPill(rankRaw)
+                        }
+
                         // UGC-1b: report confirmation + block-failure feedback.
                         if let msg = viewModel.actionMessage {
                             Text(msg)
@@ -228,10 +238,8 @@ struct FriendProfileView: View {
                     .foregroundColor(tc.textSecondary)
             }
 
-            if let rankRaw = viewModel.stats?.rank {
-                rankPill(rankRaw)
-                    .padding(.top, 2)
-            }
+            // D9: the small in-header rank pill is REPLACED by the D2 journey card, rendered as a
+            // section below the header (see `body`). The header's rank-accent border/glow stays.
 
             if let joinedAt = viewModel.stats?.joinedAt {
                 Text("Member since \(joinedAt.formatted(.dateTime.month(.abbreviated).year()))")

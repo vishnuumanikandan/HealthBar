@@ -731,6 +731,10 @@ struct GuildDetailView: View {
     private func requestRow(_ request: GuildViewModel.RequestRow) -> some View {
         let isBusy = viewModel.pendingActionUids.contains(request.id)
         return HStack(spacing: DesignSystem.Spacing.md) {
+            // D3b: leading preset avatar over the shared standings initials fallback (38pt).
+            AvatarView(iconId: request.avatarIcon, colorId: request.avatarColor, size: 38) {
+                StandingsPieces.avatar(initial: initials(displayName: request.displayName, username: request.username), tint: nil)
+            }
             identityLabel(displayName: request.displayName, username: request.username)
 
             Spacer()
@@ -784,14 +788,17 @@ struct GuildDetailView: View {
             if tappable { profileMember = member }
         } label: {
             HStack(spacing: DesignSystem.Spacing.md) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(tc.primary.opacity(0.16))
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(tc.primary.opacity(0.45), lineWidth: 1.5)
-                    Text(initials(for: member))
-                        .font(AppFont.bold(16))
-                        .foregroundColor(tc.primary)
+                // D3b: preset avatar over the existing 44pt tinted-initials fallback (byte-preserved).
+                AvatarView(iconId: member.avatarIcon, colorId: member.avatarColor, size: 44) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(tc.primary.opacity(0.16))
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(tc.primary.opacity(0.45), lineWidth: 1.5)
+                        Text(initials(for: member))
+                            .font(AppFont.bold(16))
+                            .foregroundColor(tc.primary)
+                    }
                 }
                 .frame(width: 44, height: 44)
 
@@ -904,7 +911,12 @@ struct GuildDetailView: View {
     // MARK: - Shared Pieces
 
     private func initials(for member: GuildViewModel.MemberRow) -> String {
-        let name = member.displayName.isEmpty ? member.username : member.displayName
+        initials(displayName: member.displayName, username: member.username)
+    }
+
+    /// Shared initials builder — used by the member row and the join-request row's avatar fallback.
+    private func initials(displayName: String, username: String) -> String {
+        let name = displayName.isEmpty ? username : displayName
         let letters = name.split(separator: " ").prefix(2).compactMap { $0.first }
         return letters.isEmpty ? "?" : String(letters).uppercased()
     }

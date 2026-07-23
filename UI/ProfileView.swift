@@ -310,66 +310,13 @@ struct ProfileView: View {
         }
     }
 
-    /// D3 Rank Journey card — driven purely by `userProgress.rr` via Rank.swift's API. Renders
-    /// only once progress is loaded (no invented default RR, no force-unwrap); before load the
-    /// region participates in the page's loading state.
+    /// D3 Rank Journey card — the shared `RankJourneyCard` (D9 extraction) driven purely by
+    /// `userProgress.rr`. Renders only once progress is loaded (no invented default RR, no
+    /// force-unwrap); before load the region participates in the page's loading state.
     @ViewBuilder
     private var rankJourneyCard: some View {
-        if let journey = viewModel.rankJourney {
-            // rankMetal returns nil for Stone (and nil rr); FriendProfileView.rankColor is the
-            // canonical per-rank switch, but D8 forbids new hex here, so fall back to the neutral
-            // textTertiary token (the established `?? tc.textTertiary` FriendsView pattern).
-            let accent = DesignSystem.Erewhon.rankMetal(forRR: journey.rr) ?? tc.textTertiary
-            VStack(spacing: DesignSystem.Spacing.md) {
-                HStack(spacing: DesignSystem.Spacing.md) {
-                    RankPlaque(rank: journey.rank, size: 48)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(journey.tierTitle)
-                            .font(AppFont.bold(22))
-                            .foregroundColor(tc.textPrimary)
-                        Text(journey.subline)
-                            .font(AppFont.regular(13))
-                            .foregroundColor(tc.textSecondary)
-                            .monospacedDigit()
-                    }
-
-                    Spacer()
-                }
-
-                if journey.isPeak {
-                    // Peak state: bar + caption replaced by a single line (D3).
-                    Text("Peak of the ladder")
-                        .font(AppFont.bold(14))
-                        .foregroundColor(accent)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    // Progress bar: fill = (rr − currentTierFloor) / Rank.rrPerTier, clamped 0…1.
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            AdaptivePillShapeStyle()
-                                .fill(accent.opacity(0.18))
-                            AdaptivePillShapeStyle()
-                                .fill(accent)
-                                .frame(width: max(0, geo.size.width * journey.fill))
-                        }
-                    }
-                    .frame(height: 8)
-
-                    // Caption: left = current tier name; right = "<remaining> RR to <next>"
-                    // (ascending — next tier in-rank, or the next rank's tier 1 at tier 3).
-                    HStack {
-                        Text(journey.tierTitle)
-                        Spacer()
-                        Text(journey.captionRight)
-                    }
-                    .font(AppFont.regular(12))
-                    .foregroundColor(tc.textSecondary)
-                    .monospacedDigit()
-                }
-            }
-            .padding(DesignSystem.Spacing.md)
-            .adaptiveCard(borderColor: accent.opacity(0.4), fillColor: tc.cardBackground)
+        if let progress = viewModel.userProgress {
+            RankJourneyCard(rr: progress.rr)
         }
     }
 

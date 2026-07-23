@@ -22,6 +22,11 @@ final class ArenaViewModel {
     private(set) var inFlight = false
     var toastMessage: String?
 
+    /// D3b/D4: MY fighter-head avatar, from the LIVE local profile (freshest; never the possibly
+    /// stale/absent duel snapshot). Loaded on refresh; nil ⇒ the initials fallback.
+    private(set) var myAvatarIcon: String?
+    private(set) var myAvatarColor: String?
+
     init(coordinator: AppCoordinator, myUid: String, duel: DuelDTO) {
         self.coordinator = coordinator
         self.myUid = myUid
@@ -36,6 +41,10 @@ final class ArenaViewModel {
         } else {
             isStale = true // keep last-known render; no pop, no alert
         }
+        // D3b: my own avatar from the local profile record (D3a accessor) for MY fighter head.
+        let profile = try? await coordinator.getUserProfile()
+        myAvatarIcon = profile?.avatarIcon
+        myAvatarColor = profile?.avatarColor
         await coordinator.markDuelsSeen([duel], isFullList: false)
     }
 
@@ -55,6 +64,10 @@ final class ArenaViewModel {
     /// Stamped identity snapshots off the DTO (display-only; mirrors `opponentLabel(of:)`).
     var theirUsername: String { duel.isChallenger(myUid) ? duel.opponentUsername : duel.challengerUsername }
     var theirDisplayName: String { duel.isChallenger(myUid) ? duel.opponentDisplayName : duel.challengerDisplayName }
+    /// D3b/D4: THEIR fighter-head avatar — the COUNTERPARTY side of the duel snapshot, via the same
+    /// challenger/opponent ownership logic as the names/scores (no new branching). nil ⇒ initials.
+    var theirAvatarIcon: String? { duel.isChallenger(myUid) ? duel.opponentAvatarIcon : duel.challengerAvatarIcon }
+    var theirAvatarColor: String? { duel.isChallenger(myUid) ? duel.opponentAvatarColor : duel.challengerAvatarColor }
     /// A blocked opponent leaves the head inert — active duels are never touched (UGC-1b).
     var canOpenOpponentProfile: Bool { !coordinator.isBlocked(theirUid) }
 

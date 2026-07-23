@@ -43,17 +43,28 @@ final class FriendRequest {
     /// The counterparty's display name. Nil for outgoing requests.
     var displayName: String? = nil
 
+    /// The counterparty's preset avatar (D3b): icon id + color id, a display-only snapshot.
+    /// Populated for INCOMING requests only (mirrored from `IncomingRequestDTO.fromAvatarIcon/
+    /// Color` by the reconcile) — outgoing mirrors stay nil, because `SentRequestDTO` carries no
+    /// avatar by design (the sender never reads the recipient's avatar). Optional + inline nil
+    /// default = lightweight SwiftData migration; nil ⇒ initials in the incoming-request row.
+    var avatarIcon: String? = nil
+    var avatarColor: String? = nil
+
     /// When the request was created (server time).
     var createdAt: Date = Date.distantPast
 
     // MARK: - Init
 
-    init(userId: String, otherUid: String, direction: String, username: String, displayName: String?, createdAt: Date) {
+    init(userId: String, otherUid: String, direction: String, username: String, displayName: String?, createdAt: Date,
+         avatarIcon: String? = nil, avatarColor: String? = nil) {
         self.userId = userId
         self.otherUid = otherUid
         self.direction = direction
         self.username = username
         self.displayName = displayName
+        self.avatarIcon = avatarIcon
+        self.avatarColor = avatarColor
         self.createdAt = createdAt
     }
 }

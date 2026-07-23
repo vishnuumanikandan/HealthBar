@@ -786,14 +786,23 @@ final class FirestoreServiceImpl: FirestoreService {
     }
 
     func sendFriendRequest(toUid: String, toUsername: String,
-                           fromUid: String, fromUsername: String, fromDisplayName: String) async throws {
+                           fromUid: String, fromUsername: String, fromDisplayName: String,
+                           fromAvatarIcon: String?, fromAvatarColor: String?) async throws {
         let batch = db.batch()
-        batch.setData([
+        // Incoming request in the recipient's space — stamp my own avatar (D3b). Keys added
+        // ONLY when non-nil, so a no-avatar sender omits them and the write stays compatible
+        // with pre-deploy rules during the dev window (the D3a nil-omission precedent).
+        var incoming: [String: Any] = [
             "fromUid": fromUid,
             "fromUsername": fromUsername,
             "fromDisplayName": fromDisplayName,
             "createdAt": FieldValue.serverTimestamp()
-        ], forDocument: incomingRequestsCollection(for: toUid).document(fromUid))
+        ]
+        if let icon = fromAvatarIcon { incoming["fromAvatarIcon"] = icon }
+        if let color = fromAvatarColor { incoming["fromAvatarColor"] = color }
+        batch.setData(incoming, forDocument: incomingRequestsCollection(for: toUid).document(fromUid))
+        // Sent mirror — UNTOUCHED (SentRequestDTO carries no avatar; the sender never knows the
+        // recipient's avatar by design).
         batch.setData([
             "toUid": toUid,
             "toUsername": toUsername,
@@ -803,21 +812,32 @@ final class FirestoreServiceImpl: FirestoreService {
     }
 
     func acceptFriendRequest(fromUid: String, fromUsername: String, fromDisplayName: String,
-                             meUid: String, meUsername: String, meDisplayName: String) async throws {
+                             meUid: String, meUsername: String, meDisplayName: String,
+                             fromAvatarIcon: String?, fromAvatarColor: String?,
+                             meAvatarIcon: String?, meAvatarColor: String?) async throws {
         let batch = db.batch()
         // Both friend edges — each side stamped with the counterparty's identity.
-        batch.setData([
+        // D3b: the edge in MY space (friend == the sender) copies the SENDER's avatar, which
+        // the caller sourced from the request snapshot (no profile/public-stats fetch).
+        var myEdge: [String: Any] = [
             "friendUid": fromUid,
             "friendUsername": fromUsername,
             "friendDisplayName": fromDisplayName,
             "since": FieldValue.serverTimestamp()
-        ], forDocument: friendsCollection(for: meUid).document(fromUid))
-        batch.setData([
+        ]
+        if let icon = fromAvatarIcon { myEdge["friendAvatarIcon"] = icon }
+        if let color = fromAvatarColor { myEdge["friendAvatarColor"] = color }
+        batch.setData(myEdge, forDocument: friendsCollection(for: meUid).document(fromUid))
+        // D3b: the edge in the SENDER's space (friend == me) carries MY own avatar (local profile).
+        var theirEdge: [String: Any] = [
             "friendUid": meUid,
             "friendUsername": meUsername,
             "friendDisplayName": meDisplayName,
             "since": FieldValue.serverTimestamp()
-        ], forDocument: friendsCollection(for: fromUid).document(meUid))
+        ]
+        if let icon = meAvatarIcon { theirEdge["friendAvatarIcon"] = icon }
+        if let color = meAvatarColor { theirEdge["friendAvatarColor"] = color }
+        batch.setData(theirEdge, forDocument: friendsCollection(for: fromUid).document(meUid))
         // The request being accepted.
         batch.deleteDocument(incomingRequestsCollection(for: meUid).document(fromUid))
         batch.deleteDocument(sentRequestsCollection(for: fromUid).document(meUid))
@@ -1144,7 +1164,8 @@ final class FirestoreServiceImpl: FirestoreService {
     }
 
     func createGuild(code: String, name: String, joinPolicy: String, description: String?,
-                     ownerUid: String, ownerUsername: String, ownerDisplayName: String) async throws {
+                     ownerUid: String, ownerUsername: String, ownerDisplayName: String,
+                     ownerAvatarIcon: String?, ownerAvatarColor: String?) async throws {
         let batch = db.batch()
 
         // Guild doc — create-only by rules (a collision over an existing code fails).
@@ -1165,14 +1186,19 @@ final class FirestoreServiceImpl: FirestoreService {
         }
         batch.setData(guildData, forDocument: guildDocument(code: code))
 
-        // Founder's owner member doc.
-        batch.setData([
+        // Founder's owner member doc. D3b: stamp the founder's own avatar here, at the SAME
+        // create the roster doc is born at (not factored into a helper). GUILD-CAP-1's memberCount
+        // pairing is untouched — only the member-doc field set gains the optional avatar keys.
+        var ownerMember: [String: Any] = [
             "uid": ownerUid,
             "username": ownerUsername,
             "displayName": ownerDisplayName,
             "role": "owner",
             "joinedAt": FieldValue.serverTimestamp()
-        ], forDocument: guildMembers(code: code).document(ownerUid))
+        ]
+        if let icon = ownerAvatarIcon { ownerMember["avatarIcon"] = icon }
+        if let color = ownerAvatarColor { ownerMember["avatarColor"] = color }
+        batch.setData(ownerMember, forDocument: guildMembers(code: code).document(ownerUid))
 
         // Founder's one-guild lock (create-only; an existing lock means the caller
         // is already in a guild and the whole batch is rejected).
@@ -1248,15 +1274,21 @@ final class FirestoreServiceImpl: FirestoreService {
         }
     }
 
-    func joinOpenGuild(code: String, uid: String, username: String, displayName: String) async throws {
+    func joinOpenGuild(code: String, uid: String, username: String, displayName: String,
+                       avatarIcon: String?, avatarColor: String?) async throws {
         let batch = db.batch()
-        batch.setData([
+        // D3b: stamp my own avatar into MY member doc at this same create (GUILD-CAP-1 pairing
+        // untouched). Keys added only when non-nil.
+        var member: [String: Any] = [
             "uid": uid,
             "username": username,
             "displayName": displayName,
             "role": "member",
             "joinedAt": FieldValue.serverTimestamp()
-        ], forDocument: guildMembers(code: code).document(uid))
+        ]
+        if let icon = avatarIcon { member["avatarIcon"] = icon }
+        if let color = avatarColor { member["avatarColor"] = color }
+        batch.setData(member, forDocument: guildMembers(code: code).document(uid))
         batch.setData([
             "uid": uid,
             "guildCode": code,
@@ -1271,16 +1303,22 @@ final class FirestoreServiceImpl: FirestoreService {
         try await commitGuildBatch(batch)
     }
 
-    func requestToJoinGuild(code: String, uid: String, username: String, displayName: String) async throws {
+    func requestToJoinGuild(code: String, uid: String, username: String, displayName: String,
+                            avatarIcon: String?, avatarColor: String?) async throws {
         // No lock yet — the lock is written on approval. Awaiting the dictionary
         // setData surfaces a rules rejection (e.g. wrong-policy guild) as a throw.
+        // D3b: stamp my own avatar into the request doc (owner copies it into the member doc on
+        // approval). Keys added only when non-nil.
+        var request: [String: Any] = [
+            "uid": uid,
+            "username": username,
+            "displayName": displayName,
+            "createdAt": FieldValue.serverTimestamp()
+        ]
+        if let icon = avatarIcon { request["avatarIcon"] = icon }
+        if let color = avatarColor { request["avatarColor"] = color }
         do {
-            try await guildJoinRequests(code: code).document(uid).setData([
-                "uid": uid,
-                "username": username,
-                "displayName": displayName,
-                "createdAt": FieldValue.serverTimestamp()
-            ])
+            try await guildJoinRequests(code: code).document(uid).setData(request)
         } catch {
             throw GuildError.network(error.localizedDescription)
         }
@@ -1293,13 +1331,19 @@ final class FirestoreServiceImpl: FirestoreService {
     func approveJoinRequest(code: String, request: GuildJoinRequestDTO) async throws {
         let batch = db.batch()
         // Member doc stamped from the request (identity the requester provided).
-        batch.setData([
+        // D3b: copy the requester's avatar snapshot from the request doc into the member doc —
+        // the counterparty avatar comes from a doc the owner already holds (no cross-user read).
+        // Keys added only when the request carried them (pre-D3b request ⇒ nil ⇒ omitted).
+        var member: [String: Any] = [
             "uid": request.uid,
             "username": request.username,
             "displayName": request.displayName,
             "role": "member",
             "joinedAt": FieldValue.serverTimestamp()
-        ], forDocument: guildMembers(code: code).document(request.uid))
+        ]
+        if let icon = request.avatarIcon { member["avatarIcon"] = icon }
+        if let color = request.avatarColor { member["avatarColor"] = color }
+        batch.setData(member, forDocument: guildMembers(code: code).document(request.uid))
         // The requester's one-guild lock (create fails if they joined elsewhere meanwhile).
         batch.setData([
             "uid": request.uid,
@@ -1446,13 +1490,18 @@ final class FirestoreServiceImpl: FirestoreService {
         // rules rejection (e.g. a raced eject) as a throw; createdAt is the server
         // sentinel. The DTO is a field carrier — its id/createdAt are unused here.
         do {
-            try await guildMessages(code: code).document().setData([
+            // D3b: stamp the sender's avatar per message, in this existing send write (never a
+            // post-send update). Keys added only when non-nil.
+            var data: [String: Any] = [
                 "senderUid": msg.senderUid,
                 "senderUsername": msg.senderUsername,
                 "senderDisplayName": msg.senderDisplayName,
                 "text": msg.text,
                 "createdAt": FieldValue.serverTimestamp()
-            ])
+            ]
+            if let icon = msg.senderAvatarIcon { data["senderAvatarIcon"] = icon }
+            if let color = msg.senderAvatarColor { data["senderAvatarColor"] = color }
+            try await guildMessages(code: code).document().setData(data)
         } catch {
             throw GuildChatError.network(error.localizedDescription)
         }
@@ -1503,6 +1552,14 @@ final class FirestoreServiceImpl: FirestoreService {
         if let rematchOfDuelId = duel.rematchOfDuelId {
             data["rematchOfDuelId"] = rematchOfDuelId
         }
+        // D3b: stamp both sides' avatar snapshots at CREATE (challenger's own from local profile;
+        // opponent's copied from the challenge candidate) — each Arena/featured head reads the
+        // COUNTERPARTY side. Keys added only when non-nil (matchmade create is a separate path
+        // that never stamps them). isChallengeCreate()'s hasOnly permits these keys.
+        if let icon = duel.challengerAvatarIcon { data["challengerAvatarIcon"] = icon }
+        if let color = duel.challengerAvatarColor { data["challengerAvatarColor"] = color }
+        if let icon = duel.opponentAvatarIcon { data["opponentAvatarIcon"] = icon }
+        if let color = duel.opponentAvatarColor { data["opponentAvatarColor"] = color }
         try await ref.setData(data)
         return ref.documentID
     }
