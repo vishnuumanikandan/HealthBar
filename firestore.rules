@@ -422,8 +422,9 @@ service cloud.firestore {
 
       // Create: founder creates a guild they own, valid shape, with a 'create'
       // (the rules reject a create over an existing code, giving the client its
-      // collision signal). GUILD-CAP-1: the count is born at exactly 1 (the founder
-      // is the sole member) — explicit presence, not equality-on-a-maybe-missing key.
+      // collision signal). GUILD-CAP-1 born the count at exactly 1; GUILD-RULES-1a
+      // relaxes that to bi-generational conditional-presence for the transition —
+      // a new client still writes memberCount == 1, a pre-counter client omits it.
       allow create: if request.auth != null
                     && request.resource.data.ownerUid == request.auth.uid
                     && request.resource.data.joinPolicy in ['open','request','private']
@@ -431,8 +432,15 @@ service cloud.firestore {
                     && request.resource.data.name.size() >= 1
                     && request.resource.data.name.size() <= 30
                     && (!('description' in request.resource.data) || (request.resource.data.description is string && request.resource.data.description.size() <= 140))
-                    && 'memberCount' in request.resource.data
-                    && request.resource.data.memberCount == 1
+                    // legacy path := an identical document transition except memberCount
+                    // is unchanged (the write provably does not touch the counter); for a
+                    // CREATE that is a memberCount-ABSENT write from a pre-counter client.
+                    // TODO-strict-rules-at-2.1: restore mandatory presence —
+                    //   && 'memberCount' in request.resource.data
+                    //   && request.resource.data.memberCount == 1
+                    && (!('memberCount' in request.resource.data)
+                        || (request.resource.data.memberCount is int
+                            && request.resource.data.memberCount == 1))
                     && request.resource.data.keys().hasOnly(['name','ownerUid','joinPolicy','description','createdAt','memberCount']);
 
       // Update — GUILD-CAP-1 split the single owner-settings rule into two branches:
@@ -469,11 +477,8 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
 
       match /members/{memberUid} {
-        // Read: your own membership (covers the find-my-guild path, which filters
-        // uid == me), or any member of this guild reading the roster.
-        allow read: if request.auth != null
-                    && (request.auth.uid == memberUid
-                        || exists(/databases/$(database)/documents/guilds/$(guildId)/members/$(request.auth.uid)));
+        // GUILD-UI-1: roster is identity snapshots only (username/displayName/role/joinedAt/avatar) — same privacy class as the B1 public/stats opening. joinRequests stay gated.
+        allow read: if request.auth != null;
 
         // Create — three legitimate paths, all stamping uid == doc id, exact shape:
         allow create: if request.auth != null
@@ -499,7 +504,15 @@ service cloud.firestore {
                            (request.auth.uid == memberUid
                               && request.resource.data.role == 'owner'
                               && getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid == request.auth.uid
-                              && getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount == 1)
+                              // TODO-strict-rules-at-2.1: restore strict founder count —
+                              //   && getAfter(guild).data.memberCount == 1
+                              // Transitional (strict founder-count OR legacy): a pre-counter client's
+                              // createGuild omits memberCount, so the guild it creates in this same
+                              // batch has no counter. Existence-first ordering matches the file's
+                              // conditional-presence idiom (avatar/rr) — the absent case short-circuits
+                              // before the field access.
+                              && (!('memberCount' in getAfter(/databases/$(database)/documents/guilds/$(guildId)).data)
+                                  || getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount == 1))
                            ||
                            // b) self-join an OPEN or PRIVATE guild as member (and not already in any
                            //    guild). R7d: 'private' is hidden from the directory, NOT harder to
@@ -510,20 +523,43 @@ service cloud.firestore {
                               && request.resource.data.role == 'member'
                               && get(/databases/$(database)/documents/guilds/$(guildId)).data.joinPolicy in ['open','private']
                               && !exists(/databases/$(database)/documents/guildMemberships/$(memberUid))
-                              // GUILD-CAP-1: the self-join is invalid without its same-batch +1
-                              // (which the count-only update branch caps at <= 40).
-                              && getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount
-                                   == get(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount + 1)
+                              // TODO-strict-rules-at-2.1: restore strict +1 —
+                              //   && getAfter(guild).data.memberCount == get(guild).data.memberCount + 1
+                              // Transitional, absence-escape FIRST (existence-first idiom, arm-a template):
+                              // a counterless guild — arm D1 lets pre-counter clients keep creating one —
+                              // would ERROR on getAfter/get memberCount, so !('memberCount' in get(guild))
+                              // short-circuits and admits the old-client join (no tick). Else a new client
+                              // ticks the paired +1 (count-only update branch still caps <= 40), or an old
+                              // client joins a counted guild without ticking (getAfter == get). A NEW client
+                              // on a counterless guild stays denied by the count-only update branch until a
+                              // backfill re-run.
+                              && (!('memberCount' in get(/databases/$(database)/documents/guilds/$(guildId)).data)
+                                   || (getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount
+                                         == get(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount + 1
+                                       && getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount <= 40)
+                                   || getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount
+                                         == get(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount))
                            ||
                            // c) owner approves a requester (member doc for someone else, who has a pending request)
                            (request.auth.uid == get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid
                               && memberUid != request.auth.uid
                               && request.resource.data.role == 'member'
                               && exists(/databases/$(database)/documents/guilds/$(guildId)/joinRequests/$(memberUid))
-                              // GUILD-CAP-1: the approval is invalid without its same-batch +1
-                              // (which the count-only update branch caps at <= 40).
-                              && getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount
-                                   == get(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount + 1)
+                              // TODO-strict-rules-at-2.1: restore strict +1 —
+                              //   && getAfter(guild).data.memberCount == get(guild).data.memberCount + 1
+                              // Transitional, absence-escape FIRST (existence-first idiom, arm-a template):
+                              // a counterless guild would ERROR on getAfter/get memberCount, so
+                              // !('memberCount' in get(guild)) short-circuits and admits the old-client-owner
+                              // approval (no tick). Else owner-approve ticks the paired +1 (count-only update
+                              // branch still caps <= 40), or an old owner client approves on a counted guild
+                              // without ticking (getAfter == get). A NEW owner client on a counterless guild
+                              // stays denied by the count-only update branch until a backfill re-run.
+                              && (!('memberCount' in get(/databases/$(database)/documents/guilds/$(guildId)).data)
+                                   || (getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount
+                                         == get(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount + 1
+                                       && getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount <= 40)
+                                   || getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount
+                                         == get(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount))
                          );
 
         allow update: if false;  // no role changes in G1
@@ -546,8 +582,20 @@ service cloud.firestore {
                       && (
                            (request.auth.uid == memberUid
                               && memberUid != get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid
-                              && getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount
-                                   == get(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount - 1)
+                              // TODO-strict-rules-at-2.1: restore strict paired -1 —
+                              //   && getAfter(guild).data.memberCount == get(guild).data.memberCount - 1
+                              // Transitional, absence-escape FIRST (existence-first idiom, arm-a template):
+                              // a counterless guild would ERROR on getAfter/get memberCount, so
+                              // !('memberCount' in get(guild)) short-circuits and admits the old-client leave
+                              // (no tick). Else a new client sends the paired -1, or an old client leaves a
+                              // counted guild without ticking (getAfter == get). A NEW-client account inside a
+                              // counterless guild cannot leave until a backfill re-run (the count-only update
+                              // branch denies the -1 on an absent counter). Dev-only, accepted.
+                              && (!('memberCount' in get(/databases/$(database)/documents/guilds/$(guildId)).data)
+                                   || getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount
+                                        == get(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount - 1
+                                   || getAfter(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount
+                                        == get(/databases/$(database)/documents/guilds/$(guildId)).data.memberCount))
                            || request.auth.uid == get(/databases/$(database)/documents/guilds/$(guildId)).data.ownerUid
                          );
       }

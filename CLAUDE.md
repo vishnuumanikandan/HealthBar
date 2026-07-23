@@ -95,6 +95,7 @@ of implementing.
 - Deterministic doc IDs collide across users; composite identity (`uid + "_" + id`)
   where lists merge multiple users' docs.
 - Listener ordering needs a `documentID()` tie-break when timestamps can collide.
+- Prod rules are TRANSITIONAL since GUILD-RULES-1 — bi-generational GUILD-CAP arms; strict forms restore at 2.1 via the TODO-strict-rules-at-2.1 comments.
 
 ## Listener policy
 - Default is fetch-on-view + pull-to-refresh. The global listener registry
