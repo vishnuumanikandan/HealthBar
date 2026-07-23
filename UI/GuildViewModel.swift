@@ -315,8 +315,12 @@ final class GuildViewModel {
     func approve(_ row: RequestRow) async {
         guard let code = guild?.id else { return }
         await performRowAction(uid: row.id) {
+            // D3b: carry the requester's avatar snapshot through the row → DTO round-trip, or the
+            // member-doc copy in approveJoinRequest sees nil and the approved member loses their
+            // avatar (renders initials forever).
             let dto = GuildJoinRequestDTO(uid: row.id, username: row.username,
-                                         displayName: row.displayName, createdAt: Date())
+                                         displayName: row.displayName, createdAt: Date(),
+                                         avatarIcon: row.avatarIcon, avatarColor: row.avatarColor)
             try await self.coordinator.approveRequest(code: code, request: dto)
         }
     }
