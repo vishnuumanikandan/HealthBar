@@ -504,23 +504,29 @@ struct FirstQuestsCard: View {
 // MARK: - Quest Beacon
 
 extension View {
-    /// Pulsing concentric primary rings drawing the eye to a tutorial target (TUT-1b,
-    /// Decision 3). Renders ONLY when the shared store is loaded, not done, AND `stepId`
-    /// is the first incomplete step — so exactly one step's beacons glow app-wide, and
-    /// post-tutorial / guest / unloaded users see nothing anywhere (zero overhead). Purely
-    /// an overlay: it never wraps content, adds frames/padding, changes the target's size,
-    /// or takes hit-testing, and it self-sizes to the target's bounds so a toolbar gear
-    /// glows small and a card glows large (the "adapt to the metric" rule).
-    func questBeacon(_ stepId: String) -> some View {
-        modifier(QuestBeacon(stepId: stepId))
+    /// A pulsing primary OUTLINE that traces the target control's own shape, drawing the eye
+    /// to a tutorial target (TUT-1b, Decision 3). Renders ONLY when the shared store is
+    /// loaded, not done, AND `stepId` is the first incomplete step — so exactly one step's
+    /// beacons glow app-wide, and post-tutorial / guest / unloaded users see nothing anywhere
+    /// (zero overhead). Purely an overlay: it never wraps content, adds frames/padding,
+    /// changes the target's size, or takes hit-testing. The outline fills the overlay, so it
+    /// is already sized to the target's bounds; `cornerRadius` is what makes it match the
+    /// control's silhouette — pass the control's own radius (pill/circular controls pass
+    /// height/2; RoundedRectangle clamps to half the short side, yielding a capsule).
+    /// Defaults to the standard Erewhon surface-card/button radius (14 — `flatCard`'s default,
+    /// and AppButton's exact radius).
+    func questBeacon(_ stepId: String,
+                     cornerRadius: CGFloat = DesignSystem.Erewhon.buttonRadius) -> some View {
+        modifier(QuestBeacon(stepId: stepId, cornerRadius: cornerRadius))
     }
 }
 
-/// The beacon overlay (Decision 3). Layout-neutral: `content` is returned untouched with
-/// the rings drawn in a bounds-matching overlay that never hit-tests. Reduce Motion
-/// collapses to a single static ring at reduced opacity — no pulse.
+/// The beacon overlay (Decision 3). Layout-neutral: `content` is returned untouched with the
+/// outline drawn in a bounds-matching overlay that never hit-tests. Reduce Motion collapses
+/// to a single static outline at reduced opacity — no pulse, no glow.
 private struct QuestBeacon: ViewModifier {
     let stepId: String
+    let cornerRadius: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulsing = false
 
@@ -544,27 +550,23 @@ private struct QuestBeacon: ViewModifier {
         }
     }
 
+    /// Both outlines fill the overlay — i.e. the target's own bounds — so the beacon traces
+    /// the control instead of drawing a shape over it. The pulse ring scales slightly OUTWARD
+    /// and fades on repeat; scaleEffect draws beyond the bounds without affecting layout.
     private var beacon: some View {
-        GeometryReader { geo in
-            let base = max(geo.size.width, geo.size.height)
-            ZStack {
-                // Outer ring: the ping — expands and fades on the pulse (steady when Reduce
-                // Motion). Inner ring: a constant halo so the target stays ringed between pings.
-                Circle()
-                    .stroke(tc.primary.opacity(reduceMotion ? 0.5 : 0.85),
-                            lineWidth: max(1.5, base * 0.05))
-                    .frame(width: base * 1.15, height: base * 1.15)
-                    .scaleEffect(pulsing && !reduceMotion ? 1.35 : 1.0)
-                    .opacity(pulsing && !reduceMotion ? 0.0 : (reduceMotion ? 0.5 : 0.85))
-                if !reduceMotion {
-                    Circle()
-                        .stroke(tc.primary.opacity(0.55), lineWidth: max(1, base * 0.03))
-                        .frame(width: base * 1.15, height: base * 1.15)
-                }
+        ZStack {
+            // Steady outline — keeps the target marked between pulses.
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .stroke(tc.primary.opacity(reduceMotion ? 0.55 : 0.9), lineWidth: 2)
+            // The pulse — the same outline, expanding slightly and fading, forever.
+            if !reduceMotion {
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(tc.primary, lineWidth: 2)
+                    .scaleEffect(pulsing ? 1.08 : 1.0)
+                    .opacity(pulsing ? 0 : 0.85)
             }
-            .frame(width: geo.size.width, height: geo.size.height)
-            .shadow(color: tc.primary.opacity(reduceMotion ? 0 : 0.45), radius: base * 0.14)
         }
+        .shadow(color: tc.primary.opacity(reduceMotion ? 0 : 0.45), radius: 8)
         .allowsHitTesting(false)
         .onAppear {
             guard !reduceMotion else { return }

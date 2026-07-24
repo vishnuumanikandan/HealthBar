@@ -68,7 +68,8 @@ struct SettingsView: View {
                     }
                 )
                 // TUT-1b changeTheme beacon (Decision 7) — the Accessibility row leads to the theme picker.
-                .questBeacon(TutorialCatalog.changeThemeId)
+                // settingButton is an adaptiveCard — match its radius exactly.
+                .questBeacon(TutorialCatalog.changeThemeId, cornerRadius: DesignSystem.Erewhon.cardRadius)
 
                 // Edit Health Profile — opens onboarding in edit mode
                 settingButton(

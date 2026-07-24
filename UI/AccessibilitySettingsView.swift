@@ -45,7 +45,8 @@ struct AccessibilitySettingsView: View {
                     )
                     // TUT-1b changeTheme beacon (Decision 7) — placed on the first theme option so it
                     // sits at the top of the theme groups (a List Section can't host the overlay itself).
-                    .questBeacon(TutorialCatalog.changeThemeId)
+                    // A flat full-width List row — trace it with the small rectangular radius.
+                    .questBeacon(TutorialCatalog.changeThemeId, cornerRadius: DesignSystem.CornerRadius.sm)
 
                     Divider()
 

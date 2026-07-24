@@ -207,10 +207,14 @@ final class HomeViewModel {
 
     // MARK: - Tutorial (TUT-1a)
 
-    /// The loaded tutorial read model — the SINGLE VM-side mirror of tutorial state.
-    /// `nil` until first load; neither the popup nor the First-Quests card renders while
-    /// nil (guests resolve to `.guest`, which is done ⇒ nothing shows). seen/skipped/
-    /// completed are never duplicated here as separate booleans.
+    /// Popup show-once gating ONLY (TUT-1b amend) — NEVER a rendering source.
+    /// This is a load-time SNAPSHOT: it refreshes only when `loadTutorialState()` runs
+    /// (Home appearance / start / skip), which is exactly what the once-per-first-session
+    /// popup decision needs. The First-Quests card deliberately does NOT read it — the card
+    /// renders off the live `TutorialProgress.shared.state` so it advances the moment a step
+    /// completes on any tab, instead of waiting for Home to re-appear.
+    /// `nil` until first load; guests resolve to `.guest` (done ⇒ nothing shows). seen/
+    /// skipped/completed are never duplicated here as separate booleans.
     var tutorialState: TutorialState?
 
     /// Whether the welcome popup overlay is currently visible. Drives the Home overlay and
