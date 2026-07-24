@@ -7,14 +7,93 @@
 
 import Foundation
 
+// MARK: - Food Category
+
+/// The user-declared kind of item being logged (AILOG-1a). Drives the per-category
+/// estimation guidance injected into the recognition prompt and — in AILOG-1b — the
+/// input sheet's category chips and per-field labels.
+///
+/// `CaseIterable` order IS the AILOG-1b chip order. Raw values are pinned wire/prompt
+/// format: they appear verbatim in prompt text and in 1b's UI state, so a case name may
+/// be renamed but a raw value must NEVER change. `meal` is the default.
+enum FoodCategory: String, CaseIterable, Identifiable {
+    case meal = "meal"
+    case snack = "snack"
+    case drink = "drink"
+    case fruit = "fruit"
+    case veggie = "veggie"
+    case sweet = "sweet"
+
+    var id: String { rawValue }
+
+    /// All-caps label for the category chip (AILOG-1b).
+    var displayName: String {
+        switch self {
+        case .meal:   return "MEAL"
+        case .snack:  return "SNACK"
+        case .drink:  return "DRINK"
+        case .fruit:  return "FRUIT"
+        case .veggie: return "VEGGIE"
+        case .sweet:  return "SWEET"
+        }
+    }
+
+    /// The three input-field labels AILOG-1b renders (field 1 = item, 2 = amount,
+    /// 3 = extras).
+    struct FieldLabels {
+        let item: String
+        let amount: String
+        let extras: String
+    }
+
+    /// The single source table of per-field labels — AILOG-1b reads this and never
+    /// redefines these strings.
+    var fieldLabels: FieldLabels {
+        switch self {
+        case .meal:
+            return FieldLabels(item: "What did you eat?", amount: "How much did you eat?", extras: "Seasonings, sauces, or oil?")
+        case .snack:
+            return FieldLabels(item: "What did you eat?", amount: "How much did you eat?", extras: "Brand or toppings?")
+        case .drink:
+            return FieldLabels(item: "What did you drink?", amount: "What size?", extras: "Milk, sweeteners, or mix-ins?")
+        case .fruit:
+            return FieldLabels(item: "What did you eat?", amount: "How much did you eat?", extras: "Anything on it?")
+        case .veggie:
+            return FieldLabels(item: "What did you eat?", amount: "How much did you eat?", extras: "Anything on it?")
+        case .sweet:
+            return FieldLabels(item: "What did you eat?", amount: "How much did you eat?", extras: "Brand or toppings?")
+        }
+    }
+
+    /// Per-category estimation guidance injected into the system prompt when a category
+    /// is provided (AILOG-1a). Frozen text — prompt wording is behavior; do not edit.
+    var guidance: String {
+        switch self {
+        case .meal:
+            return "This is a composed meal. Estimate each component separately. If Amount is given, anchor portions to it; otherwise assume typical restaurant portions."
+        case .snack:
+            return "This is a snack. Prefer package-size portions; if a brand is named in Extras, use that product's published nutrition."
+        case .drink:
+            return "This is a beverage. Anchor to the stated size; account for milk, sweeteners, and mix-ins from Extras. A plain water/black coffee/plain tea is near-zero calories."
+        case .fruit:
+            return "This is fruit. Use whole-fruit or cup measures; toppings from Extras (e.g. peanut butter, honey) often exceed the fruit's own calories — include them."
+        case .veggie:
+            return "These are vegetables. Raw vs cooked matters; oils and dressings from Extras usually dominate calories — include them."
+        case .sweet:
+            return "This is a dessert/sweet. Portion sizes are commonly understated; use the stated Amount, and include sauces/toppings from Extras."
+        }
+    }
+}
+
 // MARK: - Public Types
 
 /// One recognition round's output.
 struct RecognitionResult {
     let items: [RecognizedFoodItem]
 
-    /// A single targeted question the model needs answered to estimate well.
-    /// Non-nil only on round 1 — round 2 is the final round and always returns nil here.
+    /// AILOG-1a: escalation retired — the service always sets this to nil, so the
+    /// "one quick question" flow can never fire. Kept, with the VM/UI machinery, until
+    /// AILOG-1b removes it.
     let detailRequest: String?
 }
 
@@ -150,13 +229,19 @@ final class AIFoodRecognitionService {
 
     private static let imageOnlyPrompt = "Identify the foods in this image and estimate their nutrition."
 
-    private static let systemPromptBase = """
-    Return ONLY a JSON object, no prose, no markdown fences. Schema:\
+    /// The general instruction that leads every request. AILOG-1a inserts per-category
+    /// guidance immediately after this and before the schema (see `buildSystemPromptBase`).
+    private static let systemPromptGeneral = "Return ONLY a JSON object, no prose, no markdown fences."
+
+    /// Schema description → example → units → toxin-scoring → clarification rules.
+    /// AILOG-1a removed the `detailRequest` schema field, its example value, and the
+    /// "Set detailRequest ONLY when…" instruction paragraph (escalation retired).
+    private static let systemPromptSchemaOnward = """
+    Schema:\
     {"items":[{"name":String,"quantity":String,"calories":Int,"protein":Number,"carbs":Number,"fat":Number,"toxinScore":Int,"fiber":Number|null,"sugar":Number|null,"sodium":Number|null,"saturatedFat":Number|null,"cholesterol":Number|null,"potassium":Number|null,"confidence":"high"|"medium"|"low","confidenceReason":String|null}],\
     "clarification":String|null,\
-    "clarifications":[{"itemIndex":Int,"question":String,"importance":Number,"defaultOptionIndex":Int,"options":[{"label":String,"dCalories":Int,"dProtein":Number,"dCarbs":Number,"dFat":Number}]}],\
-    "detailRequest":String|null}\
-    Example: "2 scrambled eggs, toast" → {"items":[{"name":"Scrambled Eggs","quantity":"2 eggs","calories":182,"protein":12.6,"carbs":1.6,"fat":13.6,"toxinScore":10,"fiber":0,"sugar":0.6,"sodium":180,"saturatedFat":4.1,"cholesterol":372,"potassium":176,"confidence":"high","confidenceReason":null},{"name":"Toast","quantity":"1 slice","calories":79,"protein":2.7,"carbs":14.7,"fat":1.0,"toxinScore":40,"fiber":1.9,"sugar":1.5,"sodium":150,"saturatedFat":0.2,"cholesterol":0,"potassium":50,"confidence":"medium","confidenceReason":null}],"clarification":null,"clarifications":[],"detailRequest":null}\
+    "clarifications":[{"itemIndex":Int,"question":String,"importance":Number,"defaultOptionIndex":Int,"options":[{"label":String,"dCalories":Int,"dProtein":Number,"dCarbs":Number,"dFat":Number}]}]}\
+    Example: "2 scrambled eggs, toast" → {"items":[{"name":"Scrambled Eggs","quantity":"2 eggs","calories":182,"protein":12.6,"carbs":1.6,"fat":13.6,"toxinScore":10,"fiber":0,"sugar":0.6,"sodium":180,"saturatedFat":4.1,"cholesterol":372,"potassium":176,"confidence":"high","confidenceReason":null},{"name":"Toast","quantity":"1 slice","calories":79,"protein":2.7,"carbs":14.7,"fat":1.0,"toxinScore":40,"fiber":1.9,"sugar":1.5,"sodium":150,"saturatedFat":0.2,"cholesterol":0,"potassium":50,"confidence":"medium","confidenceReason":null}],"clarification":null,"clarifications":[]}\
     Units: fiber/sugar/saturatedFat in grams; sodium/cholesterol/potassium in milligrams. Omit (null) any micronutrient you cannot reasonably estimate for this specific food — never guess sodium/cholesterol/potassium for foods where it is highly variable.\
     toxinScore rates how processed/unhealthy the item is, 0–100: 0–15 whole unprocessed foods (fruits, vegetables, plain meats, eggs, plain grains); 16–35 lightly processed (plain yogurt, whole-grain bread, cheese, home-cooked mixed dishes); 36–60 moderately processed (white bread, deli meat, granola bars, restaurant meals with unknown oils); 61–85 ultra-processed (chips, candy, soda, fast food); 86–100 extreme (energy drinks with candy, deep-fried ultra-processed combinations). Score the item as described, not a worst-case version of it.\
     Set confidence:"low" when portion or identity is uncertain. If input is too vague to estimate any items, return {"items":[],"clarification":"<your question>","clarifications":[]}.\
@@ -166,8 +251,7 @@ final class AIFoodRecognitionService {
     Set importance per clarification by expected calorie swing: portion of staples, added oil/butter, dressing, sauce score high; herbs, lettuce, spices, garnishes score low.\
     Provide confidenceReason for every non-high-confidence item — the single biggest source of uncertainty.\
     Each option's deltas must stay within ±2000 calories and ±250g per macro.\
-    Option deltas must be nutritionally plausible: calorie delta ≈ P·4 + C·4 + F·9. Do not return calorie-only deltas with zero macro change.\
-    Set detailRequest ONLY when, even after your clarifications, the calorie estimate could plausibly be off by more than ~40% because of missing food identity or portion information that fixed options cannot capture (e.g. "a sandwich", "some snacks", "a bowl of stuff"). It must be exactly ONE specific question, ≤120 characters. Otherwise null.
+    Option deltas must be nutritionally plausible: calorie delta ≈ P·4 + C·4 + F·9. Do not return calorie-only deltas with zero macro change.
     """
 
     private static let imageReconciliationRule = """
@@ -192,21 +276,28 @@ final class AIFoodRecognitionService {
     /// When both are present, a multimodal request is sent; when only text, a text-only request.
     /// `imageData` must be finalized JPEG bytes (caller's responsibility).
     ///
-    /// One-round detail escalation: round 1 may return a `detailRequest` — a single targeted
-    /// question. The caller may answer it and call again with `followUp`, which replays the
-    /// original input plus the Q&A. Round 2 is the final round: its result's `detailRequest`
-    /// is always nil, whatever the model returns.
+    /// One-round detail escalation is retired at the service (AILOG-1a): the returned
+    /// `detailRequest` is always nil, so the "one quick question" flow can never fire. The
+    /// `followUp` parameter and its round-2 replay stay wired until AILOG-1b removes the
+    /// VM/UI machinery; a round-2 call still composes and likewise returns a nil result field.
     ///
     /// - Parameters:
     ///   - description: The user's meal description (e.g. "two eggs, toast, black coffee"). May be nil or empty if image present.
     ///   - imageData: Optional JPEG image data. Must be < 1MB, longest edge ≤ 1568px.
     ///   - followUp: The question the model asked and the user's answer. Non-nil ⇒ this is round 2.
+    ///   - category: Optional user-declared food category (AILOG-1a). When present, adds that
+    ///     category's estimation guidance to the prompt plus a `Category:` input line.
+    ///   - amount: Optional user-stated amount/size (AILOG-1a). Rendered as the `Amount:` input line.
+    ///   - extras: Optional user-stated seasonings/mix-ins/toppings (AILOG-1a). Rendered as the `Extras:` input line.
     /// - Returns: The recognized items, plus at most one request for more detail.
     /// - Throws: `AIFoodRecognitionError` on failure.
     func recognize(
         description: String?,
         imageData: Data? = nil,
-        followUp: FollowUpContext? = nil
+        followUp: FollowUpContext? = nil,
+        category: FoodCategory? = nil,
+        amount: String? = nil,
+        extras: String? = nil
     ) async throws -> RecognitionResult {
         // Validate API key
         let key = APIConfig.claudeAPIKey
@@ -226,9 +317,16 @@ final class AIFoodRecognitionService {
         // Truncate text to max length
         let input = String(trimmed.prefix(Self.maxInputLength))
 
-        // What the model saw in round 1. On round 2 it leads the composed input verbatim —
-        // the user's answer refines it, never replaces it.
-        let originalInput = hasText ? input : Self.imageOnlyPrompt
+        // What the model saw in round 1 — the structured-input block when any of category/
+        // amount/extras is present (AILOG-1a), else the legacy description or image-only
+        // prompt. On round 2 it leads the composed input verbatim; the answer refines it.
+        let originalInput = Self.composeStructuredInput(
+            description: input,
+            hasText: hasText,
+            category: category,
+            amount: amount,
+            extras: extras
+        )
         let userContent = followUp.map {
             Self.composeFollowUpInput(originalInput: originalInput, followUp: $0)
         } ?? originalInput
@@ -240,7 +338,7 @@ final class AIFoodRecognitionService {
 
         if let imageData = imageData {
             // Multimodal request: image + text content blocks
-            let systemPrompt = Self.systemPromptBase + Self.imageReconciliationRule
+            let systemPrompt = Self.buildSystemPromptBase(category: category) + Self.imageReconciliationRule
 
             let contentBlocks: [APIRequestMultimodal.ContentBlock] = [
                 .image(.init(source: .init(data: imageData.base64EncodedString()))),
@@ -263,7 +361,7 @@ final class AIFoodRecognitionService {
             let requestBody = APIRequestTextOnly(
                 model: Self.model,
                 max_tokens: Self.maxTokens,
-                system: Self.systemPromptBase,
+                system: Self.buildSystemPromptBase(category: category),
                 messages: [.init(role: "user", content: userContent)]
             )
 
@@ -329,14 +427,6 @@ final class AIFoodRecognitionService {
                 print("[AIFoodRecognition] Needs clarification: \(clarification)")
                 throw AIFoodRecognitionError.needsClarification(clarification)
             }
-            // With nothing estimable the model asks its question in EITHER field — observed
-            // live using `clarification` for "food" and `detailRequest` for "a sandwich and
-            // some snacks". Both mean "ask the user", so both must reach the Q&A state;
-            // reading only `clarification` here would discard the question as noFoodFound.
-            if let detail = Self.normalizeDetailRequest(recognitionResponse.detailRequest) {
-                print("[AIFoodRecognition] Needs clarification (via detailRequest): \(detail)")
-                throw AIFoodRecognitionError.needsClarification(detail)
-            }
             print("[AIFoodRecognition] Empty recognition result")
             throw AIFoodRecognitionError.noFoodFound
         }
@@ -346,29 +436,25 @@ final class AIFoodRecognitionService {
             attachClarifications(rawClarifications, to: &items)
         }
 
-        // Round 2 is the final round — the client allows exactly one escalation, so a
-        // detail request there could never be answered. Drop it whatever the model returned.
-        var detailRequest: String? = nil
-        if followUp == nil {
-            detailRequest = Self.normalizeDetailRequest(recognitionResponse.detailRequest)
-            if let detailRequest {
-                print("[AIFoodRecognition] Detail requested: \(detailRequest)")
-            }
-        } else if recognitionResponse.detailRequest != nil {
-            print("[AIFoodRecognition] Ignoring detailRequest on round 2 (final round)")
+        // AILOG-1a: escalation retired; field + VM/UI machinery deleted in AILOG-1b.
+        // detailRequest stays Decodable so a stray value can't break decoding, but the
+        // result normalizes it to nil on every round and never surfaces it.
+        if let ignored = Self.normalizeDetailRequest(recognitionResponse.detailRequest) {
+            print("[AIFoodRecognition] Ignoring detailRequest (escalation retired): \(ignored)")
         }
 
         print("[AIFoodRecognition] Recognized \(items.count) item(s)")
-        return RecognitionResult(items: items, detailRequest: detailRequest)
+        return RecognitionResult(items: items, detailRequest: nil)
     }
 
     // MARK: - One-Round Escalation (pure)
 
-    /// Normalizes the model's `detailRequest`: trimmed, empty → nil, hard-truncated.
+    /// Normalizes the model's `detailRequest`: trimmed, empty → nil, hard-truncated to
+    /// `maxDetailRequestLength` (160).
     ///
-    /// The schema instructs the model to keep the question ≤120 characters;
-    /// `maxDetailRequestLength` (160) is the client's guard against a model that ignores
-    /// that. The two numbers are deliberately different — do not unify them.
+    /// AILOG-1a retired the escalation — the prompt no longer instructs the model to emit
+    /// this and the result always nils it — so this now only sanitizes a stray value for
+    /// logging before it is discarded (machinery deleted in AILOG-1b).
     static func normalizeDetailRequest(_ raw: String?) -> String? {
         guard let raw else { return nil }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -395,6 +481,53 @@ final class AIFoodRecognitionService {
         User's answer: \(answer)
         Combine the original description with the answer — the answer refines it, it does not replace it. This is the final round — do not request more detail; provide best estimates with confidence and clarifications as usual.
         """
+    }
+
+    // MARK: - Prompt Construction (pure)
+
+    /// Assembles the base system prompt: general instructions, then — only when a
+    /// `category` is provided (AILOG-1a) — that category's estimation guidance, then the
+    /// schema, examples, and scoring rules. With no category the result is byte-identical
+    /// to the pre-AILOG-1a prompt (minus the retired `detailRequest` text).
+    static func buildSystemPromptBase(category: FoodCategory?) -> String {
+        guard let category else {
+            return systemPromptGeneral + " " + systemPromptSchemaOnward
+        }
+        return systemPromptGeneral + " " + category.guidance + " " + systemPromptSchemaOnward
+    }
+
+    /// Builds round 1's base user content from the structured fields (AILOG-1a).
+    ///
+    /// When any of `category`, `amount`, or `extras` is present, renders labeled lines —
+    /// `Category` / `Item` / `Amount` / `Extras`, in that order — each present line joined
+    /// by a single newline, absent lines omitted, never a blank line. A field is absent
+    /// when nil or empty after trimming (`description` is the already-trimmed input;
+    /// `hasText` marks it present). With no structured field present, returns the legacy
+    /// input verbatim — the description if any, else the image-only prompt — so the default
+    /// path is byte-identical to the pre-AILOG-1a build.
+    static func composeStructuredInput(
+        description: String,
+        hasText: Bool,
+        category: FoodCategory?,
+        amount: String?,
+        extras: String?
+    ) -> String {
+        let trimmedAmount = (amount ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedExtras = (extras ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasAmount = !trimmedAmount.isEmpty
+        let hasExtras = !trimmedExtras.isEmpty
+
+        // No structured field → legacy input, byte-identical to today's originalInput.
+        guard category != nil || hasAmount || hasExtras else {
+            return hasText ? description : imageOnlyPrompt
+        }
+
+        var lines: [String] = []
+        if let category { lines.append("Category: \(category.rawValue)") }
+        if hasText { lines.append("Item: \(description)") }
+        if hasAmount { lines.append("Amount: \(trimmedAmount)") }
+        if hasExtras { lines.append("Extras: \(trimmedExtras)") }
+        return lines.joined(separator: "\n")
     }
 
     // MARK: - JSON Parsing
