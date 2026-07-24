@@ -47,6 +47,11 @@ struct BadgeDefinition: Identifiable, Equatable {
             title: "Level Up",
             description: "Reach level 5"
         ),
+        BadgeDefinition(
+            id: "tutorial_complete",
+            title: "Tutorial Complete",
+            description: "Complete all six first quests"
+        ),
     ]
 
     /// Looks up a definition by id. Returns nil if no matching definition exists.

@@ -1469,37 +1469,59 @@ final class DataManager {
     // local-first; the `guard !isGuest` first line excludes guests entirely (Decision 7):
     // guest tutorial state is `.guest` (done), so no popup / card / writes ever occur.
 
+    /// Recomputes the tutorial read model from local UserProgress (guests ⇒ `.guest`) and
+    /// pushes it into the shared cross-tab store (TUT-1b, Decision 2). The ONLY caller of
+    /// `TutorialProgress.shared.update(_:)` — every public tutorial entry point below ends by
+    /// calling this, so the store always trails the persisted state and any future mutator
+    /// inherits the pattern by construction. Returns the value it stored so `tutorialState()`
+    /// hands it straight back (single compute site; no duplicated predicate).
+    @MainActor
+    @discardableResult
+    private func refreshTutorialStore() async -> TutorialState {
+        let state: TutorialState
+        if isGuest {
+            state = .guest
+        } else if let progress = try? await getUserProgress() {
+            state = TutorialState(
+                seen: progress.tutorialSeen,
+                skipped: progress.tutorialSkipped,
+                completed: progress.tutorialCompletedStepSet
+            )
+        } else {
+            // No local UserProgress yet (pre-bootstrap edge) — treat as a fresh tutorial.
+            state = TutorialState(seen: false, skipped: false, completed: [])
+        }
+        TutorialProgress.shared.update(state)
+        return state
+    }
+
     /// Reads the local tutorial read model. Guests return `.guest` (seen + skipped ⇒ done).
+    /// Refreshes the shared store as it reads (Decision 2), returning the same value.
     @MainActor
     func tutorialState() async -> TutorialState {
-        guard !isGuest else { return TutorialState.guest }
-        guard let progress = try? await getUserProgress() else {
-            // No local UserProgress yet (pre-bootstrap edge) — treat as a fresh tutorial.
-            return TutorialState(seen: false, skipped: false, completed: [])
-        }
-        return TutorialState(
-            seen: progress.tutorialSeen,
-            skipped: progress.tutorialSkipped,
-            completed: progress.tutorialCompletedStepSet
-        )
+        await refreshTutorialStore()
     }
 
     /// Marks the welcome popup as seen (no-op if already seen). Syncs via saveUserProgress.
     @MainActor
     func markTutorialSeen() async {
         guard !isGuest else { return }
-        guard let progress = try? await getUserProgress(), !progress.tutorialSeen else { return }
-        progress.tutorialSeen = true
-        try? await saveUserProgress()
+        if let progress = try? await getUserProgress(), !progress.tutorialSeen {
+            progress.tutorialSeen = true
+            try? await saveUserProgress()
+        }
+        await refreshTutorialStore()
     }
 
     /// Skips the tutorial (no-op if already done). Never touches the completed set; no XP.
     @MainActor
     func skipTutorial() async {
         guard !isGuest else { return }
-        guard let progress = try? await getUserProgress(), !progress.tutorialDone else { return }
-        progress.tutorialSkipped = true
-        try? await saveUserProgress()
+        if let progress = try? await getUserProgress(), !progress.tutorialDone {
+            progress.tutorialSkipped = true
+            try? await saveUserProgress()
+        }
+        await refreshTutorialStore()
     }
 
     // MARK: - Quest Methods
@@ -2578,6 +2600,14 @@ final class DataManager {
         case .xpAwarded:
             let xpProgress = try await getUserProgress()
             if xpProgress.currentLevel >= 5 { try await unlock("level_up") }
+
+        case .tutorialCompleted:
+            // Superset check, NEVER `tutorialDone`: done includes *skipped*, and skipping
+            // must not earn the badge (Decision 8) — only completing all six steps does.
+            let tutProgress = try await getUserProgress()
+            if tutProgress.tutorialCompletedStepSet.isSuperset(of: TutorialCatalog.allIds) {
+                try await unlock("tutorial_complete")
+            }
         }
 
         // NAV-1a: republish so earnedBadgeIds includes this unlock (the surrounding XP/food publishes race the upsert). Best-effort like every publish site — a failure self-heals on the next publish.
@@ -6011,6 +6041,7 @@ enum BadgeTrigger {
     case streakUpdated
     case questsChecked
     case xpAwarded
+    case tutorialCompleted
 }
 
 // MARK: - Guild Error (Guilds Prompt G1)

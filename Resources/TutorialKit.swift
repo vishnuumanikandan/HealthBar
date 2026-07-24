@@ -44,16 +44,28 @@ enum TutorialCatalog {
         let xp: Int
     }
 
+    /// The six step ids as pinned constants — the permanent wire contract, surfaced so the
+    /// TUT-1b detection and beacon call sites reference `TutorialCatalog.quickLogId` etc.
+    /// rather than bare string literals (Decision 1); each equals the matching `steps`
+    /// entry's `id`. NEVER rename a value (it is stored in the Firestore UserProgress doc).
+    static let quickLogId    = "quickLog"
+    static let databaseLogId = "databaseLog"
+    static let checkQuestsId = "checkQuests"
+    static let visitBattleId = "visitBattle"
+    static let visitGuildId  = "visitGuild"
+    static let changeThemeId = "changeTheme"
+
     /// The six pinned tutorial steps, in pinned order (Decision 2), with the XP from
-    /// Decision 9. XP total = 150 (30 + 30 + 20 + 25 + 25 + 20). Ids are stored in the
-    /// Firestore UserProgress doc — NEVER rename; a new step gets an explicit pinned id.
+    /// Decision 9. XP total = 150 (30 + 30 + 20 + 25 + 25 + 20). Ids are the pinned
+    /// constants above (single literal per id) and are stored in the Firestore
+    /// UserProgress doc — NEVER rename; a new step gets an explicit pinned id.
     static let steps: [TutorialStep] = [
-        TutorialStep(id: "quickLog",    ordinal: 1, title: "Quick-log a meal",           detail: "Use quick log on Home to add your first meal", xp: 30),
-        TutorialStep(id: "databaseLog", ordinal: 2, title: "Log from the food database", detail: "Open the Log tab and add anything",            xp: 30),
-        TutorialStep(id: "checkQuests", ordinal: 3, title: "Check your daily quests",     detail: "Find today's quests on Home",                  xp: 20),
-        TutorialStep(id: "visitBattle", ordinal: 4, title: "Learn how duels work",        detail: "Visit the Battle tab",                         xp: 25),
-        TutorialStep(id: "visitGuild",  ordinal: 5, title: "Check out a guild",           detail: "Open any guild from the directory",            xp: 25),
-        TutorialStep(id: "changeTheme", ordinal: 6, title: "Try a new theme",             detail: "Settings → appearance",                        xp: 20),
+        TutorialStep(id: quickLogId,    ordinal: 1, title: "Quick-log a meal",           detail: "Use quick log on Home to add your first meal", xp: 30),
+        TutorialStep(id: databaseLogId, ordinal: 2, title: "Log from the food database", detail: "Open the Log tab and add anything",            xp: 30),
+        TutorialStep(id: checkQuestsId, ordinal: 3, title: "Check your daily quests",     detail: "Find today's quests on Home",                  xp: 20),
+        TutorialStep(id: visitBattleId, ordinal: 4, title: "Learn how duels work",        detail: "Visit the Battle tab",                         xp: 25),
+        TutorialStep(id: visitGuildId,  ordinal: 5, title: "Check out a guild",           detail: "Open any guild from the directory",            xp: 25),
+        TutorialStep(id: changeThemeId, ordinal: 6, title: "Try a new theme",             detail: "Settings → appearance",                        xp: 20),
     ]
 
     /// The set of all catalog step ids — the target of the `done` superset check.
@@ -84,6 +96,41 @@ struct TutorialState: Equatable {
     /// Guests are excluded entirely (Decision 7): treated as seen + skipped ⇒ done, so
     /// no popup, no pinned card, no writes.
     static let guest = TutorialState(seen: true, skipped: true, completed: [])
+}
+
+// MARK: - Shared Read-Model Store
+
+/// The tutorial's shared, cross-tab read model (TUT-1b, Decision 1). ContentView builds a
+/// DataManager per tab, so tutorial state — which drives beacons and the view-side detection
+/// guard on every tab — MUST be `static`, not instance state (the per-tab-DataManager
+/// invariant). This is TutorialKit's runtime read model: the AvatarKit-style read-only
+/// companion to the compile-time `TutorialCatalog`, NOT a manager, owning no persistence.
+/// `DuelUIState.shared` is the precedent (DataManager writes on the main actor; views read).
+@Observable
+@MainActor
+final class TutorialProgress {
+    static let shared = TutorialProgress()
+    private init() {}
+
+    /// The latest resolved read model, or nil while unloaded. nil ⇒ beacons render nothing
+    /// and detection skips, exactly as when done — until the first refresh populates it.
+    private(set) var state: TutorialState?
+
+    /// The ONLY mutation path. Called exclusively by DataManager's refresh helper
+    /// (`refreshTutorialStore()`) — every public DataManager tutorial entry point ends
+    /// there, so the store always trails the persisted UserProgress.
+    func update(_ newState: TutorialState?) {
+        state = newState
+    }
+
+    /// The uniform view-side detection guard (Decision 1), used at all six sites — never
+    /// inlined. False when the tutorial is unloaded, done (skipped or fully complete —
+    /// guests included), or already holds `stepId`; true otherwise. An optimization only:
+    /// the `completeTutorialStep` chokepoint stays the correctness boundary, not this.
+    func shouldAttempt(_ stepId: String) -> Bool {
+        guard let state, !state.done else { return false }
+        return !state.completed.contains(stepId)
+    }
 }
 
 // MARK: - Welcome Popup
@@ -451,5 +498,79 @@ struct FirstQuestsCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         // Primary-accent border per the mockup; adaptiveCard adapts pixel vs flat.
         .adaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground, isSelected: true)
+    }
+}
+
+// MARK: - Quest Beacon
+
+extension View {
+    /// Pulsing concentric primary rings drawing the eye to a tutorial target (TUT-1b,
+    /// Decision 3). Renders ONLY when the shared store is loaded, not done, AND `stepId`
+    /// is the first incomplete step — so exactly one step's beacons glow app-wide, and
+    /// post-tutorial / guest / unloaded users see nothing anywhere (zero overhead). Purely
+    /// an overlay: it never wraps content, adds frames/padding, changes the target's size,
+    /// or takes hit-testing, and it self-sizes to the target's bounds so a toolbar gear
+    /// glows small and a card glows large (the "adapt to the metric" rule).
+    func questBeacon(_ stepId: String) -> some View {
+        modifier(QuestBeacon(stepId: stepId))
+    }
+}
+
+/// The beacon overlay (Decision 3). Layout-neutral: `content` is returned untouched with
+/// the rings drawn in a bounds-matching overlay that never hit-tests. Reduce Motion
+/// collapses to a single static ring at reduced opacity — no pulse.
+private struct QuestBeacon: ViewModifier {
+    let stepId: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pulsing = false
+
+    private var tc: ThemeColors { SettingsManager.shared.activeColors }
+
+    /// True when `stepId` is the single active beacon — the lowest-ordinal step not yet
+    /// completed, given a loaded, not-done tutorial. The first-incomplete predicate lives
+    /// HERE, not on the store (which keeps exactly `update` + `shouldAttempt`), and reads
+    /// `state` directly so @Observable re-evaluates it as the store changes.
+    private var isActiveBeacon: Bool {
+        guard let state = TutorialProgress.shared.state, !state.done else { return false }
+        let firstIncomplete = TutorialCatalog.steps.first { !state.completed.contains($0.id) }
+        return firstIncomplete?.id == stepId
+    }
+
+    func body(content: Content) -> some View {
+        content.overlay {
+            if isActiveBeacon {
+                beacon
+            }
+        }
+    }
+
+    private var beacon: some View {
+        GeometryReader { geo in
+            let base = max(geo.size.width, geo.size.height)
+            ZStack {
+                // Outer ring: the ping — expands and fades on the pulse (steady when Reduce
+                // Motion). Inner ring: a constant halo so the target stays ringed between pings.
+                Circle()
+                    .stroke(tc.primary.opacity(reduceMotion ? 0.5 : 0.85),
+                            lineWidth: max(1.5, base * 0.05))
+                    .frame(width: base * 1.15, height: base * 1.15)
+                    .scaleEffect(pulsing && !reduceMotion ? 1.35 : 1.0)
+                    .opacity(pulsing && !reduceMotion ? 0.0 : (reduceMotion ? 0.5 : 0.85))
+                if !reduceMotion {
+                    Circle()
+                        .stroke(tc.primary.opacity(0.55), lineWidth: max(1, base * 0.03))
+                        .frame(width: base * 1.15, height: base * 1.15)
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .shadow(color: tc.primary.opacity(reduceMotion ? 0 : 0.45), radius: base * 0.14)
+        }
+        .allowsHitTesting(false)
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) {
+                pulsing = true
+            }
+        }
     }
 }

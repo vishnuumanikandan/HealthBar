@@ -67,6 +67,8 @@ struct SettingsView: View {
                         showingAccessibility = true
                     }
                 )
+                // TUT-1b changeTheme beacon (Decision 7) — the Accessibility row leads to the theme picker.
+                .questBeacon(TutorialCatalog.changeThemeId)
 
                 // Edit Health Profile — opens onboarding in edit mode
                 settingButton(
@@ -133,7 +135,7 @@ struct SettingsView: View {
             DailyGoalsView(coordinator: coordinator)
         }
         .sheet(isPresented: $showingAccessibility) {
-            AccessibilitySettingsView()
+            AccessibilitySettingsView(coordinator: coordinator)
         }
         .sheet(isPresented: $showingAccount) {
             AccountView(coordinator: coordinator, authService: FirebaseAuthService.shared)
