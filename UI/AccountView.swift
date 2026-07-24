@@ -367,7 +367,7 @@ struct AccountView: View {
             // already-loaded account VM (no new fetch).
             if showReplayTutorial {
                 TutorialWelcomePopup(
-                    username: viewModel.currentUsername.isEmpty ? nil : viewModel.currentUsername,
+                    greetingName: viewModel.currentUsername.isEmpty ? nil : "@\(viewModel.currentUsername)",
                     isReplay: true,
                     onStart: { showReplayTutorial = false },
                     onSkip: { showReplayTutorial = false }

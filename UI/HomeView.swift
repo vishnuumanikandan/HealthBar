@@ -763,13 +763,12 @@ struct HomeView: View {
 
                 // TUT-1a: welcome popup — a body-level overlay above all content, dimming
                 // whichever content arm is active. `showTutorialPopup` is only ever true
-                // once state has loaded AND (!seen && !done), so guests never see it.
-                // username is nil here: the Home app-head carries no identity, and fetching
-                // a handle would be out-of-scope VM business logic → greeting falls back to
-                // "Hey there" (see TUT-1a report).
+                // once state has loaded AND (!seen && !done), so guests never see it. The
+                // greeting name is the cached UserProfile displayName, resolved by the VM
+                // (empty ⇒ "Hey there").
                 if viewModel.showTutorialPopup {
                     TutorialWelcomePopup(
-                        username: nil,
+                        greetingName: viewModel.greetingName,
                         onStart: { Task { await viewModel.startTutorial() } },
                         onSkip: { Task { await viewModel.skipTutorialTapped() } }
                     )

@@ -95,8 +95,10 @@ struct TutorialState: Equatable {
 /// visually identical; the presenter simply supplies dismiss-only closures.
 struct TutorialWelcomePopup: View {
 
-    /// Handle for the greeting, or nil ⇒ "Hey there". Sourced by the presenter.
-    let username: String?
+    /// Greeting subject as plain data — the presenter passes the cached UserProfile
+    /// displayName for first-run (or an @handle for Settings replay). nil / empty ⇒
+    /// "Hey there". The popup never resolves identity itself (stays persistence-free).
+    let greetingName: String?
     /// Read-only replay (Settings). Visuals identical; only the a11y verb differs.
     var isReplay: Bool = false
     let onStart: () -> Void
@@ -174,7 +176,7 @@ struct TutorialWelcomePopup: View {
     }
 
     private var greeting: String {
-        if let username, !username.isEmpty { return "Hey @\(username)" }
+        if let greetingName, !greetingName.isEmpty { return "Hey \(greetingName)" }
         return "Hey there"
     }
 

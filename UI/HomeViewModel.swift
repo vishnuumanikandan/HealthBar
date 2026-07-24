@@ -218,13 +218,23 @@ final class HomeViewModel {
     /// cleared the instant the user starts or skips.
     var showTutorialPopup: Bool = false
 
+    /// First-run greeting name — the locally-cached UserProfile's displayName, resolved
+    /// only when the popup will show and passed to the popup as plain data (the popup
+    /// stays persistence-free). nil when genuinely empty ⇒ the popup shows "Hey there".
+    var greetingName: String?
+
     /// Loads tutorial state via the coordinator and derives popup visibility (shown only
-    /// when loaded AND not yet seen AND not done).
+    /// when loaded AND not yet seen AND not done). When the popup will show, resolves the
+    /// greeting name from the existing profile-read passthrough (no new fetch mechanism).
     @MainActor
     func loadTutorialState() async {
         let state = await coordinator.tutorialState()
         tutorialState = state
         showTutorialPopup = !state.seen && !state.done
+        if showTutorialPopup {
+            let name = (try? await coordinator.getUserProfile())?.displayName.trimmingCharacters(in: .whitespaces)
+            greetingName = (name?.isEmpty ?? true) ? nil : name
+        }
     }
 
     /// "Start your first quest" tapped: mark seen, dismiss, then reload state (never
