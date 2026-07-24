@@ -249,7 +249,6 @@ struct BattleView: View {
                     // heading. Featured duel is still excluded from this list (D2) — it is DUEL 1
                     // in the featured slot above.
                     ongoingSections
-                    primerFootButton
                     historyBlock   // D7: collapsible "Duel history" (replaces the Finished section)
                 }
 
@@ -293,6 +292,24 @@ struct BattleView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 6)
+        // DUEL-CLARITY-1: the "How duels work" primer is ALWAYS reachable — it explains duels in
+        // general (static content), so it must not depend on having a duel. Parked top-trailing so
+        // the centered title and the rank-block tap target are undisturbed; sits above the rank
+        // block, so no tap conflict. (The live surfaces — score breakdown, points toast, recap —
+        // stay duel-exclusive; only this general explainer is unconditional.)
+        .overlay(alignment: .topTrailing) {
+            Button {
+                showPrimer = true
+            } label: {
+                Image(systemName: "info.circle")
+                    .font(AppFont.regular(15))
+                    .foregroundColor(tc.textTertiary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("How duels work")
+        }
     }
 
     /// R7a §3: my rank — plaque, tier name, RR figure, and progress within the CURRENT tier.
@@ -815,30 +832,6 @@ struct BattleView: View {
                 .foregroundColor(tc.textTertiary)
         }
         .padding(.bottom, 10)
-    }
-
-    /// EXACTLY ONE primer entry for the whole ongoing list — at its foot, never per duel.
-    /// Hidden when there is no ongoing duel (the empty state is unchanged).
-    @ViewBuilder
-    private var primerFootButton: some View {
-        if !viewModel.active.isEmpty {
-            Button {
-                showPrimer = true
-            } label: {
-                HStack(spacing: 5) {
-                    Text("HOW DUELS WORK")
-                        .font(AppFont.display(11))
-                        .tracking(1.1)
-                    Image(systemName: "info.circle")
-                        .font(AppFont.regular(11))
-                }
-                .foregroundColor(tc.textSecondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DesignSystem.Spacing.sm)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
     }
 
     // MARK: - Section scaffold
