@@ -1279,6 +1279,9 @@ struct FoodLogView: View {
                     viewModel.formMealType = .uncategorized
                     viewModel.showingFoodDatabase = true
                 }
+                // TUT-1b databaseLog beacon (Decision 7) — the food-database entry affordance (one target).
+                // A flat method row inside the 14-radius group — trace it with the small radius.
+                .questBeacon(TutorialCatalog.databaseLogId, cornerRadius: DesignSystem.CornerRadius.sm)
                 addRow(
                     icon: "barcode", title: "Scan barcode",
                     subtitle: "Auto-fill from product label",

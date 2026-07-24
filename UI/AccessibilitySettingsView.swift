@@ -18,11 +18,19 @@ struct AccessibilitySettingsView: View {
     /// Settings manager for persistence
     @State private var settings = SettingsManager.shared
 
+    /// Coordinator for the changeTheme tutorial detection (TUT-1b, Decision 6). Optional so
+    /// the bare `#Preview` can omit it — nil ⇒ detection is silently skipped.
+    private let coordinator: AppCoordinator?
+
     /// Active-theme colors (R8 token conversion)
     private var tc: ThemeColors { settings.activeColors }
 
     /// Environment dismiss action
     @Environment(\.dismiss) private var dismiss
+
+    init(coordinator: AppCoordinator? = nil) {
+        self.coordinator = coordinator
+    }
 
     var body: some View {
         NavigationStack {
@@ -35,6 +43,10 @@ struct AccessibilitySettingsView: View {
                         icon: "arrow.triangle.2.circlepath",
                         value: "auto"
                     )
+                    // TUT-1b changeTheme beacon (Decision 7) — placed on the first theme option so it
+                    // sits at the top of the theme groups (a List Section can't host the overlay itself).
+                    // A flat full-width List row — trace it with the small rectangular radius.
+                    .questBeacon(TutorialCatalog.changeThemeId, cornerRadius: DesignSystem.CornerRadius.sm)
 
                     Divider()
 
@@ -144,7 +156,14 @@ struct AccessibilitySettingsView: View {
     @ViewBuilder
     private func themeRow(title: String, subtitle: String, icon: String, value: String) -> some View {
         Button {
+            // TUT-1b changeTheme detection (Decision 4/5) — capture the old preference, then fire
+            // only on a REAL change (value != previous), not re-tapping the current theme.
+            let previous = settings.themePreference
             settings.themePreference = value
+            if value != previous,
+               TutorialProgress.shared.shouldAttempt(TutorialCatalog.changeThemeId) {
+                Task { _ = try? await coordinator?.completeTutorialStep(TutorialCatalog.changeThemeId) }
+            }
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: icon)

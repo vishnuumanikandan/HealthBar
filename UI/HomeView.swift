@@ -904,8 +904,10 @@ struct HomeView: View {
                 .padding(.bottom, 22)
 
             VStack(spacing: 14) {
-                    // 0. Pinned First-Quests card (TUT-1a) — renders only mid-tutorial (nil/done ⇒ nothing).
-                    if let tut = viewModel.tutorialState {
+                    // 0. Pinned First-Quests card — renders off the LIVE shared store (TUT-1b amend)
+                    // so visibility, N/6 and the current step advance the moment a step completes on
+                    // any tab. The VM mirror only refreshed on Home re-appearance. nil/done ⇒ nothing.
+                    if let tut = TutorialProgress.shared.state {
                         FirstQuestsCard(state: tut, onSkip: { Task { await viewModel.skipTutorialTapped() } })
                     }
 
@@ -931,18 +933,34 @@ struct HomeView: View {
                     // 5. Action buttons
                     actionButtons
 
-                    // 6. Daily Quests heading
-                    HStack {
-                        sectionLabel("Daily Quests")
-                        Spacer()
-                        Text(viewModel.questProgressText)
-                            .font(AppFont.regular(12))
-                            .foregroundColor(tc.textSecondary)
-                    }
-                    .padding(.top, 8)
+                    // 6-7. Daily Quests section (heading + board). Wrapped so the whole section is
+                    // one checkQuests tap target (Decision 5); the inner spacing 14 preserves the
+                    // prior inter-item gaps exactly. The beacon (Decision 7) rides the heading below.
+                    VStack(spacing: 14) {
+                        // 6. Daily Quests heading
+                        HStack {
+                            sectionLabel("Daily Quests")
+                                // TUT-1b checkQuests beacon (Decision 7) — Daily Quests header (pixel arm).
+                                // A flat text header — trace it with the small rectangular radius.
+                                .questBeacon(TutorialCatalog.checkQuestsId, cornerRadius: DesignSystem.CornerRadius.sm)
+                            Spacer()
+                            Text(viewModel.questProgressText)
+                                .font(AppFont.regular(12))
+                                .foregroundColor(tc.textSecondary)
+                        }
+                        .padding(.top, 8)
 
-                    // 7. Wooden quest board
-                    questBoard
+                        // 7. Wooden quest board
+                        questBoard
+                    }
+                    // TUT-1b checkQuests detection (Decision 4/5) — section-container tap; child
+                    // quest rows keep priority via SwiftUI child-first hit-testing.
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if TutorialProgress.shared.shouldAttempt(TutorialCatalog.checkQuestsId) {
+                            Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.checkQuestsId) }
+                        }
+                    }
 
                     // 8. Today's Meals heading
                     sectionLabel("Today's Meals")
@@ -1020,8 +1038,10 @@ struct HomeView: View {
                     .padding(.top, 6)
                     .modifier(EntranceReveal(index: 0, isRevealed: hasRevealed, reduceMotion: reduceMotion))
 
-                // Pinned First-Quests card (TUT-1a) — renders only mid-tutorial (nil/done ⇒ nothing).
-                if let tut = viewModel.tutorialState {
+                // Pinned First-Quests card — renders off the LIVE shared store (TUT-1b amend) so
+                // visibility, N/6 and the current step advance the moment a step completes on any
+                // tab. The VM mirror only refreshed on Home re-appearance. nil/done ⇒ nothing.
+                if let tut = TutorialProgress.shared.state {
                     FirstQuestsCard(state: tut, onSkip: { Task { await viewModel.skipTutorialTapped() } })
                         .padding(.top, 18)
                         .modifier(EntranceReveal(index: 0, isRevealed: hasRevealed, reduceMotion: reduceMotion))
@@ -1467,6 +1487,9 @@ struct HomeView: View {
                       action: { selectedTab = 1 }, icon: "arrow.up.right")
             AppButton(title: "Scan", style: .secondary,
                       action: { viewModel.showQuickScan = true }, icon: "viewfinder")
+                // TUT-1b quickLog beacon (Decision 7) — the Home quick-log control (clean arm).
+                // AppButton's own radius IS the modifier default (Erewhon.buttonRadius, 14).
+                .questBeacon(TutorialCatalog.quickLogId)
         }
         .sheet(isPresented: $viewModel.showQuickScan) {
             QuickScanView(viewModel: viewModel, selectedTab: $selectedTab)
@@ -1480,6 +1503,9 @@ struct HomeView: View {
         let total = viewModel.totalQuestsCount
         return VStack(spacing: 0) {
             secHead("Daily quests", "\(completed) / \(total) done")
+                // TUT-1b checkQuests beacon (Decision 7) — the Daily Quests header (clean arm).
+                // A flat sec-head row — trace it with the small rectangular radius.
+                .questBeacon(TutorialCatalog.checkQuestsId, cornerRadius: DesignSystem.CornerRadius.sm)
             if viewModel.allQuestsComplete {
                 AllQuestsCompleteView(totalXPFromQuests: viewModel.totalQuestXPEarnedToday)
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
@@ -1496,6 +1522,14 @@ struct HomeView: View {
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.allQuestsComplete)
+        // TUT-1b checkQuests detection (Decision 4/5) — section-container tap. contentShape makes
+        // the whole block tappable; the display-only quest rows carry no gesture to swallow.
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if TutorialProgress.shared.shouldAttempt(TutorialCatalog.checkQuestsId) {
+                Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.checkQuestsId) }
+            }
+        }
     }
 
     private func cleanQuestRowNew(_ quest: DailyQuest, isLast: Bool) -> some View {
@@ -1977,6 +2011,9 @@ struct HomeView: View {
                 }
                 .frame(width: 80, height: 54)
             }
+            // TUT-1b quickLog beacon (Decision 7) — the Home quick-log control (pixel arm).
+            // The pixel Scan button is a stepped AdaptiveCard tile — trace it near-square.
+            .questBeacon(TutorialCatalog.quickLogId, cornerRadius: DesignSystem.CornerRadius.sm)
         }
         .sheet(isPresented: $viewModel.showQuickScan) {
             QuickScanView(viewModel: viewModel, selectedTab: $selectedTab)
@@ -2923,6 +2960,10 @@ struct QuickScanAddFoodView: View {
             #endif
 
             isSubmitting = false
+            // TUT-1b quickLog detection (Decision 4/5) — same success path that closes the sheet.
+            if TutorialProgress.shared.shouldAttempt(TutorialCatalog.quickLogId) {
+                Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.quickLogId) }
+            }
             onComplete()
 
         } catch {

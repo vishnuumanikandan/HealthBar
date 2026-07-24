@@ -104,6 +104,11 @@ struct ProfileView: View {
                             .foregroundColor(tc.textPrimary)
                     }
                     .accessibilityLabel("Settings")
+                    // TUT-1b changeTheme beacon (Decision 7) — the Profile gear leads toward the
+                    // theme picker; the overlay self-sizes to the gear's small toolbar bounds.
+                    // The gear is icon-sized and round: half its box, which RoundedRectangle
+                    // clamps to half the short side ⇒ a capsule/circular trace at toolbar scale.
+                    .questBeacon(TutorialCatalog.changeThemeId, cornerRadius: DesignSystem.CornerRadius.md)
                 }
             }
             .refreshable {

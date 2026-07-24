@@ -73,6 +73,7 @@ struct BadgeEmblem: View {
         case "century":      century(a)
         case "goal_getter":  goalGetter(a)
         case "level_up":     levelUp(a)
+        case "tutorial_complete": tutorialComplete(a)
         default:             fallback(a)   // unknown id (never in practice) — neutral disc
         }
     }
@@ -191,7 +192,19 @@ private extension BadgeEmblem {
         }
     }
 
-    // Defensive neutral emblem for an unrecognized id (never hit — the six ids are exhaustive).
+    // Tutorial Complete — the tutorial spark: navy disc, accent spark-ring, white bolt.
+    // Traced to the welcome popup greeting page's Circle-stroke spark ring (TutorialKit),
+    // remapped into the 72-box: a concentric accent ring with a lightning bolt struck
+    // through center. Reuses `a.circle` for the rings; `bolt` is the only new geometry.
+    func tutorialComplete(_ a: Art) -> some View {
+        ZStack(alignment: .topLeading) {
+            a.circle(36, 36, 25).fill(Art.navy)
+            a.circle(36, 36, 21).stroke(a.accentColor, lineWidth: a.w(2.5))
+            Self.bolt(a).fill(Art.white)
+        }
+    }
+
+    // Defensive neutral emblem for an unrecognized id (never hit — the seven ids are exhaustive).
     func fallback(_ a: Art) -> some View {
         ZStack(alignment: .topLeading) {
             a.circle(36, 36, 25).fill(Art.navy)
@@ -265,6 +278,12 @@ private extension BadgeEmblem {
         a.curve(&p, to: (53, 33), c1: (52, 46), c2: (54, 40))
         return p
     }
+
+    /// The tutorial spark's lightning bolt (Tutorial Complete), a simple 6-vertex zigzag
+    /// centered in the ring — top at (41,22), bottom tip at (31,50).
+    static func bolt(_ a: Art) -> Path {
+        a.poly([(41, 22), (29, 40), (35.5, 40), (31, 50), (43, 32), (36.5, 32)])
+    }
 }
 
 // MARK: - Art (the emblem drawing space + artwork literals)
@@ -337,7 +356,7 @@ private struct Art {
     }
 }
 
-// MARK: - Preview (all six × unlocked + locked — the component's regression surface; keep it)
+// MARK: - Preview (all seven × unlocked + locked — the component's regression surface; keep it)
 
 #Preview("Badge emblems") {
     ScrollView {

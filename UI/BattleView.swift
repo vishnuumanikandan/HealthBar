@@ -105,6 +105,11 @@ struct BattleView: View {
         .task {
             // Guests never load; load once per appearance (pull-to-refresh re-loads).
             guard !authService.isGuest else { return }
+            // TUT-1b visitBattle detection (Decision 4/5) — authenticated arm only (past the
+            // guest guard; never the guest sign-in-card path). Visiting the tab completes it.
+            if TutorialProgress.shared.shouldAttempt(TutorialCatalog.visitBattleId) {
+                Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.visitBattleId) }
+            }
             if !viewModel.didLoadOnce { await viewModel.load() }
             await leaderboardVM.loadInitial()   // D4: inline standings board (idempotent)
             macroGuessPlayedToday = (await coordinator.todayQTEState())?.macroGuessPlayed ?? false

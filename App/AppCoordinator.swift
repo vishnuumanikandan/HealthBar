@@ -645,8 +645,14 @@ final class AppCoordinator {
         _ = gamificationManager.addXP(amount: step.xp, to: &progress)
 
         try await dataManager.saveUserProgress()
-        // TODO-tutorial-badge (TUT-1b): award Tutorial Complete badge when
-        // progress.tutorialDone flips true here
+        // Refresh the shared tutorial store off the just-saved progress (Decision 2). The
+        // coordinator never touches the store directly — only through DataManager.
+        _ = await dataManager.tutorialState()
+        // Award the Tutorial Complete badge (Decision 9). Unconditional — the trigger arm
+        // self-guards on the all-six superset; enqueue exactly like the .foodLogged pattern.
+        if let badges = try? await dataManager.checkAndUnlockBadges(trigger: .tutorialCompleted), !badges.isEmpty {
+            BadgeToastQueue.shared.enqueue(badges)
+        }
         emitProgressionEvents(beforeLevel: beforeLevel, beforeRank: beforeRank, progress: progress)
         return step.xp
     }
