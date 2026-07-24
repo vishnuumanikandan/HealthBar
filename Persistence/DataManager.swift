@@ -739,6 +739,8 @@ final class DataManager {
     /// - `totalXP`, `longestStreak` → `max()` wins (never decrease)
     /// - `lastActiveDate` → `max()` wins
     /// - `claimedMilestones` → set union (milestones are never un-claimed)
+    /// - tutorial fields (TUT-1a) → completed-step set union, seen/skipped OR (monotonic,
+    ///   self-protecting; NOT confirmation-gated — see the inline note below)
     /// - `currentStreak` → Firestore value wins (NON-monotonic — a missed-day reset must
     ///   propagate across devices; `max()` would resurrect a broken streak — review finding H1)
     /// - `rr` → Firestore value wins (server-authoritative, NON-monotonic — never `max()`);
@@ -762,6 +764,18 @@ final class DataManager {
             let mergedLastActiveDate = max(dto.lastActiveDate, local.lastActiveDate)
             let mergedClaimedSet = Set(dto.claimedMilestonesArray).union(local.claimedMilestoneSet)
             let mergedClaimedString = mergedClaimedSet.sorted().map { String($0) }.joined(separator: ",")
+            // Tutorial (TUT-1a) — monotonic/additive like claimedMilestones: union the
+            // completed-step set, OR the two bools. Union/OR merging is SELF-PROTECTING
+            // against stale or field-absent snapshots — a 2.0-era client that overwrites
+            // the doc without these fields merges harmlessly (union with ∅ / OR with
+            // false), and the next local save re-uploads them. They are therefore
+            // deliberately ABSENT from `firestoreIsConfirmed` below and NEVER routed
+            // through reconcile(): a confirmation term would risk blocking confirmation on
+            // snapshots written by older app versions.
+            let mergedTutorialStepSet = dto.resolvedTutorialCompletedSteps.union(local.tutorialCompletedStepSet)
+            let mergedTutorialSteps = mergedTutorialStepSet.sorted().joined(separator: ",")
+            let mergedTutorialSeen = dto.resolvedTutorialSeen || local.tutorialSeen
+            let mergedTutorialSkipped = dto.resolvedTutorialSkipped || local.tutorialSkipped
 
             let isPending = FirestoreServiceImpl.shared.pendingProgressIds.contains(dto.id)
 
@@ -824,6 +838,9 @@ final class DataManager {
                 || mergedStreak1 != local.winStreak1
                 || mergedStreak3 != local.winStreak3
                 || mergedStreak5 != local.winStreak5
+                || mergedTutorialStepSet != local.tutorialCompletedStepSet
+                || mergedTutorialSeen != local.tutorialSeen
+                || mergedTutorialSkipped != local.tutorialSkipped
 
             if changed {
                 local.totalXP = mergedTotalXP
@@ -843,6 +860,9 @@ final class DataManager {
                 local.winStreak1 = mergedStreak1
                 local.winStreak3 = mergedStreak3
                 local.winStreak5 = mergedStreak5
+                local.tutorialCompletedSteps = mergedTutorialSteps
+                local.tutorialSeen = mergedTutorialSeen
+                local.tutorialSkipped = mergedTutorialSkipped
                 try modelContext.save()
             }
         } else {
@@ -1440,6 +1460,46 @@ final class DataManager {
         Task {
             await publishMyStats()
         }
+    }
+
+    // MARK: - Tutorial (TUT-1a)
+    //
+    // State entry points only — NO XP awarding here (progression-event detection stays
+    // at the coordinator boundary per emitProgressionEvents' doc comment). All three are
+    // local-first; the `guard !isGuest` first line excludes guests entirely (Decision 7):
+    // guest tutorial state is `.guest` (done), so no popup / card / writes ever occur.
+
+    /// Reads the local tutorial read model. Guests return `.guest` (seen + skipped ⇒ done).
+    @MainActor
+    func tutorialState() async -> TutorialState {
+        guard !isGuest else { return TutorialState.guest }
+        guard let progress = try? await getUserProgress() else {
+            // No local UserProgress yet (pre-bootstrap edge) — treat as a fresh tutorial.
+            return TutorialState(seen: false, skipped: false, completed: [])
+        }
+        return TutorialState(
+            seen: progress.tutorialSeen,
+            skipped: progress.tutorialSkipped,
+            completed: progress.tutorialCompletedStepSet
+        )
+    }
+
+    /// Marks the welcome popup as seen (no-op if already seen). Syncs via saveUserProgress.
+    @MainActor
+    func markTutorialSeen() async {
+        guard !isGuest else { return }
+        guard let progress = try? await getUserProgress(), !progress.tutorialSeen else { return }
+        progress.tutorialSeen = true
+        try? await saveUserProgress()
+    }
+
+    /// Skips the tutorial (no-op if already done). Never touches the completed set; no XP.
+    @MainActor
+    func skipTutorial() async {
+        guard !isGuest else { return }
+        guard let progress = try? await getUserProgress(), !progress.tutorialDone else { return }
+        progress.tutorialSkipped = true
+        try? await saveUserProgress()
     }
 
     // MARK: - Quest Methods

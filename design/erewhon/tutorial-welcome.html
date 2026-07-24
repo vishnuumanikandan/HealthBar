@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Overheal — Tutorial Welcome (TUT-1a design ground truth)</title>
+<style>
+  /* Approved mockup: welcome popup (3 pages) + pinned First-Quests card + beacon ref.
+     Layout is ground truth; Decisions in TUT-1a-prompt.md outrank this file on behavior.
+     Tokens approximate ThemeColors.erewhonLight / erewhonDark — implement with tc.* */
+  :root{
+    --lt-bg:#f6f4ee; --lt-card:#ffffff; --lt-line:#e3e0d6; --lt-t1:#20241f; --lt-t2:#6b7168; --lt-t3:#9a9f96;
+    --dk-bg:#101311; --dk-card:#161a17; --dk-line:#2a2f2b; --dk-t1:#eef1ee; --dk-t2:#a9b0aa; --dk-t3:#6d746e;
+    --primary:#57c98b; --primary-ink:#0c1a12;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{font-family:-apple-system,'Hanken Grotesk',sans-serif;background:#eceae2;padding:28px;display:flex;flex-direction:column;gap:26px;align-items:center}
+  h1{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:#6b7168}
+  .row{display:flex;gap:22px;flex-wrap:wrap;justify-content:center}
+  .phone{width:270px;border-radius:26px;border:1px solid var(--line);background:var(--bg);padding:16px 14px;min-height:480px;position:relative;overflow:hidden}
+  .light{--bg:var(--lt-bg);--card:var(--lt-card);--line:var(--lt-line);--t1:var(--lt-t1);--t2:var(--lt-t2);--t3:var(--lt-t3)}
+  .dark{--bg:var(--dk-bg);--card:var(--dk-card);--line:var(--dk-line);--t1:var(--dk-t1);--t2:var(--dk-t2);--t3:var(--dk-t3)}
+  .cap{font-size:11px;color:#6b7168;text-align:center;margin-top:8px}
+  .meta{font-size:10px;letter-spacing:.18em;color:var(--t3);text-transform:uppercase;text-align:center}
+  .meta .hr{display:inline-block;width:18px;height:1px;background:var(--line);vertical-align:middle;margin:0 8px}
+  /* dimmed app behind popup */
+  .appbehind{opacity:.35}
+  .apphead .day{font-size:10px;letter-spacing:.16em;color:var(--t3)}
+  .apphead .title{font-size:18px;font-weight:600;color:var(--t1);margin-top:2px}
+  .stub{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:12px;margin-top:9px}
+  .stub .k{font-size:10px;letter-spacing:.14em;color:var(--t3)}
+  .stub .v{font-size:16px;font-weight:600;color:var(--t1);margin-top:2px}
+  .scrim{position:absolute;inset:0;background:rgba(5,7,5,.55);display:flex;align-items:center;justify-content:center;padding:18px}
+  .pop{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px 16px 14px;width:100%;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.35)}
+  .skip{position:absolute;top:14px;right:16px;font-size:10px;letter-spacing:.14em;color:var(--t3)}
+  .ring{width:46px;height:46px;border-radius:50%;border:2px solid var(--primary);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;box-shadow:0 0 0 5px rgba(87,201,139,.12), 0 0 22px rgba(87,201,139,.35)}
+  .ring span{color:var(--primary);font-size:20px}
+  .h{font-size:18px;font-weight:600;color:var(--t1)}
+  .sub{font-size:12px;color:var(--t2);margin-top:7px;line-height:1.5}
+  .dots{display:flex;justify-content:center;gap:5px;margin-top:14px}
+  .dots i{width:3px;height:3px;border-radius:2px;background:var(--line)}
+  .dots i.on{width:12px;background:var(--primary)}
+  .looprow{display:flex;align-items:center;gap:11px;padding:10px 2px;text-align:left}
+  .looprow+.looprow{border-top:1px solid var(--line)}
+  .looprow b{font-size:12.5px;font-weight:600;color:var(--t1);display:block}
+  .looprow small{font-size:10.5px;color:var(--t3)}
+  .looprow .ic{color:var(--primary);width:20px;text-align:center;font-size:15px}
+  .qbox{border:1px solid var(--line);border-radius:12px;overflow:hidden;text-align:left;margin-top:10px}
+  .q{display:flex;justify-content:space-between;align-items:center;padding:8px 11px;font-size:11.5px;color:var(--t1)}
+  .q+.q{border-top:1px solid var(--line)}
+  .q em{font-style:normal;color:var(--primary);font-size:10.5px}
+  .cta{margin-top:12px;background:var(--primary);border-radius:11px;padding:11px 0;color:var(--primary-ink);font-size:13px;font-weight:600;box-shadow:0 0 18px rgba(87,201,139,.4)}
+  .micro{font-size:10px;color:var(--t3);margin-top:8px}
+  /* pinned card */
+  .pin{border:1.5px solid var(--primary);border-radius:12px;background:var(--card);padding:12px;margin-top:10px;position:relative}
+  .pin .lab{font-size:9.5px;letter-spacing:.16em;color:var(--primary)}
+  .pin .count{position:absolute;top:12px;right:38px;font-size:10.5px;color:var(--t3)}
+  .pin .skp{position:absolute;top:12px;right:12px;font-size:9px;letter-spacing:.1em;color:var(--t3)}
+  .pin .body{display:flex;gap:10px;align-items:center;margin-top:9px}
+  .pin .disc{width:28px;height:28px;border-radius:50%;border:2px solid var(--primary);color:var(--primary);font-size:10.5px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:none}
+  .pin b{font-size:12.5px;font-weight:600;color:var(--t1);display:block}
+  .pin small{font-size:10.5px;color:var(--t3)}
+</style>
+</head>
+<body>
+  <h1>Tutorial welcome — popup pages 1 &amp; 3 · pinned card (light + dark)</h1>
+
+  <div class="row">
+    <!-- LIGHT: popup page 1 over dimmed Home -->
+    <div>
+      <div class="phone light">
+        <div class="appbehind">
+          <div class="apphead"><div class="day">TUESDAY, JUL 23</div><div class="title">Home</div></div>
+          <div class="stub"><div class="k">CALORIES</div><div class="v">1,240 / 2,100</div></div>
+          <div class="stub" style="height:58px"></div><div class="stub" style="height:58px"></div>
+        </div>
+        <div class="scrim"><div class="pop" style="position:relative">
+          <div class="skip">SKIP</div>
+          <div class="ring"><span>⚡</span></div>
+          <div class="meta"><span class="hr"></span>WELCOME<span class="hr"></span></div>
+          <div class="h" style="margin-top:8px">Hey @avery</div>
+          <div class="sub">Overheal turns eating well into a game you can win.</div>
+          <div class="dots"><i class="on"></i><i></i><i></i></div>
+        </div></div>
+      </div>
+      <div class="cap">Page 1 · greeting (light)</div>
+    </div>
+
+    <!-- DARK: popup page 3 -->
+    <div>
+      <div class="phone dark">
+        <div class="appbehind">
+          <div class="apphead"><div class="day">TUESDAY, JUL 23</div><div class="title">Home</div></div>
+          <div class="stub" style="height:58px"></div><div class="stub" style="height:58px"></div><div class="stub" style="height:58px"></div>
+        </div>
+        <div class="scrim"><div class="pop" style="position:relative">
+          <div class="skip">SKIP</div>
+          <div class="meta"><span class="hr"></span>FIRST QUESTS<span class="hr"></span></div>
+          <div class="sub" style="margin-top:6px">Six quests. Finish them all for a badge.</div>
+          <div class="qbox">
+            <div class="q"><span>Quick-log a meal</span><em>+30 XP</em></div>
+            <div class="q"><span>Log from the food database</span><em>+30 XP</em></div>
+            <div class="q"><span>Check your daily quests</span><em>+20 XP</em></div>
+            <div class="q"><span>Learn how duels work</span><em>+25 XP</em></div>
+            <div class="q"><span>Check out a guild</span><em>+25 XP</em></div>
+            <div class="q"><span>Try a new theme</span><em>+20 XP</em></div>
+          </div>
+          <div class="cta">Start your first quest</div>
+          <div class="micro">Tutorial complete badge awaits</div>
+          <div class="dots"><i></i><i></i><i class="on"></i></div>
+        </div></div>
+      </div>
+      <div class="cap">Page 3 · quest list (dark)</div>
+    </div>
+
+    <!-- LIGHT: pinned card on Home -->
+    <div>
+      <div class="phone light">
+        <div class="apphead"><div class="day">TUESDAY, JUL 23</div><div class="title">Home</div></div>
+        <div class="pin">
+          <div class="lab">FIRST QUESTS</div>
+          <div class="count">1 / 6</div><div class="skp">SKIP</div>
+          <div class="body">
+            <div class="disc">2</div>
+            <div><b>Log from the food database</b><small>Open the Log tab and add anything →</small></div>
+          </div>
+        </div>
+        <div class="stub"><div class="k">CALORIES</div><div class="v">1,240 / 2,100</div></div>
+        <div class="stub" style="height:56px"></div><div class="stub" style="height:56px"></div>
+      </div>
+      <div class="cap">Pinned First-Quests card · above first Home section, both content arms</div>
+    </div>
+  </div>
+
+  <div class="meta" style="color:#9a9f96">Page 2 (the loop) uses the hairline row family below · beacon = pulsing primary rings (TUT-1b)</div>
+  <div class="row">
+    <div>
+      <div class="phone dark" style="min-height:auto;padding-bottom:14px">
+        <div class="looprow"><span class="ic">🍽</span><div><b>Log what you eat</b><small>Describe it, scan it, or pick it</small></div></div>
+        <div class="looprow"><span class="ic">★</span><div><b>Earn XP and streaks</b><small>Quests reward eating clean</small></div></div>
+        <div class="looprow"><span class="ic">🏆</span><div><b>Climb the ranks</b><small>Stone to Zenith, one day at a time</small></div></div>
+        <div class="looprow"><span class="ic">⚔</span><div><b>Duel your friends</b><small>Best eating wins the day</small></div></div>
+      </div>
+      <div class="cap">Page 2 · the loop rows (dark)</div>
+    </div>
+  </div>
+</body>
+</html>
