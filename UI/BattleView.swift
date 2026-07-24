@@ -45,6 +45,9 @@ struct BattleView: View {
     /// R7b §4b: presents the full ranked ladder from the tappable rank block in arenaHead.
     @State private var showingRankLadder = false
 
+    /// DUEL-CLARITY-1: "How duels work" primer, opened from the ongoing list's foot button.
+    @State private var showPrimer = false
+
     // MARK: - Init
 
     init(
@@ -145,6 +148,10 @@ struct BattleView: View {
         .sheet(isPresented: $showingRankLadder) {
             RankLadderSheet(currentRR: viewModel.myRR)
         }
+        // DUEL-CLARITY-1: the scoring primer. Static content — nothing to pass, nothing to load.
+        .sheet(isPresented: $showPrimer) {
+            DuelPrimerSheet()
+        }
         .confirmationDialog(
             "Forfeit this duel?",
             isPresented: Binding(
@@ -180,6 +187,7 @@ struct BattleView: View {
             && !showingMatchmaking
             && !showMacroQTE
             && !showingRankLadder   // R7b §4b: the celebration waits behind the ladder sheet too.
+            && !showPrimer          // DUEL-CLARITY-1: and behind the primer sheet.
             && duelToForfeit == nil
             && arenaDuelId == nil
     }
@@ -218,7 +226,12 @@ struct BattleView: View {
                 // Featured slot: an active duel's card wins; otherwise the R4b matchup preview
                 // (me vs a random friend, or a labelled SAMPLE) when there is no active duel (D2).
                 if let featured = viewModel.active.first {
-                    featuredCard(featured)
+                    // DUEL-CLARITY-1: the featured card IS ongoing duel #1, so it takes the first
+                    // numbered header and the list below continues from DUEL 2.
+                    VStack(spacing: 0) {
+                        duelSectionHeader(number: 1, league: featured.league)
+                        featuredCard(featured)
+                    }
                 } else if let preview = viewModel.matchupPreview {
                     matchupPreviewCard(preview)
                 }
@@ -232,8 +245,11 @@ struct BattleView: View {
                 } else {
                     section("Incoming Challenges", viewModel.incoming) { incomingRow($0) }
                     section("Outgoing Challenges", viewModel.outgoing) { outgoingRow($0) }
-                    // Featured duel is excluded from the Active section (D2).
-                    section("Active Duels", Array(viewModel.active.dropFirst())) { activeRow($0) }
+                    // DUEL-CLARITY-1: numbered `DUEL N` headers replace the single "Active Duels"
+                    // heading. Featured duel is still excluded from this list (D2) — it is DUEL 1
+                    // in the featured slot above.
+                    ongoingSections
+                    primerFootButton
                     historyBlock   // D7: collapsible "Duel history" (replaces the Finished section)
                 }
 
@@ -756,6 +772,73 @@ struct BattleView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DesignSystem.Spacing.xl)
+    }
+
+    // MARK: - Ongoing duels: numbered sections (DUEL-CLARITY-1)
+
+    /// The ongoing list, reorganized into numbered `DUEL N` sections.
+    ///
+    /// N is the duel's 1-based position in the DISPLAYED ongoing array (`viewModel.active`), so
+    /// these continue from 2 — the featured card above is DUEL 1. The existing active filter and
+    /// ends-soonest sort are untouched: this only re-heads what `viewModel.active` already
+    /// returns, in the order it returns them. The duel cards themselves render unchanged.
+    @ViewBuilder
+    private var ongoingSections: some View {
+        let rest = Array(viewModel.active.dropFirst())
+        if !rest.isEmpty {
+            VStack(spacing: DesignSystem.Spacing.lg) {
+                ForEach(Array(rest.enumerated()), id: \.element.id) { index, duel in
+                    VStack(spacing: 0) {
+                        duelSectionHeader(number: index + 2, league: duel.league)
+                        activeRow(duel)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// Mockup: `DUEL N` tracked-uppercase in the accent, a hairline rule, and the league tag
+    /// right-aligned. Same hairline language as `secHead`.
+    private func duelSectionHeader(number: Int, league: Int) -> some View {
+        HStack(spacing: DesignSystem.Spacing.sm) {
+            Text("DUEL \(number)")
+                .font(AppFont.display(12))
+                .tracking(1.1)
+                .foregroundColor(tc.primary)
+            Rectangle()
+                .fill(DesignSystem.Erewhon.lineSoft)
+                .frame(height: 1)
+            Text(leagueLabel(league))
+                .font(AppFont.display(10))
+                .tracking(0.9)
+                .foregroundColor(tc.textTertiary)
+        }
+        .padding(.bottom, 10)
+    }
+
+    /// EXACTLY ONE primer entry for the whole ongoing list — at its foot, never per duel.
+    /// Hidden when there is no ongoing duel (the empty state is unchanged).
+    @ViewBuilder
+    private var primerFootButton: some View {
+        if !viewModel.active.isEmpty {
+            Button {
+                showPrimer = true
+            } label: {
+                HStack(spacing: 5) {
+                    Text("HOW DUELS WORK")
+                        .font(AppFont.display(11))
+                        .tracking(1.1)
+                    Image(systemName: "info.circle")
+                        .font(AppFont.regular(11))
+                }
+                .foregroundColor(tc.textSecondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DesignSystem.Spacing.sm)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     // MARK: - Section scaffold

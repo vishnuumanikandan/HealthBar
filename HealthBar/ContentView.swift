@@ -279,6 +279,17 @@ struct ContentView: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.7), value: BadgeToastQueue.shared.currentToast?.id)
+        // DUEL-CLARITY-1: the duel-points toast rides the same host site as the badge toast.
+        // A badge unlock is the bigger moment, so it wins the slot; the points toast stays in
+        // `currentToast` and appears once the badge banner clears (deferred, never dropped).
+        .overlay(alignment: .top) {
+            if BadgeToastQueue.shared.currentToast == nil,
+               let points = DuelPointsToastQueue.shared.currentToast {
+                DuelPointsToastView(toast: points, onDismiss: { DuelPointsToastQueue.shared.dismiss() })
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: DuelPointsToastQueue.shared.currentToast?.id)
         .fullScreenCover(isPresented: $showClaimUsername) {
             ClaimUsernameView(
                 coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared)

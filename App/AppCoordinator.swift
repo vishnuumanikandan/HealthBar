@@ -1191,6 +1191,13 @@ final class AppCoordinator {
     /// Claim toasts from the most recent `loadMyDuels()` — read by BattleViewModel after load.
     var recentDuelClaims: [String] { dataManager.recentDuelClaims }
 
+    /// DUEL-CLARITY-1: MY live day-score components for the Arena "YOUR POINTS TODAY" card.
+    /// My side only — no opponent component data exists, is fetched, or is inferred.
+    func dayScoreBreakdown(for date: Date) async -> DayScoreBreakdown {
+        guard !isGuest else { return .zero }
+        return await dataManager.dayScoreBreakdown(for: date)
+    }
+
     func markDuelsSeen(_ duels: [DuelDTO], isFullList: Bool) async {
         await dataManager.markDuelsSeen(duels, isFullList: isFullList)
     }
