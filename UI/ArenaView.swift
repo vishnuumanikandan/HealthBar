@@ -22,6 +22,8 @@ struct ArenaView: View {
     @State private var endgamePulse = false
     /// NAV-1b: opponent's read-only profile sheet presentation flag.
     @State private var showOpponentProfile = false
+    /// DUEL-CLARITY-1: "How duels work" primer presentation flag.
+    @State private var showPrimer = false
 
     init(coordinator: AppCoordinator, myUid: String, duel: DuelDTO) {
         self._viewModel = State(initialValue: ArenaViewModel(coordinator: coordinator, myUid: myUid, duel: duel))
@@ -40,6 +42,7 @@ struct ArenaView: View {
                         .font(AppFont.regular(12))
                         .foregroundColor(tc.textSecondary)
                 }
+                breakdownCard
                 dayTimeline
                 actions
                 if viewModel.isStale {
@@ -79,6 +82,10 @@ struct ArenaView: View {
                 onRemoved: {}
             )
         }
+        // DUEL-CLARITY-1: the scoring primer. Static content — nothing to pass, nothing to load.
+        .sheet(isPresented: $showPrimer) {
+            DuelPrimerSheet()
+        }
     }
 
     // MARK: - Header + scores
@@ -86,13 +93,32 @@ struct ArenaView: View {
     /// D5: adopts the D4 fighter layout — two fighter columns around a `.vs-mid`,
     /// replacing the plain name/name row.
     private var versusHeader: some View {
-        HStack(alignment: .center, spacing: 0) {
-            // D3b/D4: MY head from the live local profile (VM); THEIR head is the opponent column.
-            fighterColumn(initial: "Y", isMe: true, name: nil, subline: leagueSubline,
-                          avatarIcon: viewModel.myAvatarIcon, avatarColor: viewModel.myAvatarColor)
-            vsMid
-            opponentColumn
+        VStack(spacing: 6) {
+            HStack(alignment: .center, spacing: 0) {
+                // D3b/D4: MY head from the live local profile (VM); THEIR head is the opponent column.
+                fighterColumn(initial: "Y", isMe: true, name: nil, subline: leagueSubline,
+                              avatarIcon: viewModel.myAvatarIcon, avatarColor: viewModel.myAvatarColor)
+                vsMid
+                opponentColumn
+            }
+            primerAffordance
         }
+    }
+
+    /// DUEL-CLARITY-1: the primer entry point, sitting directly under the league sub-lines.
+    /// The other entry point is the Battle ongoing-list foot button; both open the same sheet.
+    private var primerAffordance: some View {
+        Button {
+            showPrimer = true
+        } label: {
+            Image(systemName: "info.circle")
+                .font(AppFont.regular(13))
+                .foregroundColor(tc.textTertiary)
+                .frame(width: 44, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("How duels work")
     }
 
     /// The opponent fighter column. NAV-1b: tappable to their read-only profile unless
@@ -254,6 +280,93 @@ struct ArenaView: View {
                 guard viewModel.isEndgame else { return }
                 withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { endgamePulse = true }
             }
+        }
+    }
+
+    // MARK: - My-side breakdown (DUEL-CLARITY-1)
+
+    /// "YOUR POINTS TODAY" — why my score is what it is. ACTIVE duels only. My side only: the
+    /// opponent has no component data here, is never fetched for one, and renders as the bare
+    /// total in the score row above (their food data is private).
+    ///
+    /// These are my GLOBAL day components, so the card is identical in every active Arena —
+    /// correct, and what the primer states: one day's points count in every duel.
+    @ViewBuilder
+    private var breakdownCard: some View {
+        if viewModel.showBreakdown {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("YOUR POINTS TODAY")
+                        .font(AppFont.display(11))
+                        .tracking(1.1)
+                        .foregroundColor(tc.primary)
+                    Spacer()
+                    Text(viewModel.pointsText(viewModel.breakdown.total))
+                        .font(AppFont.display(20))
+                        .foregroundColor(tc.textPrimary)
+                }
+
+                // Primer order — the same five rows, in the same order, as the primer sheet.
+                VStack(spacing: DesignSystem.Spacing.sm) {
+                    ForEach(DayScoreBreakdown.Component.allCases, id: \.self) { component in
+                        breakdownRow(component)
+                    }
+                }
+
+                Text(viewModel.breakdownHint)
+                    .font(AppFont.regular(11))
+                    .foregroundColor(tc.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let callout = viewModel.comebackCallout {
+                    Text(callout)
+                        .font(AppFont.regular(11))
+                        .foregroundColor(tc.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(DesignSystem.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .adaptiveCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.cardBackground)
+        }
+    }
+
+    /// One component row: name, `value / max`, and a thin progress bar. The LABEL shows the raw
+    /// value; only the BAR is clamped (`fill`), so an over-max component can never overflow.
+    private func breakdownRow(_ component: DayScoreBreakdown.Component) -> some View {
+        let value = viewModel.breakdown.value(component)
+        let ceiling = DayScoreBreakdown.maxValue(component)
+        return VStack(spacing: 5) {
+            HStack {
+                Text(breakdownLabel(component))
+                    .font(AppFont.regular(12))
+                    .foregroundColor(tc.textSecondary)
+                Spacer()
+                Text("\(viewModel.pointsText(value)) / \(viewModel.pointsText(ceiling))")
+                    .font(AppFont.display(13))
+                    .foregroundColor(tc.textPrimary)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(tc.segBackground)
+                        .overlay(Capsule().stroke(DesignSystem.Erewhon.line, lineWidth: 1))
+                    Capsule()
+                        .fill(tc.primary)
+                        .frame(width: max(0, geo.size.width * viewModel.breakdown.fill(component)))
+                }
+            }
+            .frame(height: 5)
+        }
+    }
+
+    private func breakdownLabel(_ component: DayScoreBreakdown.Component) -> String {
+        switch component {
+        case .calories: return "Calories"
+        case .protein:  return "Protein"
+        case .purity:   return "Purity"
+        case .quests:   return "Quests"
+        case .qteBonus: return "QTE bonus"
         }
     }
 

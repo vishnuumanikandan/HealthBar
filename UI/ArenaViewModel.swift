@@ -27,6 +27,11 @@ final class ArenaViewModel {
     private(set) var myAvatarIcon: String?
     private(set) var myAvatarColor: String?
 
+    /// DUEL-CLARITY-1: MY day-score components for the "YOUR POINTS TODAY" card. My side only —
+    /// the opponent's food data is private, so their score stays a bare total everywhere.
+    /// Loaded inside `refresh()`; `.zero` until the first pass completes.
+    private(set) var breakdown: DayScoreBreakdown = .zero
+
     init(coordinator: AppCoordinator, myUid: String, duel: DuelDTO) {
         self.coordinator = coordinator
         self.myUid = myUid
@@ -45,6 +50,10 @@ final class ArenaViewModel {
         let profile = try? await coordinator.getUserProfile()
         myAvatarIcon = profile?.avatarIcon
         myAvatarColor = profile?.avatarColor
+        // DUEL-CLARITY-1: my live day components, awaited in this same refresh pass — one
+        // lifecycle, no second `.task`. The day is global, so the same figures appear in every
+        // active Arena (that is the point: today's points count in all of them).
+        breakdown = await coordinator.dayScoreBreakdown(for: Date())
         await coordinator.markDuelsSeen([duel], isFullList: false)
     }
 
@@ -98,6 +107,45 @@ final class ArenaViewModel {
     var isEndgame: Bool {
         guard isActive, let endAt = duel.endAt else { return false }
         return endAt.timeIntervalSinceNow < DuelConstants.secondsPerDay
+    }
+
+    // MARK: - My-side breakdown (DUEL-CLARITY-1)
+
+    /// The breakdown card is an ACTIVE-duel affordance — a finished duel's day is over, so it
+    /// is hidden there (the card would describe a day that can no longer change the result).
+    var showBreakdown: Bool { isActive }
+
+    /// Trailing in THIS duel — the comeback multiplier's condition, using the same strict
+    /// rounded-tenths comparison as the scoring pass (a tie is NOT trailing).
+    var iAmTrailing: Bool { tenths(myScore) < tenths(theirScore) }
+
+    /// Points rendered at the app's 1-decimal day-score convention ("30", "17.9").
+    func pointsText(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(0...1)))
+    }
+
+    /// One sentence naming the largest remaining gap. FIXED copy table keyed by category —
+    /// never free-form. Ties resolve in primer order via `largestGapComponent`.
+    var breakdownHint: String {
+        guard let gap = breakdown.largestGapComponent else {
+            // Everything banked. N is the max-day-score constant, never a literal.
+            return "Perfect day so far — all \(pointsText(DuelConstants.maxDayScore)) points banked."
+        }
+        let n = pointsText(breakdown.remaining(gap))
+        switch gap {
+        case .calories: return "Log under your calorie goal to bank the last \(n) calorie points."
+        case .protein:  return "Hit your protein target to bank \(n) more points."
+        case .purity:   return "Keep meals clean to bank \(n) more purity points."
+        case .quests:   return "Finish today's quests for \(n) more points."
+        case .qteBonus: return "QTE events can add \(n) more points."
+        }
+    }
+
+    /// The comeback callout, appended only while I'm behind in THIS duel (the multiplier is
+    /// per-duel). nil otherwise. The multiplier comes from the constants.
+    var comebackCallout: String? {
+        guard isActive, iAmTrailing else { return nil }
+        return "You're behind — QTE points count ×\(DuelConstants.comebackMultiplier.formatted(.number.precision(.fractionLength(0...2)))) in this duel."
     }
 
     // MARK: - Day timeline

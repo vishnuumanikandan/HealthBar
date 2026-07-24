@@ -4759,8 +4759,24 @@ final class DataManager {
     /// Graded day-score (0…110) for a local calendar date, per the D1b EXACT SPEC.
     /// Reuses existing per-date machinery (entries/goal-in-effect/quests + NutritionManager).
     /// Memoized by callers (updateMyDuelScores) per start-of-day.
+    ///
+    /// DUEL-CLARITY-1: now a thin alias over `dayScoreBreakdown(for:)`. The arithmetic moved
+    /// into `DayScoreBreakdown.total` VERBATIM (same terms, same order, same clamp, same
+    /// rounding), so every call site is bit-identical.
     func dayScore(for date: Date) async -> Double {
-        guard let userId = currentUserId, !userId.isEmpty else { return 0 }
+        await dayScoreBreakdown(for: date).total
+    }
+
+    /// The five scoring components behind `dayScore` (DUEL-CLARITY-1) — identical machinery
+    /// and identical intermediates; the only change is that the terms are RETURNED instead of
+    /// summed on the spot. Powers the Arena "YOUR POINTS TODAY" card and the points-toast diff.
+    ///
+    /// The `!isGuest` guard is new (every DUEL-CLARITY-1 entry point starts with one). It is a
+    /// no-op for existing behavior: the sole pre-existing consumer, `updateMyDuelScores`, is
+    /// already guest-guarded, and `qtePoints(for:)` had the same guard already.
+    func dayScoreBreakdown(for date: Date) async -> DayScoreBreakdown {
+        guard !isGuest else { return .zero }
+        guard let userId = currentUserId, !userId.isEmpty else { return .zero }
         let entries = (try? await fetchEntriesForDate(date)) ?? []
 
         // The goal IN EFFECT on the date (goals persist until changed), exactly as adherence does.
@@ -4769,7 +4785,7 @@ final class DataManager {
         let goal = goalInEffect(on: dayStart, calendar: Calendar.current, goalsByRecency: goals)
 
         // Gate: no goal in effect OR no entries logged → 0 (no free points for silence; avoids /0).
-        guard let goal, !entries.isEmpty else { return 0 }
+        guard let goal, !entries.isEmpty else { return .zero }
 
         let totalCalories = nutritionManager.calculateTotalCalories(from: entries)
         let totalProtein = nutritionManager.calculateTotalMacros(from: entries).protein
@@ -4807,9 +4823,10 @@ final class DataManager {
         let questPts: Double = quests.isEmpty ? 0 :
             DuelConstants.questPoints * (Double(quests.filter { $0.isCompleted }.count) / Double(quests.count))
 
-        let raw = caloriePts + proteinPts + purityPts + questPts + qteBonus(date)
-        let clamped = min(DuelConstants.maxDayScore, max(0, raw))
-        return (clamped * 10).rounded() / 10 // 1 decimal place
+        // The sum/clamp/1-dp rounding that used to close this function now lives — unchanged —
+        // in `DayScoreBreakdown.total`.
+        return DayScoreBreakdown(calories: caloriePts, protein: proteinPts, purity: purityPts,
+                                 quests: questPts, qteBonus: qteBonus(date))
     }
 
     /// Recompute and push MY side of every ACTIVE duel. Memoizes dayScore per start-of-day so
@@ -4823,8 +4840,12 @@ final class DataManager {
 
         let calendar = Calendar.current
         let now = Date()
-        var cache: [Date: Double] = [:]  // start-of-day → dayScore (compute each date once)
+        // DUEL-CLARITY-1: the memo now holds the BREAKDOWN (`.total` is the same Double the memo
+        // held before) so today's components are available for the points-toast diff below
+        // without a second scoring pass.
+        var cache: [Date: DayScoreBreakdown] = [:]  // start-of-day → breakdown (compute each date once)
         var qteCache: [Date: Int] = [:]  // start-of-day → capped QTE points (comeback weighting)
+        var didPush = false              // DUEL-CLARITY-1: ≥1 write actually landed this pass
 
         for duel in active {
             guard let id = duel.id, let acceptedAt = duel.acceptedAt else { continue }
@@ -4840,11 +4861,11 @@ final class DataManager {
                 if dayStart > now { break }                              // future duel-day — stop
                 if let endAt = duel.endAt, dayStart >= endAt { break }   // past the window — stop
                 if let cached = cache[dayStart] {
-                    dayScores.append(cached)
+                    dayScores.append(cached.total)
                 } else {
-                    let score = await dayScore(for: dayStart)
-                    cache[dayStart] = score
-                    dayScores.append(score)
+                    let breakdown = await dayScoreBreakdown(for: dayStart)
+                    cache[dayStart] = breakdown
+                    dayScores.append(breakdown.total)
                 }
                 dayStarts.append(dayStart)
             }
@@ -4884,9 +4905,55 @@ final class DataManager {
             if current == dayScores { continue }
 
             // Swallow permission-denied (duel ended / froze between fetch and write).
-            try? await firestoreService.updateDuelScore(duelId: id, isChallenger: iAmChallenger,
-                                                        score: total, dayScores: dayScores)
+            // DUEL-CLARITY-1: `try?` still swallows, but the outcome is now observed — a FAILED
+            // push must never move the toast baseline (we would then diff against state that
+            // never landed and silently lose the toast for a real change).
+            let pushed: Void? = try? await firestoreService.updateDuelScore(
+                duelId: id, isChallenger: iAmChallenger, score: total, dayScores: dayScores)
+            if pushed != nil { didPush = true }
         }
+
+        // DUEL-CLARITY-1 points toast — own side only, at this one chokepoint. The day identity
+        // is this function's OWN start-of-day (its `calendar` and `now`, the same values that
+        // key the memo above) — computed once here, never restated downstream.
+        let todayStart = calendar.startOfDay(for: now)
+        emitPointsToast(today: cache[todayStart], dayStart: todayStart, didPush: didPush)
+    }
+
+    /// Last successfully-pushed day breakdown and the day it belongs to — the points-toast
+    /// baseline (in memory, per launch; nothing is persisted).
+    ///
+    /// STATIC on purpose: ContentView builds ONE DataManager PER TAB, so instance state forks
+    /// per tab (the D3a `blockedUids` lesson) and the same change would toast once per tab.
+    private static var lastPushedBreakdown: DayScoreBreakdown?
+    private static var lastPushedDayStart: Date?
+
+    /// Diffs today's just-pushed components against the previous successful push and raises at
+    /// most ONE toast — never a stack.
+    ///
+    /// Baseline rules:
+    /// - Only a SUCCESSFUL push moves the baseline (a failed write leaves it alone).
+    /// - The FIRST successful push after launch sets the baseline silently (no toast), so a
+    ///   relaunch never replays the whole day as a toast storm.
+    /// - A day rollover (the day identity changed) also resets the baseline SILENTLY — the
+    ///   rollover itself is not a points change.
+    /// - `today` is nil when no active duel covers today (e.g. an expired-but-unresolved duel):
+    ///   nothing to diff, so nothing is toasted and the baseline is left untouched.
+    ///
+    /// `dayStart` is the caller's day identity — passed in, never recomputed, so the baseline
+    /// can't disagree with the memo key across a midnight boundary mid-pass.
+    private func emitPointsToast(today: DayScoreBreakdown?, dayStart: Date, didPush: Bool) {
+        guard didPush, let today else { return }
+        defer {
+            Self.lastPushedBreakdown = today
+            Self.lastPushedDayStart = dayStart
+        }
+        // First push after launch, or the first push of a new day → baseline only, no toast.
+        guard let previous = Self.lastPushedBreakdown, Self.lastPushedDayStart == dayStart else { return }
+        guard let change = DayScoreBreakdown.delta(from: previous, to: today),
+              let toast = DuelPointsToast.make(net: change.net, reason: change.reason) else { return }
+
+        Task { @MainActor in DuelPointsToastQueue.shared.enqueue(toast) }
     }
 
     /// Applies MY claimed outcome to `progress` (RR floored at 0 + W/L/draw + win-streak).
@@ -6069,6 +6136,116 @@ enum GuildError: LocalizedError {
         case .network(let m):   return "Couldn't reach the server. Try again. (\(m))"
         }
     }
+}
+
+// MARK: - Duel Day-Score Breakdown (DUEL-CLARITY-1)
+
+/// The component decomposition of one duel day-score — the ONE place day-score component
+/// math lives. Plain value type (the `LeaderboardEntry` precedent): no SwiftData, no
+/// Firestore, computed entirely from values `dayScoreBreakdown(for:)` already produced.
+///
+/// `total` is `dayScore`'s pre-refactor return expression VERBATIM — same operations, same
+/// order, same rounding — so every existing call site is bit-identical and `dayScore(for:)`
+/// is now literally `dayScoreBreakdown(for:).total`.
+///
+/// Component order is PRIMER ORDER (calories → protein → purity → quests → QTE) and it is
+/// load-bearing: `Component.allCases` drives the Arena breakdown rows, the largest-gap hint
+/// tie-break, and the points-toast reason tie-break. Do not reorder.
+struct DayScoreBreakdown {
+    let calories: Double
+    let protein: Double
+    let purity: Double
+    let quests: Double
+    let qteBonus: Double
+
+    /// No user / no goal in effect / nothing logged — a 0 score with no components.
+    static let zero = DayScoreBreakdown(calories: 0, protein: 0, purity: 0, quests: 0, qteBonus: 0)
+
+    /// The five scoring components, in primer order.
+    enum Component: CaseIterable {
+        case calories, protein, purity, quests, qteBonus
+    }
+
+    func value(_ component: Component) -> Double {
+        switch component {
+        case .calories: return calories
+        case .protein:  return protein
+        case .purity:   return purity
+        case .quests:   return quests
+        case .qteBonus: return qteBonus
+        }
+    }
+
+    /// Each component's ceiling, straight off the tuning constants (never a literal).
+    static func maxValue(_ component: Component) -> Double {
+        switch component {
+        case .calories: return DuelConstants.caloriePoints
+        case .protein:  return DuelConstants.proteinPoints
+        case .purity:   return DuelConstants.purityPoints
+        case .quests:   return DuelConstants.questPoints
+        case .qteBonus: return DuelConstants.qteBonusCap
+        }
+    }
+
+    /// Points still on the table for a component (never negative).
+    func remaining(_ component: Component) -> Double {
+        max(0, Self.maxValue(component) - value(component))
+    }
+
+    /// Progress-bar fill — defensively clamped to 1.0. The row LABEL still shows the raw
+    /// `value / max` text; only the bar is clamped.
+    func fill(_ component: Component) -> Double {
+        let ceiling = Self.maxValue(component)
+        guard ceiling > 0 else { return 0 }
+        return min(value(component) / ceiling, 1.0)
+    }
+
+    /// The component with the most points left — the hint line's subject. Ties resolve in
+    /// primer order (strict `>` keeps the earliest). nil when everything is banked.
+    var largestGapComponent: Component? {
+        var best: Component?
+        var bestGap = 0.0
+        for component in Component.allCases where remaining(component) > bestGap {
+            best = component
+            bestGap = remaining(component)
+        }
+        return best
+    }
+
+    /// `dayScore`'s pre-refactor return expression, unchanged: sum in primer order, clamp to
+    /// [0, maxDayScore], round to one decimal place.
+    var total: Double {
+        let raw = calories + protein + purity + quests + qteBonus
+        let clamped = min(DuelConstants.maxDayScore, max(0, raw))
+        return (clamped * 10).rounded() / 10
+    }
+
+    /// What moved between two successive score pushes: the NET points across every CHANGED
+    /// category, plus the largest-|delta| category as the toast's reason (magnitude ties
+    /// resolve in primer order). nil when nothing moved.
+    ///
+    /// "Changed" is a tenths comparison — the same rounded-int convention the duel scores use
+    /// everywhere — so floating-point drift never raises a toast.
+    static func delta(from old: DayScoreBreakdown,
+                      to new: DayScoreBreakdown) -> (net: Double, reason: Component)? {
+        var net = 0.0
+        var reason: Component?
+        var bestMagnitude = 0.0
+        for component in Component.allCases {
+            let before = old.value(component), after = new.value(component)
+            guard tenths(after) != tenths(before) else { continue }
+            let change = after - before
+            net += change
+            if abs(change) > bestMagnitude {
+                bestMagnitude = abs(change)
+                reason = component
+            }
+        }
+        guard let reason else { return nil }
+        return (net, reason)
+    }
+
+    private static func tenths(_ v: Double) -> Int { Int((v * 10).rounded()) }
 }
 
 // MARK: - Duel Error (Duels D1a)

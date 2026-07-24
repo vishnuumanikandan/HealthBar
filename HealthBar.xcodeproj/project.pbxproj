@@ -128,6 +128,7 @@
 		BED60B432FFA31D300F9E190 /* BattleViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B422FFA31D300F9E190 /* BattleViewModel.swift */; };
 		BED60B452FFA31DB00F9E190 /* DuelRecapSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B442FFA31DB00F9E190 /* DuelRecapSheet.swift */; };
 		BED60B472FFA31E300F9E190 /* ArenaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B462FFA31E300F9E190 /* ArenaView.swift */; };
+		BE7B0C102FE5000000000014 /* DuelPrimerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0C0F2FE5000000000013 /* DuelPrimerSheet.swift */; };
 		BED60B492FFA31EA00F9E190 /* ArenaViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B482FFA31EA00F9E190 /* ArenaViewModel.swift */; };
 		BED60B4B2FFA31F400F9E190 /* DuelSeenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B4A2FFA31F400F9E190 /* DuelSeenStore.swift */; };
 		BED60B4D2FFA31FB00F9E190 /* ChallengeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B4C2FFA31FB00F9E190 /* ChallengeSheet.swift */; };
@@ -317,6 +318,7 @@
 		BED60B422FFA31D300F9E190 /* BattleViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattleViewModel.swift; sourceTree = "<group>"; };
 		BED60B442FFA31DB00F9E190 /* DuelRecapSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuelRecapSheet.swift; sourceTree = "<group>"; };
 		BED60B462FFA31E300F9E190 /* ArenaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArenaView.swift; sourceTree = "<group>"; };
+		BE7B0C0F2FE5000000000013 /* DuelPrimerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuelPrimerSheet.swift; sourceTree = "<group>"; };
 		BED60B482FFA31EA00F9E190 /* ArenaViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArenaViewModel.swift; sourceTree = "<group>"; };
 		BED60B4A2FFA31F400F9E190 /* DuelSeenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuelSeenStore.swift; sourceTree = "<group>"; };
 		BED60B4C2FFA31FB00F9E190 /* ChallengeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChallengeSheet.swift; sourceTree = "<group>"; };
@@ -528,6 +530,7 @@
 				BED60B4A2FFA31F400F9E190 /* DuelSeenStore.swift */,
 				BED60B482FFA31EA00F9E190 /* ArenaViewModel.swift */,
 				BED60B462FFA31E300F9E190 /* ArenaView.swift */,
+				BE7B0C0F2FE5000000000013 /* DuelPrimerSheet.swift */,
 				BED60B442FFA31DB00F9E190 /* DuelRecapSheet.swift */,
 				BED60B422FFA31D300F9E190 /* BattleViewModel.swift */,
 				BED60B402FFA31CD00F9E190 /* DuelUIState.swift */,
@@ -1023,6 +1026,7 @@
 				BE102B522FD9EA8600E9744F /* PublicStatsDTO .swift in Sources */,
 				BED60B3B2FFA31B800F9E190 /* BattleView.swift in Sources */,
 				BED60B472FFA31E300F9E190 /* ArenaView.swift in Sources */,
+				BE7B0C102FE5000000000014 /* DuelPrimerSheet.swift in Sources */,
 				1146B2E02F2341D1004767C9 /* AddFoodViewModel.swift in Sources */,
 				1111E13A2F285E98006EF76F /* EditMealView.swift in Sources */,
 				BE102AB82FD9353900E9744F /* FriendRequest.swift in Sources */,
