@@ -34,6 +34,13 @@ struct UserProgressDTO: Codable {
     /// Serialized from UserProgress.claimedMilestones (comma-string) as a sorted Int array.
     var claimedMilestonesArray: [Int]
 
+    // MARK: - Tutorial (TUT-1a) — optional so pre-TUT `progress` docs decode. The
+    // completed-step set is stored as a sorted [String] in Firestore (the comma-string
+    // is a SwiftData-model-only encoding). Always read via the resolved accessors.
+    var tutorialSeen: Bool?
+    var tutorialSkipped: Bool?
+    var tutorialCompletedStepsArray: [String]?
+
     // MARK: - Duel record (D1b) — optional for legacy-doc decode; read via resolved accessors.
     var duelWins: Int?
     var duelLosses: Int?
@@ -64,6 +71,11 @@ struct UserProgressDTO: Codable {
     var resolvedWinStreak3: Int { winStreak3 ?? 0 }
     var resolvedWinStreak5: Int { winStreak5 ?? 0 }
 
+    // Tutorial (TUT-1a) — nil → false / empty (pre-TUT docs). Single fallback site.
+    var resolvedTutorialSeen: Bool { tutorialSeen ?? false }
+    var resolvedTutorialSkipped: Bool { tutorialSkipped ?? false }
+    var resolvedTutorialCompletedSteps: Set<String> { Set(tutorialCompletedStepsArray ?? []) }
+
     // NOTE: `rank` is intentionally excluded — it is a computed function of `rr`
     // (`Rank.getRank(from: rr)`) and must never be written or read from Firestore.
 
@@ -88,6 +100,9 @@ struct UserProgressDTO: Codable {
         self.longestStreak = progress.longestStreak
         self.lastActiveDate = progress.lastActiveDate
         self.claimedMilestonesArray = Array(progress.claimedMilestoneSet).sorted()
+        self.tutorialSeen = progress.tutorialSeen
+        self.tutorialSkipped = progress.tutorialSkipped
+        self.tutorialCompletedStepsArray = Array(progress.tutorialCompletedStepSet).sorted()
     }
 
     // MARK: - Conversion: UserProgressDTO → UserProgress
@@ -108,6 +123,9 @@ struct UserProgressDTO: Codable {
         )
         progress.userId = userId
         progress.claimedMilestones = claimedMilestonesArray.sorted().map { String($0) }.joined(separator: ",")
+        progress.tutorialSeen = resolvedTutorialSeen
+        progress.tutorialSkipped = resolvedTutorialSkipped
+        progress.tutorialCompletedSteps = resolvedTutorialCompletedSteps.sorted().joined(separator: ",")
         progress.duelWins = resolvedDuelWins
         progress.duelLosses = resolvedDuelLosses
         progress.duelDraws = resolvedDuelDraws
@@ -147,5 +165,8 @@ struct UserProgressDTO: Codable {
             || longestStreak != progress.longestStreak
             || lastActiveDate != progress.lastActiveDate
             || Set(claimedMilestonesArray) != progress.claimedMilestoneSet
+            || resolvedTutorialSeen != progress.tutorialSeen
+            || resolvedTutorialSkipped != progress.tutorialSkipped
+            || resolvedTutorialCompletedSteps != progress.tutorialCompletedStepSet
     }
 }

@@ -32,6 +32,7 @@
 		1111E1B22F32E13B006EF76F /* AccessibilitySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E1B12F32E13B006EF76F /* AccessibilitySettingsView.swift */; };
 		1146B26C2F1F493D004767C9 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B26B2F1F493D004767C9 /* DesignSystem.swift */; };
 		D3A0AA710000000000000002 /* AvatarKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A0AA710000000000000001 /* AvatarKit.swift */; };
+		D3A0AA720000000000000002 /* TutorialKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A0AA720000000000000001 /* TutorialKit.swift */; };
 		D3B0AA710000000000000002 /* RankJourneyCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B0AA710000000000000001 /* RankJourneyCard.swift */; };
 		1146B2E02F2341D1004767C9 /* AddFoodViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2B92F233CD5004767C9 /* AddFoodViewModel.swift */; };
 		1146B2E92F2343C3004767C9 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2E82F2343C3004767C9 /* AppCoordinator.swift */; };
@@ -248,6 +249,7 @@
 		1146B25C2F1F36F0004767C9 /* HealthBar_Architecture.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = HealthBar_Architecture.md; sourceTree = "<group>"; };
 		1146B26B2F1F493D004767C9 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		D3A0AA710000000000000001 /* AvatarKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarKit.swift; sourceTree = "<group>"; };
+		D3A0AA720000000000000001 /* TutorialKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialKit.swift; sourceTree = "<group>"; };
 		D3B0AA710000000000000001 /* RankJourneyCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankJourneyCard.swift; sourceTree = "<group>"; };
 		1146B2B12F233BE6004767C9 /* AddFoodFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddFoodFormView.swift; sourceTree = "<group>"; };
 		1146B2B22F233BE6004767C9 /* FoodLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodLogView.swift; sourceTree = "<group>"; };
@@ -506,6 +508,7 @@
 			children = (
 				1146B26B2F1F493D004767C9 /* DesignSystem.swift */,
 				D3A0AA710000000000000001 /* AvatarKit.swift */,
+				D3A0AA720000000000000001 /* TutorialKit.swift */,
 				D3B0AA710000000000000001 /* RankJourneyCard.swift */,
 				CC770AA12F500000000000E1 /* TimeOfDayTheme.swift */,
 				AADD0D052FE1000000000003 /* ProfanityDenylist.txt */,
@@ -955,6 +958,7 @@
 				BEF96D0F2FC8F4B200FB0F83 /* DescribeMealView.swift in Sources */,
 				1146B26C2F1F493D004767C9 /* DesignSystem.swift in Sources */,
 				D3A0AA710000000000000002 /* AvatarKit.swift in Sources */,
+				D3A0AA720000000000000002 /* TutorialKit.swift in Sources */,
 				D3B0AA710000000000000002 /* RankJourneyCard.swift in Sources */,
 				CC770AB12F500000000000E1 /* TimeOfDayTheme.swift in Sources */,
 				BEF9698E2F7B48B500FB0F83 /* AddCustomFoodView.swift in Sources */,

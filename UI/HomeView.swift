@@ -691,6 +691,9 @@ struct HomeView: View {
                 await viewModel.checkForStreakMilestone()
                 await viewModel.loadDailyInsights()
                 await viewModel.loadWeeklySummary()
+                // TUT-1a: load tutorial state on first appearance (guest guard lives in
+                // DataManager ⇒ guests resolve to `.guest`/done and never show anything).
+                await viewModel.loadTutorialState()
             }
             // Independent leaderboard load: its own async path so it never delays
             // or fails the dashboard. A plain .task runs exactly once per Home
@@ -757,6 +760,20 @@ struct HomeView: View {
                         }
                     )
                 }
+
+                // TUT-1a: welcome popup — a body-level overlay above all content, dimming
+                // whichever content arm is active. `showTutorialPopup` is only ever true
+                // once state has loaded AND (!seen && !done), so guests never see it. The
+                // greeting name is the cached UserProfile displayName, resolved by the VM
+                // (empty ⇒ "Hey there").
+                if viewModel.showTutorialPopup {
+                    TutorialWelcomePopup(
+                        greetingName: viewModel.greetingName,
+                        onStart: { Task { await viewModel.startTutorial() } },
+                        onSkip: { Task { await viewModel.skipTutorialTapped() } }
+                    )
+                    .transition(.opacity)
+                }
             }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
@@ -799,6 +816,9 @@ struct HomeView: View {
     // MARK: - Mood Check
 
     private func checkForMoodPrompt() {
+        // Decision 12: while the tutorial welcome popup is visible, the 7pm mood check must
+        // not fire (the popup takes precedence on Home).
+        guard !viewModel.showTutorialPopup else { return }
         guard settings.dailyMoodCheckEnabled else { return }
         let hour = Calendar.current.component(.hour, from: Date())
         guard hour >= 19 else { return }
@@ -866,10 +886,13 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Pixel Home Content (byte-identical to pre-R3b)
+    // MARK: - Pixel Home Content (byte-identical to pre-R3b, except the TUT-1a insertion)
 
-    /// Pixel-theme dashboard: the section order and bodies are preserved exactly. Rendered
-    /// only when `!isClean`, so every section takes its pixel branch.
+    /// Pixel-theme dashboard: the section order and bodies are preserved exactly, with ONE
+    /// deliberate exception — the pinned First-Quests card (TUT-1a) is inserted at the top
+    /// of the card stack. Adding a new self-contained section is permitted here; mutating an
+    /// existing pixel widget is not. Rendered only when `!isClean`, so every section takes
+    /// its pixel branch.
     private var pixelContent: some View {
         VStack(spacing: 0) {
             Text("Overheal")
@@ -881,6 +904,11 @@ struct HomeView: View {
                 .padding(.bottom, 22)
 
             VStack(spacing: 14) {
+                    // 0. Pinned First-Quests card (TUT-1a) — renders only mid-tutorial (nil/done ⇒ nothing).
+                    if let tut = viewModel.tutorialState {
+                        FirstQuestsCard(state: tut, onSkip: { Task { await viewModel.skipTutorialTapped() } })
+                    }
+
                     // 1. XP / Rank Card
                     xpAndStreakSection
 
@@ -991,6 +1019,13 @@ struct HomeView: View {
                 appHead
                     .padding(.top, 6)
                     .modifier(EntranceReveal(index: 0, isRevealed: hasRevealed, reduceMotion: reduceMotion))
+
+                // Pinned First-Quests card (TUT-1a) — renders only mid-tutorial (nil/done ⇒ nothing).
+                if let tut = viewModel.tutorialState {
+                    FirstQuestsCard(state: tut, onSkip: { Task { await viewModel.skipTutorialTapped() } })
+                        .padding(.top, 18)
+                        .modifier(EntranceReveal(index: 0, isRevealed: hasRevealed, reduceMotion: reduceMotion))
+                }
 
                 if let summary = viewModel.summary {
                     resourceRow(summary)

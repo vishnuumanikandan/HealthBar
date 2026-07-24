@@ -205,6 +205,58 @@ final class HomeViewModel {
         DuelSeenStore().deltaSinceSeen(for: duel, myUid: myUid)
     }
 
+    // MARK: - Tutorial (TUT-1a)
+
+    /// The loaded tutorial read model — the SINGLE VM-side mirror of tutorial state.
+    /// `nil` until first load; neither the popup nor the First-Quests card renders while
+    /// nil (guests resolve to `.guest`, which is done ⇒ nothing shows). seen/skipped/
+    /// completed are never duplicated here as separate booleans.
+    var tutorialState: TutorialState?
+
+    /// Whether the welcome popup overlay is currently visible. Drives the Home overlay and
+    /// the mood-check suppression (Decision 12); derived from the loaded state on load,
+    /// cleared the instant the user starts or skips.
+    var showTutorialPopup: Bool = false
+
+    /// First-run greeting name — the locally-cached UserProfile's displayName, resolved
+    /// only when the popup will show and passed to the popup as plain data (the popup
+    /// stays persistence-free). nil when genuinely empty ⇒ the popup shows "Hey there".
+    var greetingName: String?
+
+    /// Loads tutorial state via the coordinator and derives popup visibility (shown only
+    /// when loaded AND not yet seen AND not done). When the popup will show, resolves the
+    /// greeting name from the existing profile-read passthrough (no new fetch mechanism).
+    @MainActor
+    func loadTutorialState() async {
+        let state = await coordinator.tutorialState()
+        tutorialState = state
+        showTutorialPopup = !state.seen && !state.done
+        if showTutorialPopup {
+            let name = (try? await coordinator.getUserProfile())?.displayName.trimmingCharacters(in: .whitespaces)
+            greetingName = (name?.isEmpty ?? true) ? nil : name
+        }
+    }
+
+    /// "Start your first quest" tapped: mark seen, dismiss, then reload state (never
+    /// mutates a duplicate copy — the coordinator + reload are the single source).
+    @MainActor
+    func startTutorial() async {
+        showTutorialPopup = false
+        await coordinator.markTutorialSeen()
+        await loadTutorialState()
+    }
+
+    /// SKIP tapped (welcome popup or pinned card): skip + mark seen, dismiss, reload. The
+    /// mark-seen is a no-op from the card (it only appears once the popup is dismissed,
+    /// i.e. already seen), so one method serves both call sites.
+    @MainActor
+    func skipTutorialTapped() async {
+        showTutorialPopup = false
+        await coordinator.skipTutorial()
+        await coordinator.markTutorialSeen()
+        await loadTutorialState()
+    }
+
     // MARK: - Public Methods
 
     /// Loads today's summary data

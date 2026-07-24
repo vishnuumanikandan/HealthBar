@@ -298,6 +298,11 @@ struct AccountView: View {
     /// password/delete sheets rather than a push that would have no stack to push onto.
     @State private var showBlockedUsers = false
 
+    /// TUT-1a: presents the welcome popup in read-only replay mode as an overlay in this
+    /// view's context. Replay is STATELESS — it writes nothing (no step reset, no XP
+    /// re-award, no seen mutation); both SKIP and Start simply dismiss.
+    @State private var showReplayTutorial = false
+
     init(coordinator: AppCoordinator, authService: FirebaseAuthService) {
         self.coordinator = coordinator
         self._viewModel = State(
@@ -318,6 +323,11 @@ struct AccountView: View {
                     // UGC-1b (D10): hidden for guests (they never block anyone).
                     if !viewModel.isGuest {
                         blockedUsersSection
+                    }
+                    // TUT-1a: hidden for guests (they have no tutorial); shown to every
+                    // other user regardless of tutorial done-ness.
+                    if !viewModel.isGuest {
+                        tutorialSection
                     }
                     dangerSection
                 }
@@ -350,6 +360,20 @@ struct AccountView: View {
         }
         .sheet(isPresented: $showBlockedUsers) {
             BlockedUsersView(coordinator: coordinator)
+        }
+        .overlay {
+            // TUT-1a: replay the welcome popup, read-only (isReplay). Dismiss-only closures
+            // ⇒ no state writes of any kind (Decision 11). Greeting handle comes from the
+            // already-loaded account VM (no new fetch).
+            if showReplayTutorial {
+                TutorialWelcomePopup(
+                    greetingName: viewModel.currentUsername.isEmpty ? nil : "@\(viewModel.currentUsername)",
+                    isReplay: true,
+                    onStart: { showReplayTutorial = false },
+                    onSkip: { showReplayTutorial = false }
+                )
+                .transition(.opacity)
+            }
         }
     }
 
@@ -531,6 +555,30 @@ struct AccountView: View {
             } label: {
                 HStack {
                     Text("Blocked Users")
+                        .font(AppFont.bold(16))
+                        .foregroundColor(tc.textPrimary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(AppFont.regular(13))
+                        .foregroundColor(tc.textTertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+    }
+
+    // MARK: - Tutorial Section (TUT-1a)
+
+    /// "Replay tutorial" — presents the welcome popup in read-only replay mode. Matches the
+    /// Blocked Users row component style exactly (Button + label + chevron in a sectionCard).
+    private var tutorialSection: some View {
+        sectionCard(title: "Tutorial") {
+            Button {
+                showReplayTutorial = true
+            } label: {
+                HStack {
+                    Text("Replay tutorial")
                         .font(AppFont.bold(16))
                         .foregroundColor(tc.textPrimary)
                     Spacer()

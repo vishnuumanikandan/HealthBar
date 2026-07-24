@@ -57,6 +57,16 @@ final class UserProgress {
     /// Uses inline default for SwiftData lightweight migration support
     var claimedMilestones: String = ""
 
+    // MARK: - Tutorial (TUT-1a)
+    // First-session tutorial state. MONOTONIC: the completed-step set only grows;
+    // the two bools only go false→true (union/OR merge in DataManager). The
+    // comma-separated step-id String mirrors `claimedMilestones`'s encoding; inline
+    // defaults = SwiftData lightweight migration (everyone does the tutorial — existing
+    // accounts default to not-yet-seen/skipped with no completed steps).
+    var tutorialSeen: Bool = false
+    var tutorialSkipped: Bool = false
+    var tutorialCompletedSteps: String = ""   // comma-separated step ids
+
     // MARK: - Duel record (D1b)
     // Server-authoritative and NON-monotonic (win streak resets; W/L/D accumulate).
     // Inline defaults = SwiftData lightweight migration. Published to leaderboard/{uid} in D3.
@@ -103,6 +113,35 @@ final class UserProgress {
         } else {
             claimedMilestones += ",\(milestone.rawValue)"
         }
+    }
+
+    // MARK: - Tutorial helpers (TUT-1a) — mirror the milestone helpers above.
+
+    /// Returns the set of completed tutorial step ids (empty String → empty set).
+    var tutorialCompletedStepSet: Set<String> {
+        guard !tutorialCompletedSteps.isEmpty else { return [] }
+        return Set(tutorialCompletedSteps.split(separator: ",").map { String($0) })
+    }
+
+    /// Checks whether a specific tutorial step has been completed.
+    func hasCompletedTutorialStep(_ id: String) -> Bool {
+        tutorialCompletedStepSet.contains(id)
+    }
+
+    /// Completes a tutorial step (append-if-absent — mirrors `claim(_:)`).
+    func completeTutorialStep(_ id: String) {
+        guard !hasCompletedTutorialStep(id) else { return }
+        if tutorialCompletedSteps.isEmpty {
+            tutorialCompletedSteps = id
+        } else {
+            tutorialCompletedSteps += ",\(id)"
+        }
+    }
+
+    /// Done := skipped OR all catalog steps completed (Decision 5). Delegates to the
+    /// single `TutorialState.done` predicate — never restates it here.
+    var tutorialDone: Bool {
+        TutorialState(seen: tutorialSeen, skipped: tutorialSkipped, completed: tutorialCompletedStepSet).done
     }
 
     /// Initializes user progress with starting values

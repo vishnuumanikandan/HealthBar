@@ -607,6 +607,50 @@ final class AppCoordinator {
         return try await dataManager.getUserProgress()
     }
 
+    // MARK: - Tutorial (TUT-1a)
+
+    /// Reads the local tutorial read model (passthrough; guest-guarded in DataManager).
+    func tutorialState() async -> TutorialState {
+        await dataManager.tutorialState()
+    }
+
+    /// Marks the welcome popup as seen (passthrough).
+    func markTutorialSeen() async {
+        await dataManager.markTutorialSeen()
+    }
+
+    /// Skips the tutorial — no late XP (passthrough).
+    func skipTutorial() async {
+        await dataManager.skipTutorial()
+    }
+
+    /// Completes a tutorial step and awards its one-time XP. Mirrors `completeQuest`'s
+    /// shape exactly: fetch progress → capture before level/rank → addXP →
+    /// saveUserProgress → emitProgressionEvents. Level/rank feed events therefore emit
+    /// exactly as they do for quests (deterministic event IDs make repeats
+    /// duplicate-safe); tutorial completion emits no new feed event type of its own.
+    /// Awarded exactly once per step id (idempotent by membership in the completed set);
+    /// an unknown id or a skipped / guest / done tutorial is a no-op (returns 0). Nothing
+    /// calls this from UI in TUT-1a — it exists for TUT-1b's detection wiring.
+    func completeTutorialStep(_ id: String) async throws -> Int {
+        guard let step = TutorialCatalog.step(id: id) else { return 0 }
+        let state = await dataManager.tutorialState()
+        guard !state.done, !state.completed.contains(id) else { return 0 }
+
+        var progress = try await dataManager.getUserProgress()
+        let beforeLevel = progress.currentLevel
+        let beforeRank = progress.rank
+
+        progress.completeTutorialStep(id)
+        _ = gamificationManager.addXP(amount: step.xp, to: &progress)
+
+        try await dataManager.saveUserProgress()
+        // TODO-tutorial-badge (TUT-1b): award Tutorial Complete badge when
+        // progress.tutorialDone flips true here
+        emitProgressionEvents(beforeLevel: beforeLevel, beforeRank: beforeRank, progress: progress)
+        return step.xp
+    }
+
     // MARK: - Recent Foods & Favorites
 
     /// Gets recent unique foods for quick-log feature
