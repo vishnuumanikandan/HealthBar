@@ -25,6 +25,51 @@ struct RecognizedFoodsReviewView: View {
     @State private var quickLogMode: SaveQuickLogSheet.Mode? = nil
     @State private var saveSnapshot: [RecognizedFoodItem] = []
 
+    // MARK: - Destination Strip State (AILOG-1b)
+
+    /// Destinations already completed this session (rendered checkmarked; re-tap is a no-op).
+    @State private var completedDestinations: Set<Destination> = []
+    /// The destination whose action is in flight — disables every chip and blocks double-taps.
+    @State private var inFlightDestination: Destination? = nil
+    /// Transient inline success confirmation, shown under the chip grid for 2 seconds.
+    @State private var confirmationMessage: String? = nil
+
+    /// The five "ALSO ADD TO" destinations. Declaration order IS the pinned chip order —
+    /// unrelated to `FoodCategory`; never sorted, never derived from anything else.
+    private enum Destination: CaseIterable {
+        case myFoods, dish, meal, recipe, favorite
+
+        var title: String {
+            switch self {
+            case .myFoods: return "My Foods"
+            case .dish:    return "Dish"
+            case .meal:    return "Meal"
+            case .recipe:  return "Recipe"
+            case .favorite: return "Favorite"
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .myFoods:  return "fork.knife"
+            case .dish:     return "takeoutbag.and.cup.and.straw.fill"
+            case .meal:     return "rectangle.stack.fill"
+            case .recipe:   return "list.bullet.rectangle.fill"
+            case .favorite: return "star.fill"
+            }
+        }
+
+        var confirmation: String {
+            switch self {
+            case .myFoods:  return "Added to My Foods"
+            case .dish:     return "Saved as a dish"
+            case .meal:     return "Saved as a meal"
+            case .recipe:   return "Saved as a recipe"
+            case .favorite: return "Added to favorites"
+            }
+        }
+    }
+
     private var tc: ThemeColors { settings.activeColors }
 
     private var includedItems: [DraftItem] {
@@ -35,6 +80,20 @@ struct RecognizedFoodsReviewView: View {
 
     private var totalCalories: Int {
         includedItems.reduce(into: 0) { $0 += Int($1.caloriesText) ?? 0 }
+    }
+
+    // Macro totals over included items — the AILOG-1b Dish chip reuses these computed
+    // properties for its composite nutrition (one summation each; never re-summed inline).
+    private var totalProtein: Double {
+        includedItems.reduce(into: 0.0) { $0 += Double($1.proteinText) ?? 0 }
+    }
+
+    private var totalCarbs: Double {
+        includedItems.reduce(into: 0.0) { $0 += Double($1.carbsText) ?? 0 }
+    }
+
+    private var totalFat: Double {
+        includedItems.reduce(into: 0.0) { $0 += Double($1.fatText) ?? 0 }
     }
 
     var body: some View {
@@ -84,31 +143,23 @@ struct RecognizedFoodsReviewView: View {
 
                 // Bottom bar
                 VStack(spacing: DesignSystem.Spacing.sm) {
-                    // Log button
+                    // Log button (primary, unchanged) — disabled once this session has logged
+                    // (the sheet stays open so the strip's Favorite chip is reachable).
                     AppButton(
                         title: "Log \(includedCount) item\(includedCount == 1 ? "" : "s")",
                         style: .primary,
                         action: logItems,
                         isLoading: viewModel.isSubmittingForm,
-                        isDisabled: includedCount == 0 || viewModel.isSubmittingForm,
+                        isDisabled: includedCount == 0 || viewModel.isSubmittingForm || !viewModel.loggedFingerprints.isEmpty,
                         icon: "checkmark.circle.fill"
                     )
                     .accessibilityLabel("Log \(includedCount) food item\(includedCount == 1 ? "" : "s")")
                     .accessibilityHint(includedCount == 0 ? "No items selected" : "Tap to log selected items")
 
-                    // Save for later (Phase 10) — capture this AI result as a
-                    // reusable meal/recipe. Independent of logging; hidden when
-                    // there are no included items.
-                    if includedCount > 0 {
-                        HStack(spacing: DesignSystem.Spacing.sm) {
-                            saveForLaterButton(title: "Save as Meal", icon: "rectangle.stack.fill") {
-                                presentSaveSheet(.meal)
-                            }
-                            saveForLaterButton(title: "Save as Recipe", icon: "list.bullet.rectangle.fill") {
-                                presentSaveSheet(.recipe)
-                            }
-                        }
-                    }
+                    // "ALSO ADD TO" destination strip (AILOG-1b): also add the reviewed set to
+                    // My Foods / a Dish / a Meal / a Recipe / Favorites. Independent of logging
+                    // (except Favorite, which needs a prior log this session).
+                    destinationStrip
                 }
                 .padding(.horizontal, DesignSystem.Spacing.lg)
                 .padding(.bottom, DesignSystem.Spacing.lg)
@@ -140,28 +191,215 @@ struct RecognizedFoodsReviewView: View {
         }
     }
 
-    // MARK: - Save for Later (Phase 10)
+    // MARK: - Destination Strip (AILOG-1b)
 
-    private func saveForLaterButton(title: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: DesignSystem.Spacing.xs) {
-                Image(systemName: icon)
-                    .font(AppFont.regular(13))
-                Text(title)
-                    .font(AppFont.bold(13))
+    /// The "ALSO ADD TO" strip: a hairline divider, a tracked uppercase label, the five-chip
+    /// grid (Destination.allCases order), and a transient inline success confirmation.
+    private var destinationStrip: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            Rectangle()
+                .fill(tc.textTertiary.opacity(0.2))
+                .frame(height: 1)
+
+            Text("ALSO ADD TO")
+                .font(AppFont.bold(11))
+                .tracking(1.5)
+                .foregroundColor(tc.textSecondary)
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 104), spacing: DesignSystem.Spacing.sm)],
+                spacing: DesignSystem.Spacing.sm
+            ) {
+                ForEach(Destination.allCases, id: \.self) { destination in
+                    destinationChip(destination)
+                }
             }
-            .foregroundColor(tc.primary)
+
+            if let message = confirmationMessage {
+                Text(message)
+                    .font(AppFont.regular(12))
+                    .foregroundColor(tc.primary)
+                    .transition(.opacity)
+                    .accessibilityLabel(message)
+            }
+        }
+    }
+
+    private func destinationChip(_ destination: Destination) -> some View {
+        let isCompleted = completedDestinations.contains(destination)
+        let isInFlight = inFlightDestination == destination
+        let anyInFlight = inFlightDestination != nil
+        let isEnabled = destinationEnabled(destination) && !isCompleted && !anyInFlight
+        let active = isEnabled || isCompleted || isInFlight
+
+        return Button {
+            handleDestination(destination)
+        } label: {
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                if isInFlight {
+                    ProgressView()
+                        .tint(tc.primary)
+                        .scaleEffect(0.7)
+                } else {
+                    Image(systemName: isCompleted ? "checkmark.circle.fill" : destination.icon)
+                        .font(AppFont.regular(13))
+                }
+                Text(destination.title)
+                    .font(AppFont.bold(13))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundColor(active ? tc.primary : tc.textTertiary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, DesignSystem.Spacing.sm)
-            .adaptiveCard(borderColor: tc.primary.opacity(0.4), fillColor: tc.cardBackground)
+            .adaptiveCard(
+                borderColor: active ? tc.primary.opacity(0.4) : tc.textTertiary.opacity(0.2),
+                fillColor: tc.cardBackground
+            )
         }
         .buttonStyle(PlainButtonStyle())
+        .disabled(!isEnabled)
+        .opacity(active ? 1.0 : 0.5)
+        .accessibilityLabel(destination.title)
+        .accessibilityHint(isCompleted ? "Added" : (isEnabled ? "Tap to add" : "Unavailable"))
+        .accessibilityAddTraits(isCompleted ? [.isSelected] : [])
+    }
+
+    /// Enablement (before the completed / in-flight gates): the non-Favorite chips need at
+    /// least one included item; Favorite is gated solely by having logged this session.
+    private func destinationEnabled(_ destination: Destination) -> Bool {
+        switch destination {
+        case .favorite:
+            return !viewModel.loggedFingerprints.isEmpty
+        case .myFoods, .dish, .meal, .recipe:
+            return includedCount > 0
+        }
+    }
+
+    private func handleDestination(_ destination: Destination) {
+        // No-op when already completed OR any destination is in flight (double-tap guard).
+        guard !completedDestinations.contains(destination), inFlightDestination == nil else { return }
+        guard destinationEnabled(destination) else { return }
+
+        switch destination {
+        case .meal:
+            presentSaveSheet(.meal)
+        case .recipe:
+            presentSaveSheet(.recipe)
+        case .myFoods, .dish, .favorite:
+            inFlightDestination = destination
+            Task {
+                do {
+                    try await perform(destination)
+                    completedDestinations.insert(destination)
+                    showConfirmation(destination.confirmation)
+                } catch {
+                    // Existing error treatment: the FoodLogView error alert (shows over the
+                    // sheet). The done flag stays unset, so re-tap retries.
+                    viewModel.errorMessage = "Couldn't add to \(destination.title). Try again."
+                }
+                inFlightDestination = nil
+            }
+        }
+    }
+
+    /// Performs the async destinations (My Foods, Dish, Favorite) against the reviewed set.
+    private func perform(_ destination: Destination) async throws {
+        switch destination {
+        case .myFoods:
+            let items = includedItems.compactMap { $0.toRecognizedFoodItem() }
+            for item in items {
+                try await viewModel.coordinator.addCustomFood(customFood(from: item))
+            }
+        case .dish:
+            let items = includedItems.compactMap { $0.toRecognizedFoodItem() }
+            try await viewModel.coordinator.addCustomFood(dishCustomFood(from: items))
+        case .favorite:
+            for fingerprint in viewModel.loggedFingerprints {
+                try await viewModel.coordinator.toggleFavoriteForFingerprint(fingerprint)
+            }
+        case .meal, .recipe:
+            break // launched synchronously via presentSaveSheet
+        }
+    }
+
+    /// One CustomFood per item, mirroring the manual AddCustomFood initializer call site
+    /// (name/calories/macros in the initializer; quantity/toxin/advanced fields set after).
+    private func customFood(from item: RecognizedFoodItem) -> CustomFood {
+        let food = CustomFood(
+            name: item.name,
+            calories: item.calories,
+            protein: item.protein,
+            carbs: item.carbs,
+            fat: item.fat
+        )
+        food.servingSizeName = item.quantityText.isEmpty ? "1 serving" : item.quantityText
+        food.toxinScore = item.toxinScore
+        food.fiber = item.fiber
+        food.sugar = item.sugar
+        food.sodium = item.sodium
+        return food
+    }
+
+    /// One composite CustomFood for the whole reviewed set: nutrition reuses the view's
+    /// computed totals; name and serving description are deterministic (AILOG-1b Decision 10).
+    private func dishCustomFood(from items: [RecognizedFoodItem]) -> CustomFood {
+        let names = items.map(\.name)
+        let trimmedDescription = viewModel.mealDescriptionInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawName = trimmedDescription.isEmpty ? names.joined(separator: " + ") : trimmedDescription
+
+        let food = CustomFood(
+            name: Self.truncateDishName(rawName),
+            calories: totalCalories,
+            protein: totalProtein,
+            carbs: totalCarbs,
+            fat: totalFat
+        )
+        food.servingSizeName = Self.dishServingDescription(names: names)
+        return food
+    }
+
+    /// Shows a transient inline confirmation for 2 seconds (cleared only if still current).
+    private func showConfirmation(_ message: String) {
+        withAnimation { confirmationMessage = message }
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            if confirmationMessage == message {
+                withAnimation { confirmationMessage = nil }
+            }
+        }
     }
 
     /// Freezes the current included-items snapshot, then opens the save sheet.
     private func presentSaveSheet(_ mode: SaveQuickLogSheet.Mode) {
         saveSnapshot = includedItems.compactMap { $0.toRecognizedFoodItem() }
         quickLogMode = mode
+    }
+
+    // MARK: - Dish Name & Serving (pure — AILOG-1b, TDD-verified)
+
+    /// Word-accumulates `raw` into a ≤40-character stored name (no ellipsis); a first word
+    /// longer than 40 is hard-cut at 40.
+    static func truncateDishName(_ raw: String) -> String {
+        let limit = 40
+        let words = raw.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        guard let first = words.first else { return "" }
+        if first.count > limit { return String(first.prefix(limit)) }
+        var acc = first
+        for word in words.dropFirst() {
+            let candidate = acc + " " + word
+            if candidate.count > limit { break }
+            acc = candidate
+        }
+        return acc
+    }
+
+    /// "1 serving (name, name, …)" — the first 6 names, then ", +K more" when more remain.
+    static func dishServingDescription(names: [String]) -> String {
+        let shown = names.prefix(6).joined(separator: ", ")
+        let remainder = names.count - 6
+        let list = remainder > 0 ? shown + ", +\(remainder) more" : shown
+        return "1 serving (" + list + ")"
     }
 
     // MARK: - Item Row
