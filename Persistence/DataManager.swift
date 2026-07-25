@@ -3389,6 +3389,29 @@ final class DataManager {
         }
     }
 
+    /// FEEDBACK-1: validate, stamp, and submit a piece of user feedback to
+    /// users/{uid}/feedback/{autoId}. This method OWNS validation — the compose
+    /// view's Send gating is UX-only duplication that this revalidates. `guard
+    /// !isGuest` is the first executable line (guests never see the entry point;
+    /// this is defense-in-depth). The trimmed message is bounded to
+    /// 1…`FeedbackLimits.maxLength`, the SAME bound the firestore.rules feedback
+    /// block pins. A bounds violation returns silently (unreachable given the
+    /// identical UI gate); a service/rules failure propagates so the sheet shows it
+    /// inline.
+    func submitFeedback(message: String) async throws {
+        guard !isGuest else { return }
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (1...FeedbackLimits.maxLength).contains(trimmed.count) else { return }
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        let dto = FeedbackDTO(
+            message: trimmed,
+            createdAt: Date(),
+            appVersion: appVersion,
+            platform: "ios"
+        )
+        try await firestoreService.submitFeedback(dto)
+    }
+
     /// UGC-1b (D6/D7): resolves the blocklist into display rows for the Blocked Users screen.
     /// Each blocked uid is looked up in the world-readable `leaderboard/{uid}` projection (the
     /// C1 rail); a uid with no leaderboard row (never published / deleted) renders as

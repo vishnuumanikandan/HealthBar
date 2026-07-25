@@ -1194,6 +1194,12 @@ final class AppCoordinator {
                                             guildCode: guildCode, messageId: messageId)
     }
 
+    /// FEEDBACK-1 passthrough. DataManager owns validation, stamping, and the
+    /// guest guard; this is the view-facing entry point.
+    func submitFeedback(message: String) async throws {
+        try await dataManager.submitFeedback(message: message)
+    }
+
     /// UGC-1b (D6/D7): resolved display rows for the Blocked Users management screen.
     func blockedUsersDisplay() async -> [(uid: String, username: String, displayName: String)] {
         await dataManager.blockedUsersDisplay()

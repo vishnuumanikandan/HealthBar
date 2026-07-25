@@ -1990,6 +1990,42 @@ final class FirestoreServiceImpl: FirestoreService {
         try await reportsCollection.document(reportId).setData(data)
     }
 
+    // MARK: - FirestoreService: Feedback (FEEDBACK-1)
+
+    /// users/{userId}/feedback — a private, create-only drop-box. No reads or
+    /// listeners; the developer reads the collection via admin console
+    /// collection-group queries. The `account` allowlist precedent doesn't apply —
+    /// feedback has its own dedicated create-only rules block.
+    private func feedbackCollection(for userId: String) -> CollectionReference {
+        db.collection("users").document(userId).collection("feedback")
+    }
+
+    func submitFeedback(_ dto: FeedbackDTO) async throws {
+        // Path uid from the active sync session (same derivation as every upload*
+        // method). currentSyncUserId is set for any signed-in non-guest by login's
+        // listener registration; the guest guard + non-empty-uid check live in
+        // DataManager, so a nil here is the documented should-not-happen safety
+        // valve (mirrors uploadFoodEntry's silent skip).
+        guard let userId = currentSyncUserId else { return }
+        // addDocument (auto-id) — NEVER setData on a predetermined id. Await the
+        // completion so a rules rejection or other server error THROWS instead of
+        // being swallowed by the fire-and-forget overload; DataManager propagates
+        // it and the compose sheet shows the inline error and stays open.
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            do {
+                _ = try feedbackCollection(for: userId).addDocument(from: dto) { error in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
+                }
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+
     // MARK: - FirestoreService: Account Deletion
 
     /// Deletes all Firestore data under users/{userId}/ in batches of ≤500.
@@ -2131,7 +2167,7 @@ final class FirestoreServiceImpl: FirestoreService {
             "customFoods", "savedMeals", "savedRecipes", "personalBaselines",
             "foodFingerprints", "userProgress", "profile", "account", "badges",
             "friends", "friendRequests", "sentRequests", "public", "feedEvents",
-            "sharedItems", "qteDays"
+            "sharedItems", "qteDays", "feedback"
         ]
 
         let userDoc = db.collection("users").document(userId)
