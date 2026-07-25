@@ -691,6 +691,13 @@ final class AppCoordinator {
         try await dataManager.toggleFavoriteForFingerprint(fingerprint)
     }
 
+    /// Toggles favorite for a food identified directly by its fingerprint (AILOG-1b
+    /// destination strip's Favorite chip). Pure passthrough to the existing DataManager
+    /// fingerprint toggle — same path `toggleFavorite(_:)` uses after deriving the fingerprint.
+    func toggleFavoriteForFingerprint(_ fingerprint: FoodFingerprint) async throws {
+        try await dataManager.toggleFavoriteForFingerprint(fingerprint)
+    }
+
     // MARK: - CustomFood
 
     func getCustomFoods() async throws -> [CustomFood] {

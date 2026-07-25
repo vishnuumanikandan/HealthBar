@@ -19,7 +19,6 @@ struct DescribeMealView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var settings = SettingsManager.shared
     @FocusState private var isInputFocused: Bool
-    @FocusState private var isAnswerFocused: Bool
     @State private var showingPhotoSourceSheet: Bool = false
     @State private var photoPickerItem: PhotosPickerItem? = nil
 
@@ -29,11 +28,6 @@ struct DescribeMealView: View {
         let hasText = !viewModel.mealDescriptionInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let hasImage = viewModel.describeMealPhotoData != nil
         return (hasText || hasImage) && !viewModel.isRecognizing
-    }
-
-    private var canSendAnswer: Bool {
-        !viewModel.detailAnswerInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !viewModel.isRecognizing
     }
 
     var body: some View {
@@ -59,6 +53,9 @@ struct DescribeMealView: View {
 
                 ScrollView {
                     VStack(spacing: DesignSystem.Spacing.md) {
+                        // Category chips (AILOG-1b) — directly under the header.
+                        categoryChipRow
+
                         // Error / clarification message
                         if let error = viewModel.recognitionError {
                             HStack(alignment: .top, spacing: DesignSystem.Spacing.sm) {
@@ -78,13 +75,7 @@ struct DescribeMealView: View {
                             .accessibilityLabel("Error: \(error)")
                         }
 
-                        // The model needs one more detail before it can estimate well —
-                        // answering (or skipping) replaces the composer until it's resolved.
-                        if let question = viewModel.detailRequestQuestion {
-                            detailRequestSection(question: question)
-                        } else {
-                            composerSection
-                        }
+                        composerSection
                     }
                     .padding(.horizontal, DesignSystem.Spacing.lg)
                     .padding(.bottom, DesignSystem.Spacing.lg)
@@ -108,12 +99,6 @@ struct DescribeMealView: View {
         }
         .onDisappear {
             viewModel.cancelRecognition()
-        }
-        .onChange(of: viewModel.detailRequestQuestion) { _, newValue in
-            if newValue != nil {
-                isInputFocused = false
-                isAnswerFocused = true
-            }
         }
         .confirmationDialog("Choose Photo Source", isPresented: $showingPhotoSourceSheet) {
             Button("Take Photo") {
@@ -148,9 +133,13 @@ struct DescribeMealView: View {
 
     @ViewBuilder
     private var composerSection: some View {
-        // Text input
+        // Field labels come from the selected category's 1a table — the view hardcodes zero
+        // copy for these three fields; each label sits persistently above its input.
+        let labels = viewModel.describeCategory.fieldLabels
+
+        // Field 1 — the "what" (gates Analyze; keeps binding, TextEditor sizing, focus-on-appear).
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
-            Text("What did you eat?")
+            Text(labels.item)
                 .font(AppFont.display(14))
                 .foregroundColor(tc.textSecondary)
 
@@ -160,22 +149,19 @@ struct DescribeMealView: View {
                 .frame(minHeight: 100, maxHeight: 160)
                 .scrollContentBackground(.hidden)
                 .focused($isInputFocused)
-                .overlay(alignment: .topLeading) {
-                    if viewModel.mealDescriptionInput.isEmpty {
-                        Text("e.g. grilled chicken breast, half cup rice, side salad")
-                            .font(AppFont.regular(14))
-                            .foregroundColor(tc.textTertiary)
-                            .padding(.top, 8)
-                            .padding(.leading, 4)
-                            .allowsHitTesting(false)
-                    }
-                }
                 .padding(DesignSystem.Spacing.sm)
                 .adaptiveCard(
                     borderColor: tc.primary.opacity(0.3),
                     fillColor: tc.primaryBackground
                 )
+                .accessibilityLabel(labels.item)
         }
+
+        // Field 2 — amount/size (optional).
+        describeField(label: labels.amount, text: $viewModel.describeAmountInput)
+
+        // Field 3 — extras (optional).
+        describeField(label: labels.extras, text: $viewModel.describeExtrasInput)
 
         // Photo attach control
         photoSection
@@ -214,98 +200,63 @@ struct DescribeMealView: View {
         .accessibilityLabel("Enter food manually instead")
     }
 
-    // MARK: - Detail Request (One-Round Escalation)
+    // MARK: - Category Chips (AILOG-1b)
 
+    /// Horizontal, single-select category row under the header. Renders every
+    /// `FoodCategory.allCases` in declaration order; `.meal` is the default. Switching a
+    /// category swaps the field labels/placeholders but never clears typed field contents.
     @ViewBuilder
-    private func detailRequestSection(question: String) -> some View {
-        Text("One quick question")
-            .font(AppFont.display(14))
-            .foregroundColor(tc.textSecondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-        // Question card
-        HStack(alignment: .top, spacing: DesignSystem.Spacing.sm) {
-            // R5b tinted icon-box
-            Image(systemName: "sparkles")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(tc.primary)
-                .frame(width: 28, height: 28)
-                .background(tc.primary.opacity(0.14))
-                .clipShape(AdaptivePillShapeStyle())
-
-            Text(question)
-                .font(AppFont.regular(15))
-                .foregroundColor(tc.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(DesignSystem.Spacing.md)
-        .adaptiveCard(
-            borderColor: tc.primary.opacity(0.3),
-            fillColor: tc.primaryBackground
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("One quick question: \(question)")
-
-        // Answer field
-        TextEditor(text: $viewModel.detailAnswerInput)
-            .font(AppFont.regular(15))
-            .foregroundColor(tc.textPrimary)
-            .frame(minHeight: 80, maxHeight: 160)
-            .scrollContentBackground(.hidden)
-            .focused($isAnswerFocused)
-            .overlay(alignment: .topLeading) {
-                if viewModel.detailAnswerInput.isEmpty {
-                    Text("Add a little more detail…")
-                        .font(AppFont.regular(14))
-                        .foregroundColor(tc.textTertiary)
-                        .padding(.top, 8)
-                        .padding(.leading, 4)
-                        .allowsHitTesting(false)
+    private var categoryChipRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                ForEach(FoodCategory.allCases) { category in
+                    categoryChip(category)
                 }
             }
-            .padding(DesignSystem.Spacing.sm)
-            .adaptiveCard(
-                borderColor: tc.primary.opacity(0.3),
-                fillColor: tc.primaryBackground
-            )
-            .accessibilityLabel("Your answer")
-            .accessibilityHint("Add more detail so the estimate is accurate")
+            .padding(.vertical, 2) // keep chip outlines off the clip edge
+        }
+    }
 
-        loadingIndicator
+    private func categoryChip(_ category: FoodCategory) -> some View {
+        let isSelected = viewModel.describeCategory == category
+        return Button {
+            viewModel.describeCategory = category
+        } label: {
+            Text(category.displayName)
+                .font(AppFont.bold(12))
+                .foregroundColor(isSelected ? .white : tc.textSecondary)
+                .padding(.horizontal, DesignSystem.Spacing.md)
+                .padding(.vertical, DesignSystem.Spacing.xs + 2)
+                .background(isSelected ? tc.primary : Color.clear)
+                .clipShape(AdaptivePillShapeStyle())
+                .overlay(
+                    AdaptivePillShapeStyle()
+                        .stroke(isSelected ? Color.clear : tc.primary.opacity(0.3), lineWidth: 1)
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .accessibilityLabel("\(category.displayName) category")
+        .accessibilityHint(isSelected ? "Selected" : "Tap to select")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
 
-        AppButton(
-            title: "Send Answer",
-            style: .primary,
-            action: { Task { await viewModel.submitDetailAnswer() } },
-            isDisabled: !canSendAnswer,
-            icon: "sparkles"
-        )
-        .accessibilityLabel("Send answer")
-        .accessibilityHint(!canSendAnswer ? "Add a little more detail first" : "Tap to re-estimate with your answer")
+    /// A single optional structured input (fields 2 and 3): a persistent table-sourced label
+    /// above an empty-placeholder field.
+    private func describeField(label: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            Text(label)
+                .font(AppFont.display(14))
+                .foregroundColor(tc.textSecondary)
 
-        // Secondary action: fall back to the round-1 estimates, or — when there are none —
-        // go back and rewrite the description.
-        if viewModel.canSkipDetailRequest {
-            Button {
-                viewModel.skipDetailRequest()
-            } label: {
-                Text("Skip — use estimates")
-                    .font(AppFont.regular(13))
-                    .foregroundColor(tc.textSecondary)
-                    .underline()
-            }
-            .accessibilityLabel("Skip the question and use the current estimates")
-        } else {
-            Button {
-                viewModel.editDescriptionFromDetailRequest()
-            } label: {
-                Text("Edit description")
-                    .font(AppFont.regular(13))
-                    .foregroundColor(tc.textSecondary)
-                    .underline()
-            }
-            .accessibilityLabel("Go back and edit the meal description")
+            TextField("", text: text)
+                .font(AppFont.regular(15))
+                .foregroundColor(tc.textPrimary)
+                .padding(DesignSystem.Spacing.sm)
+                .adaptiveCard(
+                    borderColor: tc.primary.opacity(0.3),
+                    fillColor: tc.primaryBackground
+                )
+                .accessibilityLabel(label)
         }
     }
 
