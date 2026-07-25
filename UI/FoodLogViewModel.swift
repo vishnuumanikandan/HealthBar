@@ -1660,11 +1660,17 @@ final class FoodLogViewModel {
     }
 
     /// Cancels any in-flight AI recognition request and resets loading state.
+    ///
+    /// AILOG-1c: deliberately does NOT clear `describeMealPhotoData`. The only caller is the
+    /// describe sheet's `onDisappear`, which also fires on the SUCCESS path — `recognizeMeal()`
+    /// sets `showingDescribeMeal = false` before presenting the review sheet — so clearing here
+    /// destroyed the meal photo in transit and `logRecognizedItems` always stamped nil.
+    /// The photo's lifetime is bounded by `openDescribeMeal()` (session-start reset) and
+    /// `clearDescribeMealPhoto()` (the user's explicit X); neither is timing-dependent.
     func cancelRecognition() {
         recognitionTask?.cancel()
         recognitionTask = nil
         isRecognizing = false
-        describeMealPhotoData = nil
     }
 
     // MARK: - Describe Meal Photo Handling
@@ -1782,7 +1788,12 @@ final class FoodLogViewModel {
         guard !isSubmittingForm, loggedFingerprints.isEmpty else { return }
         isSubmittingForm = true
 
-        // Capture photo data for logging (attach meal photo to each entry)
+        // The session photo in effect AT LOG TIME, read before anything can clear it
+        // (nil when the user attached none → entries stay photo-less). Every item from this
+        // recognition is stamped with the SAME photo: it is the meal's photo, so N identical
+        // split cards for one photographed meal is the intended rendering. The duplicated
+        // bytes are accepted — `attachDescribeMealPhoto` already JPEG-compresses to <1MB and
+        // item counts are small.
         let mealPhoto = describeMealPhotoData
 
         var totalXP = 0
