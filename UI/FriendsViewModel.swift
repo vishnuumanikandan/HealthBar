@@ -223,6 +223,12 @@ final class FriendsViewModel {
         do {
             try await coordinator.sendFriendRequest(toHandle: row.username)
             searchSuccessMessage = "Request sent to @\(row.username)"
+            // TUT-2 friends detection (Decision 2) — friend-request-send success (fallback second
+            // site; FriendsView's appearance is the primary). A no-op in practice — the user has
+            // already visited Friends to reach here — but the guard keeps it harmless.
+            if TutorialProgress.shared.shouldAttempt(TutorialCatalog.friendsId) {
+                Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.friendsId) }
+            }
             await load()
         } catch FriendError.incomingExists {
             searchError = FriendError.incomingExists.errorDescription

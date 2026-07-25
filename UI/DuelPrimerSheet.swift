@@ -20,6 +20,11 @@ import SwiftUI
 /// `DuelConstants`, this sheet follows with no code change.
 struct DuelPrimerSheet: View {
 
+    /// Presenter hook fired on each appearance (TUT-2 duelPrimer detection wiring). Defaults to a
+    /// no-op so the sheet stays pure static content for callers that don't wire it (the Arena
+    /// entry point); the Battle entry point passes the tutorial-detection closure.
+    var onViewed: () -> Void = {}
+
     @State private var settings = SettingsManager.shared
     private var tc: ThemeColors { settings.activeColors }
 
@@ -54,6 +59,7 @@ struct DuelPrimerSheet: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.hidden)
         .presentationCornerRadius(DesignSystem.CornerRadius.xl)
+        .onAppear { onViewed() }
     }
 
     // MARK: - Intro

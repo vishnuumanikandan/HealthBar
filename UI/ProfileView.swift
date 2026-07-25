@@ -104,11 +104,12 @@ struct ProfileView: View {
                             .foregroundColor(tc.textPrimary)
                     }
                     .accessibilityLabel("Settings")
-                    // TUT-1b changeTheme beacon (Decision 7) — the Profile gear leads toward the
+                    // TUT-2 changeTheme beacon (Decision 3) — the Profile gear leads toward the
                     // theme picker; the overlay self-sizes to the gear's small toolbar bounds.
-                    // The gear is icon-sized and round: half its box, which RoundedRectangle
-                    // clamps to half the short side ⇒ a capsule/circular trace at toolbar scale.
-                    .questBeacon(TutorialCatalog.changeThemeId, cornerRadius: DesignSystem.CornerRadius.md)
+                    // The gear is icon-sized and round, so a LARGE radius makes RoundedRectangle
+                    // clamp to half the short side ⇒ a capsule/circular trace matching the gear's
+                    // hit shape (the .md rounded-rect "looks weird" fix — gear-clamp polish).
+                    .questBeacon(TutorialCatalog.changeThemeId, cornerRadius: DesignSystem.CornerRadius.xl)
                 }
             }
             .refreshable {
@@ -117,6 +118,10 @@ struct ProfileView: View {
             .task {
                 // Load data when view appears
                 await viewModel.loadUserData()
+                // TUT-2 openProfile detection (Decision 2) — the Profile screen's appearance.
+                if TutorialProgress.shared.shouldAttempt(TutorialCatalog.openProfileId) {
+                    Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.openProfileId) }
+                }
             }
             .sheet(item: $selectedBadge) { badge in
                 BadgeDetailSheet(

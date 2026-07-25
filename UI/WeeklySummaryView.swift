@@ -76,7 +76,11 @@ struct WeeklySummaryView: View {
 
     let summary: WeeklySummary
     var theme: TimeOfDayTheme = .morning
+    /// TUT-2 weeklyStats hook (directed): fired once the user has viewed all three metric tabs
+    /// (calories, protein, purity). Defaults to a no-op so non-tutorial callers are unaffected.
+    var onExploredAllMetrics: () -> Void = {}
     @State private var selectedMetric: WeeklyMetric = .calories
+    @State private var viewedMetrics: Set<WeeklyMetric> = []
     @State private var animateChart: Bool = false
 
     private let settings = SettingsManager.shared
@@ -86,11 +90,16 @@ struct WeeklySummaryView: View {
     var body: some View {
         VStack(spacing: isClean ? 16 : 14) {
             // Segmented control
-            if isClean {
-                cleanSegmentedControl
-            } else {
-                pixelSegmentedControl
+            Group {
+                if isClean {
+                    cleanSegmentedControl
+                } else {
+                    pixelSegmentedControl
+                }
             }
+            // TUT-2 weeklyStats beacon (directed) — the metric selector; the step completes once
+            // the user has explored all three tabs (see recordViewedMetric).
+            .questBeacon(TutorialCatalog.weeklyStatsId, cornerRadius: DesignSystem.CornerRadius.md)
 
             // Bar chart
             if isClean {
@@ -106,7 +115,22 @@ struct WeeklySummaryView: View {
                 thisWeekStats
             }
         }
-        .onAppear { withAnimation(.easeOut(duration: 0.6).delay(0.2)) { animateChart = true } }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.6).delay(0.2)) { animateChart = true }
+            recordViewedMetric(selectedMetric)
+        }
+        .onChange(of: selectedMetric) { _, newValue in
+            recordViewedMetric(newValue)
+        }
+    }
+
+    /// TUT-2 weeklyStats (directed): records a viewed metric tab; when all three have been seen,
+    /// fires `onExploredAllMetrics` exactly once (only on the insert that completes the set).
+    private func recordViewedMetric(_ metric: WeeklyMetric) {
+        let (inserted, _) = viewedMetrics.insert(metric)
+        if inserted, viewedMetrics.count == WeeklyMetric.allCases.count {
+            onExploredAllMetrics()
+        }
     }
 
     // MARK: - Clean Segmented Control

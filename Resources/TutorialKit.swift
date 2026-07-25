@@ -32,9 +32,9 @@ import SwiftUI
 /// reset daily, and never sync as quest docs.
 enum TutorialCatalog {
 
-    /// One tutorial step. `id` is the permanent wire contract; `ordinal` (1…6) drives
+    /// One tutorial step. `id` is the permanent wire contract; `ordinal` (1…10) drives
     /// display order and the pinned-card disc; `detail` is the "where to go" line;
-    /// `xp` is the one-time award (Decision 9). No magic numbers live at call sites —
+    /// `xp` is the one-time award. No magic numbers live at call sites —
     /// every XP value is read from `step.xp`.
     struct TutorialStep: Identifiable, Equatable {
         let id: String
@@ -44,28 +44,38 @@ enum TutorialCatalog {
         let xp: Int
     }
 
-    /// The six step ids as pinned constants — the permanent wire contract, surfaced so the
-    /// TUT-1b detection and beacon call sites reference `TutorialCatalog.quickLogId` etc.
+    /// The TEN step ids as pinned constants — the permanent wire contract (frozen at 2.1),
+    /// surfaced so detection and beacon call sites reference `TutorialCatalog.aiLogId` etc.
     /// rather than bare string literals (Decision 1); each equals the matching `steps`
     /// entry's `id`. NEVER rename a value (it is stored in the Firestore UserProgress doc).
-    static let quickLogId    = "quickLog"
-    static let databaseLogId = "databaseLog"
-    static let checkQuestsId = "checkQuests"
-    static let visitBattleId = "visitBattle"
-    static let visitGuildId  = "visitGuild"
-    static let changeThemeId = "changeTheme"
+    /// `changeThemeId` is REUSED from the old six-step catalog (identical semantics — existing
+    /// completions honor it); the other five old ids are removed and become inert.
+    static let aiLogId        = "aiLog"
+    static let openDatabaseId = "openDatabase"
+    static let barcodeScanId  = "barcodeScan"
+    static let friendsId      = "friends"
+    static let duelPrimerId   = "duelPrimer"
+    static let joinGuildId    = "joinGuild"
+    static let weeklyStatsId  = "weeklyStats"
+    static let openProfileId  = "openProfile"
+    static let changeThemeId  = "changeTheme"
+    static let perfectDayId   = "perfectDay"
 
-    /// The six pinned tutorial steps, in pinned order (Decision 2), with the XP from
-    /// Decision 9. XP total = 150 (30 + 30 + 20 + 25 + 25 + 20). Ids are the pinned
-    /// constants above (single literal per id) and are stored in the Firestore
+    /// The ten pinned tutorial steps, in pinned order (Decision 1), with the XP from that
+    /// table. XP total = 245 (25 + 20 + 25 + 20 + 25 + 25 + 15 + 15 + 15 + 60). Ids are the
+    /// pinned constants above (single literal per id) and are stored in the Firestore
     /// UserProgress doc — NEVER rename; a new step gets an explicit pinned id.
     static let steps: [TutorialStep] = [
-        TutorialStep(id: quickLogId,    ordinal: 1, title: "Quick-log a meal",           detail: "Use quick log on Home to add your first meal", xp: 30),
-        TutorialStep(id: databaseLogId, ordinal: 2, title: "Log from the food database", detail: "Open the Log tab and add anything",            xp: 30),
-        TutorialStep(id: checkQuestsId, ordinal: 3, title: "Check your daily quests",     detail: "Find today's quests on Home",                  xp: 20),
-        TutorialStep(id: visitBattleId, ordinal: 4, title: "Learn how duels work",        detail: "Visit the Battle tab",                         xp: 25),
-        TutorialStep(id: visitGuildId,  ordinal: 5, title: "Check out a guild",           detail: "Open any guild from the directory",            xp: 25),
-        TutorialStep(id: changeThemeId, ordinal: 6, title: "Try a new theme",             detail: "Settings → appearance",                        xp: 20),
+        TutorialStep(id: aiLogId,        ordinal:  1, title: "Log a meal with AI",       detail: "Describe or scan a meal — the AI does the rest", xp: 25),
+        TutorialStep(id: openDatabaseId, ordinal:  2, title: "Browse the food database", detail: "Open the Log tab's food database",               xp: 20),
+        TutorialStep(id: barcodeScanId,  ordinal:  3, title: "Try the barcode scanner",  detail: "Open the scanner from the Log tab",              xp: 25),
+        TutorialStep(id: friendsId,      ordinal:  4, title: "Find your friends",        detail: "Visit Friends — or send a request",              xp: 20),
+        TutorialStep(id: duelPrimerId,   ordinal:  5, title: "Learn how duels work",     detail: "Read How Duels Work in Battle",                  xp: 25),
+        TutorialStep(id: joinGuildId,    ordinal:  6, title: "Join a guild",             detail: "Join or request one from the directory",         xp: 25),
+        TutorialStep(id: weeklyStatsId,  ordinal:  7, title: "Check your week",          detail: "Explore your weekly stats",                      xp: 15),
+        TutorialStep(id: openProfileId,  ordinal:  8, title: "Visit your profile",       detail: "See your rank journey and badges",               xp: 15),
+        TutorialStep(id: changeThemeId,  ordinal:  9, title: "Try a new theme",          detail: "Settings → appearance",                          xp: 15),
+        TutorialStep(id: perfectDayId,   ordinal: 10, title: "Meet all your goals",      detail: "Hit calories, protein, and purity in one day",   xp: 60),
     ]
 
     /// The set of all catalog step ids — the target of the `done` superset check.
@@ -330,7 +340,8 @@ private struct TutorialLoopPage: View {
     }
 }
 
-/// Page 3 — first quests: the six catalog steps with XP, primary CTA, badge microcopy.
+/// Page 3 — first quests: the ten catalog steps with XP (fixed-height scrollable box),
+/// primary CTA, badge microcopy.
 private struct TutorialQuestsPage: View {
     let tc: ThemeColors
     let reduceMotion: Bool
@@ -342,31 +353,36 @@ private struct TutorialQuestsPage: View {
             TutorialMetaLine(text: "FIRST QUESTS", tc: tc)
                 .modifier(TutorialReveal(index: 0, shown: shown, reduceMotion: reduceMotion))
 
-            Text("Six quests. Finish them all for a badge.")
+            Text("Ten quests. Finish them all for a badge.")
                 .font(AppFont.regular(12))
                 .foregroundColor(tc.textSecondary)
                 .multilineTextAlignment(.center)
                 .modifier(TutorialReveal(index: 1, shown: shown, reduceMotion: reduceMotion))
 
-            VStack(spacing: 0) {
-                ForEach(Array(TutorialCatalog.steps.enumerated()), id: \.element.id) { pair in
-                    let step = pair.element
-                    if pair.offset > 0 {
-                        Rectangle().fill(tc.textPrimary.opacity(0.08)).frame(height: 1)
+            // Ten rows in a fixed-height scrollable box (Decision 4) — nested scroll inside the
+            // card; scrolls under Dynamic Type with no clipping. Row styling is unchanged.
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(TutorialCatalog.steps.enumerated()), id: \.element.id) { pair in
+                        let step = pair.element
+                        if pair.offset > 0 {
+                            Rectangle().fill(tc.textPrimary.opacity(0.08)).frame(height: 1)
+                        }
+                        HStack {
+                            Text(step.title)
+                                .font(AppFont.regular(12))
+                                .foregroundColor(tc.textPrimary)
+                            Spacer(minLength: 8)
+                            Text("+\(step.xp) XP")
+                                .font(AppFont.bold(11))
+                                .foregroundColor(tc.primary)
+                        }
+                        .padding(.vertical, 7)
+                        .padding(.horizontal, 11)
                     }
-                    HStack {
-                        Text(step.title)
-                            .font(AppFont.regular(12))
-                            .foregroundColor(tc.textPrimary)
-                        Spacer(minLength: 8)
-                        Text("+\(step.xp) XP")
-                            .font(AppFont.bold(11))
-                            .foregroundColor(tc.primary)
-                    }
-                    .padding(.vertical, 7)
-                    .padding(.horizontal, 11)
                 }
             }
+            .frame(height: 180)
             .overlay(
                 RoundedRectangle(cornerRadius: DesignSystem.Erewhon.buttonRadius)
                     .stroke(tc.textPrimary.opacity(0.10), lineWidth: 1)
