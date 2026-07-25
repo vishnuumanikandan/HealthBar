@@ -84,13 +84,6 @@ struct GuildView: View {
         .task {
             guard !authService.isGuest else { return }
             await viewModel.load()
-            // TUT-1b visitGuild detection (member mode, Decision 4/5) — a load that resolves to
-            // the in-guild stage means the member is viewing GuildDetailView's memberBody.
-            // Non-members land on the directory and complete via the spectator path instead.
-            if case .inGuild = viewModel.stage,
-               TutorialProgress.shared.shouldAttempt(TutorialCatalog.visitGuildId) {
-                Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.visitGuildId) }
-            }
         }
     }
 
@@ -715,11 +708,6 @@ struct GuildDetailView: View {
             return
         }
         spectatorGuild = g
-        // TUT-1b visitGuild detection (spectator mode, Decision 4/5) — a successfully fetched
-        // guild = "checked out a guild." Reached only past the unavailable early-return above.
-        if TutorialProgress.shared.shouldAttempt(TutorialCatalog.visitGuildId) {
-            Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.visitGuildId) }
-        }
         let me = coordinator.currentUserId
         // Same DTO → row mapping + sort as GuildViewModel.load() (owner first, then title).
         spectatorMembers = (await coordinator.guildMembers(code: code))

@@ -66,13 +66,6 @@ struct FoodDatabaseView: View {
                                 date: viewModel.selectedDate,
                                 mealType: viewModel.pendingMealType
                             )
-                            // TUT-1b databaseLog detection (Decision 4/5) — after confirmLog's
-                            // await returns. `confirmLog` swallows its own error (Void return), so
-                            // the await returning is the only success signal available here without
-                            // modifying FoodDatabaseViewModel (which the plan forbids).
-                            if TutorialProgress.shared.shouldAttempt(TutorialCatalog.databaseLogId) {
-                                Task { _ = try? await viewModel.coordinator.completeTutorialStep(TutorialCatalog.databaseLogId) }
-                            }
                             await viewModel.loadTodaysData()
                         }
                         dismiss()
@@ -108,7 +101,14 @@ struct FoodDatabaseView: View {
                 .onDisappear { dbViewModel.editingRecipe = nil }
             }
             .overlay(toastOverlay)
-            .task { await dbViewModel.loadAll() }
+            .task {
+                await dbViewModel.loadAll()
+                // TUT-2 openDatabase detection (Decision 2) — the food database's appearance
+                // (replaces the old databaseLog confirmLog site).
+                if TutorialProgress.shared.shouldAttempt(TutorialCatalog.openDatabaseId) {
+                    Task { _ = try? await viewModel.coordinator.completeTutorialStep(TutorialCatalog.openDatabaseId) }
+                }
+            }
         }
     }
 

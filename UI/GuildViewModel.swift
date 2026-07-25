@@ -293,6 +293,13 @@ final class GuildViewModel {
             } else {
                 joinCode = ""
             }
+            // TUT-2 joinGuild detection (Decision 2) — covers BOTH success paths: a direct join
+            // (open/private) and a submitted request for an approval-gated guild (the step is
+            // "Join or request one from the directory"). Fires from the shared performJoin core,
+            // so both the code-entry and directory entry points complete it.
+            if TutorialProgress.shared.shouldAttempt(TutorialCatalog.joinGuildId) {
+                Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.joinGuildId) }
+            }
         } catch {
             joinError = friendlyMessage(for: error)
             // A row can go stale between fetch and tap (disbanded, or switched to private).

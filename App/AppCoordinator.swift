@@ -162,6 +162,20 @@ final class AppCoordinator {
         let toxinScore = NutritionManager.dailyToxinScore(from: entries)
         let metGoals = nutritionManager.didMeetGoals(entries: entries, goal: goal)
 
+        // TUT-2 perfectDay detection (Decision 2, retargeted to the one LIVE didMeetGoals site).
+        // The plan named DataManager's daily-goal award chokepoint, but that award path
+        // (checkAndAwardDailyXP) is uncalled dead code; getTodaysSummary is the single place all
+        // three daily goals being met is computed live (every Home load). Routed through the same
+        // coordinator chokepoint as every other step — never NotificationCenter/Combine/singleton,
+        // never a direct gamification call. Hops to the main actor for the @MainActor shared store.
+        if metGoals {
+            Task { @MainActor in
+                if TutorialProgress.shared.shouldAttempt(TutorialCatalog.perfectDayId) {
+                    _ = try? await self.completeTutorialStep(TutorialCatalog.perfectDayId)
+                }
+            }
+        }
+
         let currentLevel = gamificationManager.calculateLevel(from: progress.totalXP)
         let xpForNext = gamificationManager.xpForNextLevel(currentXP: progress.totalXP)
         let currentRankTier = Rank.rankTier(from: progress.rr)

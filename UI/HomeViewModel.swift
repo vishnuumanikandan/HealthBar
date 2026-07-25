@@ -207,16 +207,6 @@ final class HomeViewModel {
 
     // MARK: - Tutorial (TUT-1a)
 
-    /// Popup show-once gating ONLY (TUT-1b amend) — NEVER a rendering source.
-    /// This is a load-time SNAPSHOT: it refreshes only when `loadTutorialState()` runs
-    /// (Home appearance / start / skip), which is exactly what the once-per-first-session
-    /// popup decision needs. The First-Quests card deliberately does NOT read it — the card
-    /// renders off the live `TutorialProgress.shared.state` so it advances the moment a step
-    /// completes on any tab, instead of waiting for Home to re-appear.
-    /// `nil` until first load; guests resolve to `.guest` (done ⇒ nothing shows). seen/
-    /// skipped/completed are never duplicated here as separate booleans.
-    var tutorialState: TutorialState?
-
     /// Whether the welcome popup overlay is currently visible. Drives the Home overlay and
     /// the mood-check suppression (Decision 12); derived from the loaded state on load,
     /// cleared the instant the user starts or skips.
@@ -233,7 +223,6 @@ final class HomeViewModel {
     @MainActor
     func loadTutorialState() async {
         let state = await coordinator.tutorialState()
-        tutorialState = state
         showTutorialPopup = !state.seen && !state.done
         if showTutorialPopup {
             let name = (try? await coordinator.getUserProfile())?.displayName.trimmingCharacters(in: .whitespaces)

@@ -126,6 +126,14 @@ struct FoodLogView: View {
                     viewModel: viewModel,
                     onDismissAll: { showingBarcodeOptions = false }
                 )
+                // TUT-2 barcodeScan detection (Decision 2) — the barcode surface's appearance
+                // (opening counts; a successful scan is NOT required). The one chosen site — not
+                // the presentation-state flip.
+                .onAppear {
+                    if TutorialProgress.shared.shouldAttempt(TutorialCatalog.barcodeScanId) {
+                        Task { _ = try? await viewModel.coordinator.completeTutorialStep(TutorialCatalog.barcodeScanId) }
+                    }
+                }
             }
             // Bridge: barcode scan → open add food form after sheet dismiss animation
             .onChange(of: viewModel.shouldOpenAddFoodForm) { _, newValue in
@@ -1279,9 +1287,9 @@ struct FoodLogView: View {
                     viewModel.formMealType = .uncategorized
                     viewModel.showingFoodDatabase = true
                 }
-                // TUT-1b databaseLog beacon (Decision 7) — the food-database entry affordance (one target).
+                // TUT-2 openDatabase beacon (Decision 3) — the food-database entry affordance (one target).
                 // A flat method row inside the 14-radius group — trace it with the small radius.
-                .questBeacon(TutorialCatalog.databaseLogId, cornerRadius: DesignSystem.CornerRadius.sm)
+                .questBeacon(TutorialCatalog.openDatabaseId, cornerRadius: DesignSystem.CornerRadius.sm)
                 addRow(
                     icon: "barcode", title: "Scan barcode",
                     subtitle: "Auto-fill from product label",
@@ -1291,6 +1299,9 @@ struct FoodLogView: View {
                     viewModel.formMealType = .uncategorized
                     showingBarcodeOptions = true
                 }
+                // TUT-2 barcodeScan beacon (Decision 3) — the barcode entry affordance (one target).
+                // A flat method row inside the 14-radius group — trace it with the small radius.
+                .questBeacon(TutorialCatalog.barcodeScanId, cornerRadius: DesignSystem.CornerRadius.sm)
             }
             .background(DesignSystem.Erewhon.lineSoft)
             .clipShape(RoundedRectangle(cornerRadius: 14))

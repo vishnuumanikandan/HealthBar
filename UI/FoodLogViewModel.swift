@@ -1841,6 +1841,12 @@ final class FoodLogViewModel {
         if loggedCount > 0 {
             let xpText = totalXP > 0 ? " (+\(totalXP) XP)" : ""
             showToastMessage("\(loggedCount) item\(loggedCount == 1 ? "" : "s") logged\(xpText)")
+            // TUT-2 aiLog detection (Decision 2) — the describe path's log-success. One of two
+            // aiLog sites (QuickScan save is the other); the membership guard in
+            // completeTutorialStep dedups if any future flow ever hits both.
+            if TutorialProgress.shared.shouldAttempt(TutorialCatalog.aiLogId) {
+                Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.aiLogId) }
+            }
         }
     }
 

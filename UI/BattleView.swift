@@ -108,11 +108,6 @@ struct BattleView: View {
         .task {
             // Guests never load; load once per appearance (pull-to-refresh re-loads).
             guard !authService.isGuest else { return }
-            // TUT-1b visitBattle detection (Decision 4/5) — authenticated arm only (past the
-            // guest guard; never the guest sign-in-card path). Visiting the tab completes it.
-            if TutorialProgress.shared.shouldAttempt(TutorialCatalog.visitBattleId) {
-                Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.visitBattleId) }
-            }
             if !viewModel.didLoadOnce { await viewModel.load() }
             await leaderboardVM.loadInitial()   // D4: inline standings board (idempotent)
             macroGuessPlayedToday = (await coordinator.todayQTEState())?.macroGuessPlayed ?? false
@@ -148,9 +143,16 @@ struct BattleView: View {
         .sheet(isPresented: $showingRankLadder) {
             RankLadderSheet(currentRR: viewModel.myRR)
         }
-        // DUEL-CLARITY-1: the scoring primer. Static content — nothing to pass, nothing to load.
+        // DUEL-CLARITY-1: the scoring primer. Static content; the closure is the TUT-2 duelPrimer
+        // detection hook (Decision 2), reached from Battle's "How duels work" button.
         .sheet(isPresented: $showPrimer) {
-            DuelPrimerSheet()
+            DuelPrimerSheet {
+                // Both entry points funnel through this one sheet; the Arena entry point leaves
+                // the hook at its no-op default (ArenaView is out of this change's scope).
+                if TutorialProgress.shared.shouldAttempt(TutorialCatalog.duelPrimerId) {
+                    Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.duelPrimerId) }
+                }
+            }
         }
         .confirmationDialog(
             "Forfeit this duel?",

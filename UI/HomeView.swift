@@ -933,34 +933,18 @@ struct HomeView: View {
                     // 5. Action buttons
                     actionButtons
 
-                    // 6-7. Daily Quests section (heading + board). Wrapped so the whole section is
-                    // one checkQuests tap target (Decision 5); the inner spacing 14 preserves the
-                    // prior inter-item gaps exactly. The beacon (Decision 7) rides the heading below.
-                    VStack(spacing: 14) {
-                        // 6. Daily Quests heading
-                        HStack {
-                            sectionLabel("Daily Quests")
-                                // TUT-1b checkQuests beacon (Decision 7) — Daily Quests header (pixel arm).
-                                // A flat text header — trace it with the small rectangular radius.
-                                .questBeacon(TutorialCatalog.checkQuestsId, cornerRadius: DesignSystem.CornerRadius.sm)
-                            Spacer()
-                            Text(viewModel.questProgressText)
-                                .font(AppFont.regular(12))
-                                .foregroundColor(tc.textSecondary)
-                        }
-                        .padding(.top, 8)
+                    // 6. Daily Quests heading
+                    HStack {
+                        sectionLabel("Daily Quests")
+                        Spacer()
+                        Text(viewModel.questProgressText)
+                            .font(AppFont.regular(12))
+                            .foregroundColor(tc.textSecondary)
+                    }
+                    .padding(.top, 8)
 
-                        // 7. Wooden quest board
-                        questBoard
-                    }
-                    // TUT-1b checkQuests detection (Decision 4/5) — section-container tap; child
-                    // quest rows keep priority via SwiftUI child-first hit-testing.
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        if TutorialProgress.shared.shouldAttempt(TutorialCatalog.checkQuestsId) {
-                            Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.checkQuestsId) }
-                        }
-                    }
+                    // 7. Wooden quest board
+                    questBoard
 
                     // 8. Today's Meals heading
                     sectionLabel("Today's Meals")
@@ -1487,9 +1471,9 @@ struct HomeView: View {
                       action: { selectedTab = 1 }, icon: "arrow.up.right")
             AppButton(title: "Scan", style: .secondary,
                       action: { viewModel.showQuickScan = true }, icon: "viewfinder")
-                // TUT-1b quickLog beacon (Decision 7) — the Home quick-log control (clean arm).
+                // TUT-2 aiLog beacon (Decision 3) — the Home quick-log/scan control (clean arm).
                 // AppButton's own radius IS the modifier default (Erewhon.buttonRadius, 14).
-                .questBeacon(TutorialCatalog.quickLogId)
+                .questBeacon(TutorialCatalog.aiLogId)
         }
         .sheet(isPresented: $viewModel.showQuickScan) {
             QuickScanView(viewModel: viewModel, selectedTab: $selectedTab)
@@ -1503,9 +1487,6 @@ struct HomeView: View {
         let total = viewModel.totalQuestsCount
         return VStack(spacing: 0) {
             secHead("Daily quests", "\(completed) / \(total) done")
-                // TUT-1b checkQuests beacon (Decision 7) — the Daily Quests header (clean arm).
-                // A flat sec-head row — trace it with the small rectangular radius.
-                .questBeacon(TutorialCatalog.checkQuestsId, cornerRadius: DesignSystem.CornerRadius.sm)
             if viewModel.allQuestsComplete {
                 AllQuestsCompleteView(totalXPFromQuests: viewModel.totalQuestXPEarnedToday)
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
@@ -1522,14 +1503,6 @@ struct HomeView: View {
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.allQuestsComplete)
-        // TUT-1b checkQuests detection (Decision 4/5) — section-container tap. contentShape makes
-        // the whole block tappable; the display-only quest rows carry no gesture to swallow.
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if TutorialProgress.shared.shouldAttempt(TutorialCatalog.checkQuestsId) {
-                Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.checkQuestsId) }
-            }
-        }
     }
 
     private func cleanQuestRowNew(_ quest: DailyQuest, isLast: Bool) -> some View {
@@ -2050,9 +2023,9 @@ struct HomeView: View {
                 }
                 .frame(width: 80, height: 54)
             }
-            // TUT-1b quickLog beacon (Decision 7) — the Home quick-log control (pixel arm).
+            // TUT-2 aiLog beacon (Decision 3) — the Home quick-log/scan control (pixel arm).
             // The pixel Scan button is a stepped AdaptiveCard tile — trace it near-square.
-            .questBeacon(TutorialCatalog.quickLogId, cornerRadius: DesignSystem.CornerRadius.sm)
+            .questBeacon(TutorialCatalog.aiLogId, cornerRadius: DesignSystem.CornerRadius.sm)
         }
         .sheet(isPresented: $viewModel.showQuickScan) {
             QuickScanView(viewModel: viewModel, selectedTab: $selectedTab)
@@ -2360,7 +2333,13 @@ struct HomeView: View {
                 }
                 .frame(minHeight: 300)
             } else if let weeklySummary = viewModel.weeklySummary {
-                WeeklySummaryView(summary: weeklySummary, theme: currentTheme)
+                WeeklySummaryView(summary: weeklySummary, theme: currentTheme, onExploredAllMetrics: {
+                    // TUT-2 weeklyStats detection (directed) — completes once the user has explored
+                    // all three weekly metric tabs (calories, protein, purity).
+                    if TutorialProgress.shared.shouldAttempt(TutorialCatalog.weeklyStatsId) {
+                        Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.weeklyStatsId) }
+                    }
+                })
             } else {
                 EmptyStateView(
                     icon: "calendar",
@@ -2999,9 +2978,11 @@ struct QuickScanAddFoodView: View {
             #endif
 
             isSubmitting = false
-            // TUT-1b quickLog detection (Decision 4/5) — same success path that closes the sheet.
-            if TutorialProgress.shared.shouldAttempt(TutorialCatalog.quickLogId) {
-                Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.quickLogId) }
+            // TUT-2 aiLog detection (Decision 2) — QuickScan save success. One of two aiLog sites
+            // (the describe path in FoodLogViewModel is the other); the membership guard in
+            // completeTutorialStep dedups if any future flow ever hits both.
+            if TutorialProgress.shared.shouldAttempt(TutorialCatalog.aiLogId) {
+                Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.aiLogId) }
             }
             onComplete()
 

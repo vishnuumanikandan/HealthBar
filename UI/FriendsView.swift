@@ -100,6 +100,10 @@ struct FriendsView: View {
             // Guests start no observation — the listener never runs for them either.
             guard !authService.isGuest else { return }
             await viewModel.observeChanges()
+            // TUT-2 friends detection (Decision 2) — FriendsView's appearance (primary site).
+            if TutorialProgress.shared.shouldAttempt(TutorialCatalog.friendsId) {
+                Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.friendsId) }
+            }
         }
         .onChange(of: viewModel.shouldShowRequestsSegment) { _, flag in
             if flag {
