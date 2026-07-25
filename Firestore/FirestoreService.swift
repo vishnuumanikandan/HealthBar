@@ -496,8 +496,11 @@ protocol FirestoreService {
 
     // MARK: - Duels (D1b)
 
-    /// Own-side score write: sets my score/dayScores/scoreUpdatedAt(server) on an active duel.
-    func updateDuelScore(duelId: String, isChallenger: Bool, score: Double, dayScores: [Double]) async throws
+    /// Own-side score write: sets my score/dayScores/scoreUpdatedAt(server) on an active duel,
+    /// plus (DUEL-FEED-1) my side's score-feed events — the caller passes the FULL merged+trimmed
+    /// array, which rides this same atomic write.
+    func updateDuelScore(duelId: String, isChallenger: Bool, score: Double,
+                         dayScores: [Double], feedEvents: [DuelFeedEventDTO]) async throws
 
     /// Resolver writes the outcome of an ended duel (winner per scores; deltas pre-rolled by caller).
     func resolveDuel(duelId: String, winnerUid: String?, challengerDelta: Int, opponentDelta: Int) async throws

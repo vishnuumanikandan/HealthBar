@@ -24,6 +24,14 @@ struct ArenaView: View {
     @State private var showOpponentProfile = false
     /// DUEL-CLARITY-1: "How duels work" primer presentation flag.
     @State private var showPrimer = false
+    /// DUEL-FEED-1: score-feed disclosure state (collapsed by default).
+    @State private var showScoreFeed = false
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter
+    }()
 
     init(coordinator: AppCoordinator, myUid: String, duel: DuelDTO) {
         self._viewModel = State(initialValue: ArenaViewModel(coordinator: coordinator, myUid: myUid, duel: duel))
@@ -43,6 +51,7 @@ struct ArenaView: View {
                         .foregroundColor(tc.textSecondary)
                 }
                 breakdownCard
+                scoreFeedCard
                 dayTimeline
                 actions
                 if viewModel.isStale {
@@ -368,6 +377,132 @@ struct ArenaView: View {
         case .quests:   return "Quests"
         case .qteBonus: return "QTE bonus"
         }
+    }
+
+    // MARK: - Score feed (DUEL-FEED-1)
+
+    /// One merged feed row. The per-side arrays are what carry authorship — an event stores no
+    /// uid — so `isMine` is stamped here, at the merge.
+    private struct ScoreFeedRow: Identifiable {
+        let event: DuelFeedEventDTO
+        let component: DayScoreBreakdown.Component
+        let isMine: Bool
+        /// Event ids are deterministic, so the two sides CAN legitimately collide (same category,
+        /// same transition, same day). Side-qualify the identity or ForEach drops a real row.
+        var id: String { "\(isMine ? "me" : "them")_\(event.id)" }
+    }
+
+    /// Both sides' events merged newest-first. Events whose category this build doesn't know are
+    /// SKIPPED at render (never deleted — they stay in the document).
+    private var scoreFeedRows: [ScoreFeedRow] {
+        let mine = viewModel.myFeedEvents.map { (event: $0, isMine: true) }
+        let theirs = viewModel.theirFeedEvents.map { (event: $0, isMine: false) }
+        return (mine + theirs)
+            .compactMap { pair -> ScoreFeedRow? in
+                guard let component = pair.event.componentEnum else { return nil }
+                return ScoreFeedRow(event: pair.event, component: component, isMine: pair.isMine)
+            }
+            .sorted { $0.event.at > $1.event.at }
+    }
+
+    /// "SCORE FEED" — the shared, category-level record of how both scores moved. Shown on every
+    /// duel page (a finished duel still renders whatever events it accumulated).
+    ///
+    /// PRIVACY: category-level ONLY. A row names one of the five scoring components and a signed
+    /// point delta — never a food, a quantity, or a meal — and the rule is symmetric: my rows
+    /// expose exactly as little as theirs.
+    private var scoreFeedCard: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+            Button {
+                withAnimation { showScoreFeed.toggle() }
+            } label: {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("SCORE FEED")
+                        .font(AppFont.display(11))
+                        .tracking(1.1)
+                        .foregroundColor(tc.primary)
+                    Spacer()
+                    Image(systemName: showScoreFeed ? "chevron.up" : "chevron.down")
+                        .font(AppFont.regular(12))
+                        .foregroundColor(tc.textTertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if showScoreFeed {
+                if scoreFeedRows.isEmpty {
+                    Text("No score events yet — points appear as both sides log.")
+                        .font(AppFont.regular(12))
+                        .foregroundColor(tc.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DesignSystem.Spacing.lg)
+                } else {
+                    // DUEL-FEED-1: deliberate nested-scroll exception (LB-PAGE-1 precedent; boxed feed). Revisit if it fights the outer scroll. DO NOT replace with outer scrolling.
+                    ScrollView {
+                        LazyVStack(spacing: DesignSystem.Spacing.sm) {
+                            ForEach(scoreFeedRows) { row in scoreFeedRowView(row) }
+                        }
+                    }
+                    .frame(height: 260)
+                }
+            }
+        }
+        .padding(DesignSystem.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.cardBackground)
+    }
+
+    private func scoreFeedRowView(_ row: ScoreFeedRow) -> some View {
+        HStack(spacing: DesignSystem.Spacing.sm) {
+            // Own-vs-opponent distinction. Their rows keep the same 3pt gutter, unpainted, so
+            // both sides stay aligned.
+            Capsule()
+                .fill(row.isMine ? tc.primary : Color.clear)
+                .frame(width: 3)
+
+            feedAvatar(row)
+
+            VStack(alignment: .leading, spacing: 2) {
+                // The copy comes from the frozen points-toast table — one source, no new wording.
+                Text("\(feedPointsText(row.event.delta)) · \(DuelPointsToast.subline(row.component, rose: row.event.delta > 0))")
+                    .font(AppFont.regular(12))
+                    .foregroundColor(tc.textPrimary)
+                Text(Self.relativeFormatter.localizedString(for: row.event.at, relativeTo: Date()))
+                    .font(AppFont.regular(10))
+                    .foregroundColor(tc.textTertiary)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The row's 26pt head: MY rows use the LIVE local profile, THEIR rows the duel snapshot —
+    /// the same ownership convention as the fighter columns. Initials reuse `favAvatar`'s
+    /// treatment, scaled down.
+    private func feedAvatar(_ row: ScoreFeedRow) -> some View {
+        let size: CGFloat = 26
+        return AvatarView(iconId: row.isMine ? viewModel.myAvatarIcon : viewModel.theirAvatarIcon,
+                          colorId: row.isMine ? viewModel.myAvatarColor : viewModel.theirAvatarColor,
+                          size: size) {
+            Text(row.isMine ? "Y" : initial(for: viewModel.theirLabel))
+                .font(AppFont.bold(11))
+                .foregroundColor(tc.textPrimary)
+                .frame(width: size, height: size)
+                .background(RoundedRectangle(cornerRadius: 8).fill(tc.segBackground))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(DesignSystem.Erewhon.line, lineWidth: 1))
+        }
+    }
+
+    /// "+4" / "−4" — `DuelPointsToast.headline`'s sign convention (a real minus sign) without the
+    /// "duel points" words. A delta that rounds to no whole point keeps its tenths rather than
+    /// rendering "+0": it was significant enough to store, so it is significant enough to show.
+    private func feedPointsText(_ delta: Double) -> String {
+        let whole = Int(delta.rounded())
+        let magnitude = whole != 0 ? "\(abs(whole))" : viewModel.pointsText(abs(delta))
+        return delta < 0 ? "−\(magnitude)" : "+\(magnitude)"
     }
 
     // MARK: - Day timeline

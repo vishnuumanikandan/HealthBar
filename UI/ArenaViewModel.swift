@@ -148,6 +148,14 @@ final class ArenaViewModel {
         return "You're behind — QTE points count ×\(DuelConstants.comebackMultiplier.formatted(.number.precision(.fractionLength(0...2)))) in this duel."
     }
 
+    // MARK: - Score feed (DUEL-FEED-1)
+
+    /// Both sides' category-level score events, straight off the already-refreshed duel — pure
+    /// passthroughs, so no new state, no new load and no listener. `refresh()` already refetches
+    /// the duel, which is what makes the feed current on appear and on pull-to-refresh.
+    var myFeedEvents: [DuelFeedEventDTO] { duel.myFeedEvents(myUid) }
+    var theirFeedEvents: [DuelFeedEventDTO] { duel.theirFeedEvents(myUid) }
+
     // MARK: - Day timeline
 
     struct DayRow: Identifiable {

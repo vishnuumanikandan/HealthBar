@@ -72,8 +72,12 @@ struct DuelPointsToast: Identifiable {
     }
 
     /// The fixed copy table: category × direction.
-    var subline: String {
-        let rose = points > 0
+    var subline: String { Self.subline(reason, rose: points > 0) }
+
+    /// The table itself — hoisted to a static (DUEL-FEED-1) so the Arena score-feed rows render
+    /// from the SAME frozen copy. ONE source: no second table, no invented wording. The strings
+    /// are unchanged from the instance property this was lifted out of.
+    static func subline(_ reason: DayScoreBreakdown.Component, rose: Bool) -> String {
         switch reason {
         case .calories: return rose ? "Calories · on target"  : "Calories · over goal"
         case .protein:  return rose ? "Protein target hit"    : "Protein · under target"

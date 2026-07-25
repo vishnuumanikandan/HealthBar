@@ -1600,12 +1600,18 @@ final class FirestoreServiceImpl: FirestoreService {
 
     // MARK: - FirestoreService: Duels (D1b)
 
-    func updateDuelScore(duelId: String, isChallenger: Bool, score: Double, dayScores: [Double]) async throws {
-        // Touch ONLY my side's three score fields (matches the isOwnScoreWrite() rule).
+    func updateDuelScore(duelId: String, isChallenger: Bool, score: Double,
+                         dayScores: [Double], feedEvents: [DuelFeedEventDTO]) async throws {
+        // Touch ONLY my side's four fields (matches the extended isOwnScoreWrite() rule).
+        // DUEL-FEED-1: `at` is written as a Timestamp — `FieldValue.serverTimestamp()` is
+        // ILLEGAL inside an array, so feed events are client-stamped by the caller.
         try await duelDocument(id: duelId).updateData([
             (isChallenger ? "challengerScore" : "opponentScore"): score,
             (isChallenger ? "challengerDayScores" : "opponentDayScores"): dayScores,
-            (isChallenger ? "challengerScoreUpdatedAt" : "opponentScoreUpdatedAt"): FieldValue.serverTimestamp()
+            (isChallenger ? "challengerScoreUpdatedAt" : "opponentScoreUpdatedAt"): FieldValue.serverTimestamp(),
+            (isChallenger ? "challengerFeedEvents" : "opponentFeedEvents"): feedEvents.map {
+                ["id": $0.id, "category": $0.category, "delta": $0.delta, "at": Timestamp(date: $0.at)]
+            }
         ])
     }
 
