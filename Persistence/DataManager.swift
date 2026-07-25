@@ -776,6 +776,20 @@ final class DataManager {
             let mergedTutorialSteps = mergedTutorialStepSet.sorted().joined(separator: ",")
             let mergedTutorialSeen = dto.resolvedTutorialSeen || local.tutorialSeen
             let mergedTutorialSkipped = dto.resolvedTutorialSkipped || local.tutorialSkipped
+            // Daily-goal XP date (FIXES-1) — MONOTONIC latest-date-wins, the SAME self-protecting
+            // posture as the tutorial fields above: a field-absent older-client snapshot merges
+            // harmlessly (nil orders as the distant past), so it is likewise deliberately ABSENT
+            // from `firestoreIsConfirmed` below and NEVER routed through reconcile(). nil = never
+            // awarded; the RESULT stays nil when BOTH sides are nil (never fabricate a distantPast
+            // into the "never awarded" state — that would spuriously trip differsFrom forever).
+            let mergedLastDailyGoalXPDate: Date? = {
+                switch (dto.resolvedLastDailyGoalXPDate, local.lastDailyGoalXPDate) {
+                case let (remote?, localValue?): return max(remote, localValue)
+                case let (remote?, nil): return remote
+                case let (nil, localValue?): return localValue
+                case (nil, nil): return nil
+                }
+            }()
 
             let isPending = FirestoreServiceImpl.shared.pendingProgressIds.contains(dto.id)
 
@@ -841,6 +855,7 @@ final class DataManager {
                 || mergedTutorialStepSet != local.tutorialCompletedStepSet
                 || mergedTutorialSeen != local.tutorialSeen
                 || mergedTutorialSkipped != local.tutorialSkipped
+                || mergedLastDailyGoalXPDate != local.lastDailyGoalXPDate
 
             if changed {
                 local.totalXP = mergedTotalXP
@@ -863,6 +878,7 @@ final class DataManager {
                 local.tutorialCompletedSteps = mergedTutorialSteps
                 local.tutorialSeen = mergedTutorialSeen
                 local.tutorialSkipped = mergedTutorialSkipped
+                local.lastDailyGoalXPDate = mergedLastDailyGoalXPDate
                 try modelContext.save()
             }
         } else {
