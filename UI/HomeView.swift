@@ -1587,35 +1587,74 @@ struct HomeView: View {
         }
     }
 
+    // MEALROW-1: photo-conditional — split-card face when a photo decodes (photo left,
+    // the existing icon/time/name/calories restacked into the right column), else the
+    // existing meal slot unchanged.
+    @ViewBuilder
     private func mealSlot(_ entry: FoodEntry) -> some View {
-        flatCard(radius: DesignSystem.CornerRadius.lg) {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Image(systemName: entry.mealType.icon)
-                        .font(AppFont.regular(18))
-                        .foregroundColor(tc.textSecondary)
-                    Spacer()
-                    Text(mealTimeString(from: entry.date))
-                        .font(AppFont.regular(10))
-                        .foregroundColor(tc.textTertiary)
+        if let photoData = entry.photoData,
+           let uiImage = UIImage(data: photoData) {
+            flatCard(radius: DesignSystem.CornerRadius.lg) {
+                PhotoSplitCard(image: uiImage, cornerRadius: DesignSystem.CornerRadius.lg, height: 116) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack {
+                            Image(systemName: entry.mealType.icon)
+                                .font(AppFont.regular(18))
+                                .foregroundColor(tc.textSecondary)
+                            Spacer()
+                            Text(mealTimeString(from: entry.date))
+                                .font(AppFont.regular(10))
+                                .foregroundColor(tc.textTertiary)
+                        }
+                        Spacer(minLength: 12)
+                        Text(entry.name)
+                            .font(AppFont.bold(13.5))
+                            .foregroundColor(tc.textPrimary)
+                            .lineLimit(2)
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text("\(entry.calories)")
+                                .font(AppFont.bold(22))
+                                .foregroundColor(tc.textPrimary)
+                            Text("kcal")
+                                .font(AppFont.regular(10))
+                                .foregroundColor(tc.textTertiary)
+                        }
+                        .padding(.top, 7)
+                    }
+                    .padding(15)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 }
-                Spacer(minLength: 12)
-                Text(entry.name)
-                    .font(AppFont.bold(13.5))
-                    .foregroundColor(tc.textPrimary)
-                    .lineLimit(2)
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text("\(entry.calories)")
-                        .font(AppFont.bold(22))
-                        .foregroundColor(tc.textPrimary)
-                    Text("kcal")
-                        .font(AppFont.regular(10))
-                        .foregroundColor(tc.textTertiary)
-                }
-                .padding(.top, 7)
             }
-            .padding(15)
-            .frame(maxWidth: .infinity, minHeight: 116, alignment: .leading)
+        } else {
+            flatCard(radius: DesignSystem.CornerRadius.lg) {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Image(systemName: entry.mealType.icon)
+                            .font(AppFont.regular(18))
+                            .foregroundColor(tc.textSecondary)
+                        Spacer()
+                        Text(mealTimeString(from: entry.date))
+                            .font(AppFont.regular(10))
+                            .foregroundColor(tc.textTertiary)
+                    }
+                    Spacer(minLength: 12)
+                    Text(entry.name)
+                        .font(AppFont.bold(13.5))
+                        .foregroundColor(tc.textPrimary)
+                        .lineLimit(2)
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text("\(entry.calories)")
+                            .font(AppFont.bold(22))
+                            .foregroundColor(tc.textPrimary)
+                        Text("kcal")
+                            .font(AppFont.regular(10))
+                            .foregroundColor(tc.textTertiary)
+                    }
+                    .padding(.top, 7)
+                }
+                .padding(15)
+                .frame(maxWidth: .infinity, minHeight: 116, alignment: .leading)
+            }
         }
     }
 
