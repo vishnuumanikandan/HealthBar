@@ -1388,6 +1388,54 @@ struct FoodLogView: View {
 
 /// Food entry card with swipe-left (edit + delete) and swipe-right (favorite) gestures.
 /// Card is intentionally thin for a compact log view.
+// MARK: - MEALROW-1: Photo Split Card
+
+/// Photo-conditional split-card *face*: a decoded photo fills the left `splitRatio`
+/// of the card edge-to-edge; caller-supplied content fills the right. Layout ONLY —
+/// background, border, and shadow come from the call site's card styling (the
+/// adaptiveCard / flatCard family); this view adds none of its own. `cornerRadius`
+/// matches the enclosing card so the photo's outer (left) corners round while its
+/// inner (right) edge at the split line stays square. One shared type referenced by
+/// both call sites (SwipeableEntryCard here + HomeView.mealSlot) — no per-surface copies.
+struct PhotoSplitCard<Content: View>: View {
+    let image: UIImage
+    let cornerRadius: CGFloat
+    var height: CGFloat = Layout.cardHeight
+    @ViewBuilder let content: () -> Content
+
+    private enum Layout {
+        // Computed (not stored) so the enum can nest inside a generic type:
+        // Swift disallows `static let` stored properties in generic types.
+        static var splitRatio: CGFloat { 0.42 }
+        static var cardHeight: CGFloat { 78 }
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let photoWidth = proxy.size.width * Layout.splitRatio
+            HStack(spacing: 0) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: photoWidth, height: height)
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: cornerRadius,
+                            bottomLeadingRadius: cornerRadius,
+                            bottomTrailingRadius: 0,
+                            topTrailingRadius: 0
+                        )
+                    )
+                    .accessibilityHidden(true)
+
+                content()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .frame(height: height)
+    }
+}
+
 private struct SwipeableEntryCard: View {
 
     let entry: FoodEntry
@@ -1524,80 +1572,152 @@ private struct SwipeableEntryCard: View {
     }
 
     // Fix #7: Thin card layout
+    // MEALROW-1: photo-conditional — split-card face when a photo decodes (photo left,
+    // the existing content restacked right), else the existing thin row unchanged.
+    @ViewBuilder
     private var thinCard: some View {
-        HStack(spacing: DesignSystem.Spacing.sm) {
-            // Photo thumbnail — only show if actual photo exists (no placeholder for thin cards)
-            if let photoData = entry.photoData,
-               let uiImage = UIImage(data: photoData) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 32, height: 32)
-                    .clipShape(AdaptiveCardShapeStyle())
-            }
+        if let photoData = entry.photoData,
+           let uiImage = UIImage(data: photoData) {
+            PhotoSplitCard(image: uiImage, cornerRadius: DesignSystem.Erewhon.cardRadius) {
+                HStack(spacing: DesignSystem.Spacing.sm) {
+                    // Food info: name + cal + time on two lines
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.name)
+                            .font(AppFont.regular(16))
+                            .foregroundColor(tc.textPrimary)
+                            .lineLimit(1)
 
-            // Food info: name + cal + time on two lines
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.name)
-                    .font(AppFont.regular(16))
-                    .foregroundColor(tc.textPrimary)
-                    .lineLimit(1)
+                        HStack(spacing: 4) {
+                            Text("\(entry.calories) cal")
+                                .font(AppFont.bold(14))
+                                .foregroundColor(tc.primary)
+                            Text("·")
+                                .font(AppFont.regular(DesignSystem.FontSizes.caption))
+                                .foregroundColor(tc.textTertiary)
+                            Text(timeString(from: entry.date))
+                                .font(AppFont.regular(12))
+                                .foregroundColor(tc.textTertiary)
+                            if entry.isFavorite {
+                                Image(systemName: "star.fill")
+                                    .font(AppFont.regular(9))
+                                    .foregroundColor(tc.macroBarCarbs)
+                            }
+                        }
+                    }
 
-                HStack(spacing: 4) {
-                    Text("\(entry.calories) cal")
-                        .font(AppFont.bold(14))
-                        .foregroundColor(tc.primary)
-                    Text("·")
-                        .font(AppFont.regular(DesignSystem.FontSizes.caption))
-                        .foregroundColor(tc.textTertiary)
-                    Text(timeString(from: entry.date))
-                        .font(AppFont.regular(12))
-                        .foregroundColor(tc.textTertiary)
-                    if entry.isFavorite {
-                        Image(systemName: "star.fill")
-                            .font(AppFont.regular(9))
-                            .foregroundColor(tc.macroBarCarbs)
+                    Spacer()
+
+                    // Three-dot menu
+                    Menu {
+                        Button {
+                            onFavorite()
+                        } label: {
+                            Label(
+                                entry.isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                                systemImage: entry.isFavorite ? "star.slash" : "star"
+                            )
+                        }
+
+                        Button {
+                            onEdit()
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+
+                        Divider()
+
+                        Button(role: .destructive) {
+                            onDelete()
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(AppFont.regular(16))
+                            .foregroundColor(tc.textSecondary)
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
                     }
                 }
+                .padding(.vertical, 8)
+                .padding(.horizontal, DesignSystem.Spacing.md)
             }
-
-            Spacer()
-
-            // Three-dot menu
-            Menu {
-                Button {
-                    onFavorite()
-                } label: {
-                    Label(
-                        entry.isFavorite ? "Remove from Favorites" : "Add to Favorites",
-                        systemImage: entry.isFavorite ? "star.slash" : "star"
-                    )
+            .adaptiveCard(borderColor: tc.primary.opacity(0.15), fillColor: tc.cardBackground)
+        } else {
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                // Photo thumbnail — only show if actual photo exists (no placeholder for thin cards)
+                if let photoData = entry.photoData,
+                   let uiImage = UIImage(data: photoData) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 32, height: 32)
+                        .clipShape(AdaptiveCardShapeStyle())
                 }
 
-                Button {
-                    onEdit()
-                } label: {
-                    Label("Edit", systemImage: "pencil")
+                // Food info: name + cal + time on two lines
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.name)
+                        .font(AppFont.regular(16))
+                        .foregroundColor(tc.textPrimary)
+                        .lineLimit(1)
+
+                    HStack(spacing: 4) {
+                        Text("\(entry.calories) cal")
+                            .font(AppFont.bold(14))
+                            .foregroundColor(tc.primary)
+                        Text("·")
+                            .font(AppFont.regular(DesignSystem.FontSizes.caption))
+                            .foregroundColor(tc.textTertiary)
+                        Text(timeString(from: entry.date))
+                            .font(AppFont.regular(12))
+                            .foregroundColor(tc.textTertiary)
+                        if entry.isFavorite {
+                            Image(systemName: "star.fill")
+                                .font(AppFont.regular(9))
+                                .foregroundColor(tc.macroBarCarbs)
+                        }
+                    }
                 }
 
-                Divider()
+                Spacer()
 
-                Button(role: .destructive) {
-                    onDelete()
+                // Three-dot menu
+                Menu {
+                    Button {
+                        onFavorite()
+                    } label: {
+                        Label(
+                            entry.isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                            systemImage: entry.isFavorite ? "star.slash" : "star"
+                        )
+                    }
+
+                    Button {
+                        onEdit()
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+
+                    Divider()
+
+                    Button(role: .destructive) {
+                        onDelete()
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 } label: {
-                    Label("Delete", systemImage: "trash")
+                    Image(systemName: "ellipsis")
+                        .font(AppFont.regular(16))
+                        .foregroundColor(tc.textSecondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
                 }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(AppFont.regular(16))
-                    .foregroundColor(tc.textSecondary)
-                    .frame(width: 28, height: 28)
-                    .contentShape(Rectangle())
             }
+            .padding(.vertical, 8)
+            .padding(.horizontal, DesignSystem.Spacing.md)
+            .adaptiveCard(borderColor: tc.primary.opacity(0.15), fillColor: tc.cardBackground)
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, DesignSystem.Spacing.md)
-        .adaptiveCard(borderColor: tc.primary.opacity(0.15), fillColor: tc.cardBackground)
     }
 
     private func timeString(from date: Date) -> String {
