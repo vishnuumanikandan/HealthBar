@@ -56,6 +56,11 @@ struct UserProgressDTO: Codable {
     var winStreak3: Int?
     var winStreak5: Int?
 
+    // MARK: - Daily-goal XP (FIXES-1) — optional so pre-FIXES-1 `progress` docs decode
+    // (missing key → nil). nil is ALSO the meaningful "never awarded" value, so unlike the
+    // fields above this is NOT coalesced to a sentinel; read via `resolvedLastDailyGoalXPDate`.
+    var lastDailyGoalXPDate: Date?
+
     /// Legacy-safe RR accessor — the single place the nil→starting fallback lives.
     /// Missing/absent `rr` (older Firestore docs) resolves to `Rank.startingRR`, never 0.
     var resolvedRR: Int { rr ?? Rank.startingRR }
@@ -75,6 +80,11 @@ struct UserProgressDTO: Codable {
     var resolvedTutorialSeen: Bool { tutorialSeen ?? false }
     var resolvedTutorialSkipped: Bool { tutorialSkipped ?? false }
     var resolvedTutorialCompletedSteps: Set<String> { Set(tutorialCompletedStepsArray ?? []) }
+
+    // Daily-goal XP (FIXES-1) — nil-PRESERVING (nil = never awarded is meaningful, so
+    // it is not coalesced to a sentinel the way `resolvedRR`/duel accessors are). Kept as
+    // a resolved accessor for DTO uniformity; the merge treats nil as the distant past.
+    var resolvedLastDailyGoalXPDate: Date? { lastDailyGoalXPDate }
 
     // NOTE: `rank` is intentionally excluded — it is a computed function of `rr`
     // (`Rank.getRank(from: rr)`) and must never be written or read from Firestore.
@@ -103,6 +113,7 @@ struct UserProgressDTO: Codable {
         self.tutorialSeen = progress.tutorialSeen
         self.tutorialSkipped = progress.tutorialSkipped
         self.tutorialCompletedStepsArray = Array(progress.tutorialCompletedStepSet).sorted()
+        self.lastDailyGoalXPDate = progress.lastDailyGoalXPDate
     }
 
     // MARK: - Conversion: UserProgressDTO → UserProgress
@@ -137,6 +148,7 @@ struct UserProgressDTO: Codable {
         progress.winStreak1 = resolvedWinStreak1
         progress.winStreak3 = resolvedWinStreak3
         progress.winStreak5 = resolvedWinStreak5
+        progress.lastDailyGoalXPDate = resolvedLastDailyGoalXPDate
         return progress
     }
 
@@ -168,5 +180,6 @@ struct UserProgressDTO: Codable {
             || resolvedTutorialSeen != progress.tutorialSeen
             || resolvedTutorialSkipped != progress.tutorialSkipped
             || resolvedTutorialCompletedSteps != progress.tutorialCompletedStepSet
+            || resolvedLastDailyGoalXPDate != progress.lastDailyGoalXPDate
     }
 }

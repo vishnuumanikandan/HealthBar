@@ -2968,7 +2968,9 @@ struct QuickScanAddFoodView: View {
                 carbs: Double(carbs) ?? 0.0,
                 fat: Double(fat) ?? 0.0,
                 toxinScore: Int(toxinScore),
-                photoData: nil,
+                photoData: nutrition.photoData,   // FIXES-1 (Fix A): carry the OpenFoodFacts
+                                                  // product image through, exactly as the Log-tab
+                                                  // barcode path does (FoodLogViewModel ~1213).
                 barcodeUPC: barcode
             )
 

@@ -85,6 +85,15 @@ final class UserProgress {
     var winStreak3: Int = 0
     var winStreak5: Int = 0
 
+    // MARK: - Daily-goal XP (FIXES-1)
+    // The last date the 50-XP "all three daily goals met" bonus was awarded. nil =
+    // never awarded. MONOTONIC — merged latest-date-wins (Firestore or local, whichever
+    // is later), exactly like the tutorial fields; never reconciled, never
+    // Firestore-confirmed. A plain client `Date` (matching `lastActiveDate`'s
+    // convention), never a server timestamp. Inline nil default = SwiftData lightweight
+    // migration (existing records decode with no award yet).
+    var lastDailyGoalXPDate: Date? = nil
+
     /// Computed property: Current level based on totalXP
     /// Each level requires 100 XP (Level 1 = 0-99 XP, Level 2 = 100-199 XP, etc.)
     var currentLevel: Int {

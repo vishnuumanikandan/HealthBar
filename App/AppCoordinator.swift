@@ -162,16 +162,44 @@ final class AppCoordinator {
         let toxinScore = NutritionManager.dailyToxinScore(from: entries)
         let metGoals = nutritionManager.didMeetGoals(entries: entries, goal: goal)
 
-        // TUT-2 perfectDay detection (Decision 2, retargeted to the one LIVE didMeetGoals site).
-        // The plan named DataManager's daily-goal award chokepoint, but that award path
-        // (checkAndAwardDailyXP) is uncalled dead code; getTodaysSummary is the single place all
-        // three daily goals being met is computed live (every Home load). Routed through the same
-        // coordinator chokepoint as every other step — never NotificationCenter/Combine/singleton,
-        // never a direct gamification call. Hops to the main actor for the @MainActor shared store.
+        // This `if metGoals` is the single place all three daily goals being met is computed
+        // live (every Home load), so BOTH daily-goal gamification hooks hang off it: TUT-2
+        // perfectDay detection, and the FIXES-1 (Fix B) 50-XP daily-goal award. Both route
+        // through the coordinator chokepoint — never NotificationCenter/Combine/singleton,
+        // never a direct gamification call. The whole block hops to the main actor for the
+        // @MainActor shared tutorial store; the award runs sequentially AFTER perfectDay in the
+        // same task, so the two never race on the shared UserProgress instance.
         if metGoals {
             Task { @MainActor in
+                // TUT-2 perfectDay detection (Decision 2, retargeted to this one LIVE didMeetGoals site).
                 if TutorialProgress.shared.shouldAttempt(TutorialCatalog.perfectDayId) {
                     _ = try? await self.completeTutorialStep(TutorialCatalog.perfectDayId)
+                }
+
+                // FIXES-1 (Fix B): the 50-XP "all daily goals met" award, revived. It formerly
+                // lived in an uncalled dead-code award path (now deleted) — so the award
+                // had NEVER fired in production. Wired here reusing the SAME already-computed
+                // `metGoals` (zero new predicate calls); awarded at most once per calendar day via
+                // the lastDailyGoalXPDate start-of-day gate. Orchestration mirrors completeQuest
+                // exactly: fetch → capture level/rank → stamp date → awardDailyGoalXP → save →
+                // emit progression events → .xpAwarded badge check. Guests earn it locally exactly
+                // as they earn quest XP (saveUserProgress skips only the Firestore sync for guests).
+                if var progress = try? await self.dataManager.getUserProgress() {
+                    let calendar = Calendar.current
+                    let awardedToday = progress.lastDailyGoalXPDate
+                        .map { calendar.startOfDay(for: $0) == calendar.startOfDay(for: Date()) } ?? false
+                    if !awardedToday {
+                        let beforeLevel = progress.currentLevel
+                        let beforeRank = progress.rank
+                        // Never revoked: once awarded for a day, later entries that push the user
+                        // back over a goal do NOT re-award or claw back XP — the quest-XP
+                        // no-rollback precedent; the start-of-day gate above is the sole guard.
+                        progress.lastDailyGoalXPDate = Date()   // plain client Date, like lastActiveDate
+                        _ = self.gamificationManager.awardDailyGoalXP(to: &progress, metGoals: true)
+                        try? await self.dataManager.saveUserProgress()   // same mutated instance, no re-fetch
+                        self.emitProgressionEvents(beforeLevel: beforeLevel, beforeRank: beforeRank, progress: progress)
+                        await self.checkBadgesAfterXPAwarded()
+                    }
                 }
             }
         }
@@ -295,29 +323,6 @@ final class AppCoordinator {
         if progress.rank != beforeRank {
             dataManager.emitFeedEvent(type: "rank", value: progress.rank)
         }
-    }
-
-    /// Updates streak and awards daily goal XP if met
-    ///
-    /// Call this once per day (e.g., at midnight or on first app open)
-    func checkAndAwardDailyXP() async throws -> (xpAwarded: Int, newStreak: Int) {
-        var progress = try await dataManager.getUserProgress()
-        let beforeLevel = progress.currentLevel
-        let beforeRank = progress.rank
-        let entries = try await dataManager.fetchTodaysEntries()
-        let goal = try await getCurrentGoal()
-
-        // Update streak
-        let newStreak = gamificationManager.updateStreak(for: &progress)
-
-        // Check if goals met and award XP
-        let metGoals = nutritionManager.didMeetGoals(entries: entries, goal: goal)
-        let xpAwarded = gamificationManager.awardDailyGoalXP(to: &progress, metGoals: metGoals)
-
-        try await dataManager.saveUserProgress()
-        emitProgressionEvents(beforeLevel: beforeLevel, beforeRank: beforeRank, progress: progress)
-
-        return (xpAwarded: xpAwarded, newStreak: newStreak)
     }
 
     // MARK: - Quest Management
