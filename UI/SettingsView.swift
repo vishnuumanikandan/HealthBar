@@ -32,6 +32,9 @@ struct SettingsView: View {
     @State private var showingOnboarding = false
     @State private var showingAccount = false
     @State private var showGuestSignOutWarning = false
+    // FEEDBACK-1: the compose sheet + the presenter's transient "thanks" confirmation.
+    @State private var showingFeedback = false
+    @State private var showFeedbackConfirmation = false
 
     init(
         coordinator: AppCoordinator,
@@ -90,6 +93,18 @@ struct SettingsView: View {
                     )
                 }
 
+                // Send Feedback — hidden for guests (writes to the signed-in
+                // account; mirrors the Account row's guest gating). Sits directly
+                // above About.
+                if !authService.isGuest {
+                    settingButton(
+                        icon: "envelope",
+                        title: "Send Feedback",
+                        subtitle: "Tell the developer what's working — or not",
+                        action: { showingFeedback = true }
+                    )
+                }
+
                 // About button (placeholder)
                 settingButton(
                     icon: "info.circle",
@@ -121,6 +136,24 @@ struct SettingsView: View {
             .padding(DesignSystem.Spacing.lg)
         }
         .background(tc.primaryBackground.ignoresSafeArea())
+        // FEEDBACK-1: the presenter's transient success confirmation, shown after
+        // the compose sheet dismisses and auto-hidden after 2s (set in the sheet's
+        // onSuccess closure below).
+        .overlay(alignment: .bottom) {
+            if showFeedbackConfirmation {
+                Text("Thanks — your feedback was sent.")
+                    .font(AppFont.bold(14))
+                    .foregroundColor(tc.textPrimary)
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
+                    .padding(.vertical, DesignSystem.Spacing.md)
+                    .adaptiveCard(
+                        borderColor: tc.primary.opacity(0.3),
+                        fillColor: tc.cardBackground
+                    )
+                    .padding(.bottom, DesignSystem.Erewhon.tabBarContentHeight + 24)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -140,6 +173,16 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showingAccount) {
             AccountView(coordinator: coordinator, authService: FirebaseAuthService.shared)
+        }
+        .sheet(isPresented: $showingFeedback) {
+            FeedbackComposeView(coordinator: coordinator) {
+                // Success: show the presenter's transient confirmation for 2s.
+                withAnimation { showFeedbackConfirmation = true }
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(2))
+                    withAnimation { showFeedbackConfirmation = false }
+                }
+            }
         }
         .fullScreenCover(isPresented: $showingOnboarding) {
             OnboardingView(
@@ -213,5 +256,125 @@ struct SettingsView: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Feedback Compose Sheet (FEEDBACK-1)
+
+/// The compose sheet — a small local view (no view model, no own file, per the
+/// prompt). Validation here is UX-only; `DataManager.submitFeedback` revalidates
+/// and is the authority. A successful submit calls `onSuccess` then self-dismisses
+/// (NOT via onDismiss/onDisappear, which fire on the success path too — the
+/// AILOG-1c lesson); a failure keeps the sheet open with an inline error and Send
+/// re-enabled.
+private struct FeedbackComposeView: View {
+
+    private let coordinator: AppCoordinator
+    /// Called exactly once, on a successful submit, immediately before self-dismiss,
+    /// so the presenter can show its transient confirmation.
+    private let onSuccess: () -> Void
+
+    init(coordinator: AppCoordinator, onSuccess: @escaping () -> Void) {
+        self.coordinator = coordinator
+        self.onSuccess = onSuccess
+    }
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
+    @State private var message = ""
+    @State private var isSubmitting = false
+    @State private var errorText: String?
+
+    /// The trimmed draft — the exact value DataManager would store.
+    private var trimmed: String {
+        message.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    private var isOverLimit: Bool { message.count > FeedbackLimits.maxLength }
+    /// Send is enabled only for a non-empty, in-bounds draft that isn't mid-send.
+    private var canSend: Bool { !trimmed.isEmpty && !isOverLimit && !isSubmitting }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                    // Persistent label (always visible — not a placeholder).
+                    Text("What's on your mind?")
+                        .font(AppFont.display(16))
+                        .foregroundColor(tc.textPrimary)
+
+                    TextEditor(text: $message)
+                        .font(AppFont.regular(15))
+                        .foregroundColor(tc.textPrimary)
+                        .frame(minHeight: 160, maxHeight: 280)
+                        .scrollContentBackground(.hidden)
+                        .padding(DesignSystem.Spacing.sm)
+                        .adaptiveCard(
+                            borderColor: tc.primary.opacity(0.3),
+                            fillColor: tc.primaryBackground
+                        )
+                        .accessibilityLabel("Feedback message")
+
+                    // Live character counter — appears only past the threshold.
+                    if message.count > FeedbackLimits.counterThreshold {
+                        Text("\(message.count) / \(FeedbackLimits.maxLength)")
+                            .font(AppFont.regular(12))
+                            .foregroundColor(isOverLimit ? DesignSystem.Colors.danger : tc.textTertiary)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+
+                    // Failure path: inline error; the sheet stays open and Send
+                    // re-enables (isSubmitting is reset in submit()'s catch).
+                    if let errorText {
+                        Text(errorText)
+                            .font(AppFont.regular(13))
+                            .foregroundColor(DesignSystem.Colors.danger)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    AppButton(
+                        title: "Send",
+                        style: .primary,
+                        action: { submit() },
+                        isLoading: isSubmitting,
+                        isDisabled: !canSend
+                    )
+                }
+                .padding(DesignSystem.Spacing.lg)
+            }
+            .background(tc.primaryBackground.ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Send Feedback")
+                        .font(AppFont.display(20))
+                        .foregroundColor(tc.textPrimary)
+                }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(tc.textSecondary)
+                }
+            }
+        }
+    }
+
+    private func submit() {
+        // Double-tap guard: canSend is already false while isSubmitting and
+        // AppButton ignores taps while isLoading — this belt-and-suspenders re-check
+        // ensures a queued tap can't open a second write.
+        guard canSend else { return }
+        isSubmitting = true
+        errorText = nil
+        Task { @MainActor in
+            do {
+                try await coordinator.submitFeedback(message: message)
+                onSuccess()
+                dismiss()
+            } catch {
+                errorText = "Couldn't send your feedback. Check your connection and try again."
+                isSubmitting = false
+            }
+        }
     }
 }

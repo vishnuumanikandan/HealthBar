@@ -94,6 +94,25 @@ service cloud.firestore {
            ];
     }
 
+    // FEEDBACK-1: private feedback drop-box. Create-only for the owner —
+    // no client reads/updates/deletes (developer reads via admin access).
+    // Repo convention is flat full-path sibling blocks (feedEvents/sharedItems/
+    // etc.), NOT nested matches under users/{userId}; this mirrors that. The rule
+    // BODY is the FEEDBACK-1 spec verbatim.
+    // DEPLOY: rides the 2.1 consolidated attended deploy
+    match /users/{userId}/feedback/{feedbackId} {
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['message', 'createdAt', 'appVersion', 'platform'])
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 1
+        && request.resource.data.message.size() <= 2000
+        && request.resource.data.appVersion is string
+        && request.resource.data.platform is string
+        && request.resource.data.createdAt is timestamp;
+      allow read, update, delete: if false;
+    }
+
     // Username uniqueness index (Friend System Phase 1)
     match /usernames/{handleKey} {
       allow read: if request.auth != null;

@@ -73,6 +73,7 @@
 		BE102F5A2FDD018600E9744F /* SharedItemDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102F592FDD018600E9744F /* SharedItemDTO.swift */; };
 		AADD0D022FE1000000000001 /* ProfanityFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADD0D012FE1000000000001 /* ProfanityFilter.swift */; };
 		AADD0D042FE1000000000002 /* ReportDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADD0D032FE1000000000002 /* ReportDTO.swift */; };
+		FEEDBAC00000000000000002 /* FeedbackDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDBAC00000000000000001 /* FeedbackDTO.swift */; };
 		AADD0D062FE2000000000001 /* BlockedUsersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADD0D052FE2000000000001 /* BlockedUsersView.swift */; };
 		AADD0D062FE1000000000003 /* ProfanityDenylist.txt in Resources */ = {isa = PBXBuildFile; fileRef = AADD0D052FE1000000000003 /* ProfanityDenylist.txt */; };
 		BE102F5C2FDD019B00E9744F /* SaveQuickLogSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102F5B2FDD019B00E9744F /* SaveQuickLogSheet.swift */; };
@@ -291,6 +292,7 @@
 		BE102F592FDD018600E9744F /* SharedItemDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedItemDTO.swift; sourceTree = "<group>"; };
 		AADD0D012FE1000000000001 /* ProfanityFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfanityFilter.swift; sourceTree = "<group>"; };
 		AADD0D032FE1000000000002 /* ReportDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportDTO.swift; sourceTree = "<group>"; };
+		FEEDBAC00000000000000001 /* FeedbackDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackDTO.swift; sourceTree = "<group>"; };
 		AADD0D052FE2000000000001 /* BlockedUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedUsersView.swift; sourceTree = "<group>"; };
 		AADD0D052FE1000000000003 /* ProfanityDenylist.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ProfanityDenylist.txt; sourceTree = "<group>"; };
 		BE102F5B2FDD019B00E9744F /* SaveQuickLogSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveQuickLogSheet.swift; sourceTree = "<group>"; };
@@ -720,6 +722,7 @@
 			isa = PBXGroup;
 			children = (
 				AADD0D032FE1000000000002 /* ReportDTO.swift */,
+				FEEDBAC00000000000000001 /* FeedbackDTO.swift */,
 				BED60B8A2FFCBAFE00F9E190 /* GlobalLeaderboardDTO.swift */,
 				BED60B6A2FFC612400F9E190 /* DuelQueueTicketDTO.swift */,
 				BED60B362FFA318F00F9E190 /* DuelDTO.swift */,
@@ -934,6 +937,7 @@
 			files = (
 				AADD0D022FE1000000000001 /* ProfanityFilter.swift in Sources */,
 				AADD0D042FE1000000000002 /* ReportDTO.swift in Sources */,
+				FEEDBAC00000000000000002 /* FeedbackDTO.swift in Sources */,
 				AADD0D062FE2000000000001 /* BlockedUsersView.swift in Sources */,
 				BE7B0D022FE5000000000008 /* StandingsPieces.swift in Sources */,
 				BE7B0A022FE5000000000002 /* TopBar.swift in Sources */,

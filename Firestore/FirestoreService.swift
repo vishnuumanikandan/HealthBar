@@ -597,6 +597,15 @@ protocol FirestoreService {
     /// interprets permission-denied (duplicate report) as idempotent success (D6).
     func submitReport(_ report: ReportDTO, reportId: String) async throws
 
+    // MARK: - Feedback (FEEDBACK-1)
+
+    /// Creates users/{uid}/feedback/{autoId} with an auto-id (addDocument) — a
+    /// private, create-only drop-box. Awaits server acknowledgement so a rules
+    /// rejection or other server error THROWS rather than being swallowed (the
+    /// compose sheet surfaces it inline). No reads, no listeners; the path uid is
+    /// resolved from the active sync session, like every upload* method.
+    func submitFeedback(_ dto: FeedbackDTO) async throws
+
     // MARK: - Account Deletion
 
     /// Deletes all Firestore data under users/{userId}/ in batches.
