@@ -133,39 +133,35 @@ struct DescribeMealView: View {
 
     @ViewBuilder
     private var composerSection: some View {
-        // Field labels/placeholders come from the selected category's 1a table — the view
-        // hardcodes zero copy for these three fields.
+        // Field labels come from the selected category's 1a table — the view hardcodes zero
+        // copy for these three fields; each label sits persistently above its input.
         let labels = viewModel.describeCategory.fieldLabels
 
         // Field 1 — the "what" (gates Analyze; keeps binding, TextEditor sizing, focus-on-appear).
-        TextEditor(text: $viewModel.mealDescriptionInput)
-            .font(AppFont.regular(15))
-            .foregroundColor(tc.textPrimary)
-            .frame(minHeight: 100, maxHeight: 160)
-            .scrollContentBackground(.hidden)
-            .focused($isInputFocused)
-            .overlay(alignment: .topLeading) {
-                if viewModel.mealDescriptionInput.isEmpty {
-                    Text(labels.item)
-                        .font(AppFont.regular(14))
-                        .foregroundColor(tc.textTertiary)
-                        .padding(.top, 8)
-                        .padding(.leading, 4)
-                        .allowsHitTesting(false)
-                }
-            }
-            .padding(DesignSystem.Spacing.sm)
-            .adaptiveCard(
-                borderColor: tc.primary.opacity(0.3),
-                fillColor: tc.primaryBackground
-            )
-            .accessibilityLabel(labels.item)
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            Text(labels.item)
+                .font(AppFont.display(14))
+                .foregroundColor(tc.textSecondary)
+
+            TextEditor(text: $viewModel.mealDescriptionInput)
+                .font(AppFont.regular(15))
+                .foregroundColor(tc.textPrimary)
+                .frame(minHeight: 100, maxHeight: 160)
+                .scrollContentBackground(.hidden)
+                .focused($isInputFocused)
+                .padding(DesignSystem.Spacing.sm)
+                .adaptiveCard(
+                    borderColor: tc.primary.opacity(0.3),
+                    fillColor: tc.primaryBackground
+                )
+                .accessibilityLabel(labels.item)
+        }
 
         // Field 2 — amount/size (optional).
-        describeField(placeholder: labels.amount, text: $viewModel.describeAmountInput)
+        describeField(label: labels.amount, text: $viewModel.describeAmountInput)
 
         // Field 3 — extras (optional).
-        describeField(placeholder: labels.extras, text: $viewModel.describeExtrasInput)
+        describeField(label: labels.extras, text: $viewModel.describeExtrasInput)
 
         // Photo attach control
         photoSection
@@ -244,17 +240,24 @@ struct DescribeMealView: View {
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
-    /// A single optional structured input (fields 2 and 3). Placeholder is table-sourced.
-    private func describeField(placeholder: String, text: Binding<String>) -> some View {
-        TextField(placeholder, text: text)
-            .font(AppFont.regular(15))
-            .foregroundColor(tc.textPrimary)
-            .padding(DesignSystem.Spacing.sm)
-            .adaptiveCard(
-                borderColor: tc.primary.opacity(0.3),
-                fillColor: tc.primaryBackground
-            )
-            .accessibilityLabel(placeholder)
+    /// A single optional structured input (fields 2 and 3): a persistent table-sourced label
+    /// above an empty-placeholder field.
+    private func describeField(label: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            Text(label)
+                .font(AppFont.display(14))
+                .foregroundColor(tc.textSecondary)
+
+            TextField("", text: text)
+                .font(AppFont.regular(15))
+                .foregroundColor(tc.textPrimary)
+                .padding(DesignSystem.Spacing.sm)
+                .adaptiveCard(
+                    borderColor: tc.primary.opacity(0.3),
+                    fillColor: tc.primaryBackground
+                )
+                .accessibilityLabel(label)
+        }
     }
 
     // MARK: - Loading Indicator
