@@ -4870,6 +4870,48 @@ final class DataManager {
         var qteCache: [Date: Int] = [:]  // start-of-day → capped QTE points (comeback weighting)
         var didPush = false              // DUEL-CLARITY-1: ≥1 write actually landed this pass
 
+        // DUEL-FEED-1: the day identity and today's components are hoisted ABOVE the loop so the
+        // diff is computed ONCE for the whole pass and every duel appends the SAME events.
+        // Seeding the memo keeps the common case at one scoring pass; when no active duel covers
+        // today this costs one extra pass (rare, accepted).
+        let todayStart = calendar.startOfDay(for: now)
+        let todayBreakdown = await dayScoreBreakdown(for: todayStart)
+        cache[todayStart] = todayBreakdown
+
+        // True once some active duel's day loop actually reaches today. The points toast keys on
+        // THIS, not on the (now always-seeded) memo — so seeding cannot start advancing the toast
+        // baseline in a pass where no duel covers today. Pre-DUEL-FEED behavior, preserved exactly.
+        var todayIsInPlay = false
+
+        // ONE diff per pass, shared by the points toast (net/reason) and the feed
+        // (componentChanges) — never compute a second one. nil when no valid baseline exists
+        // (first push after launch, or a day rollover): no toast, no events, baseline seeds silently.
+        let baseline: DayScoreBreakdown? = Self.lastPushedDayStart == todayStart ? Self.lastPushedBreakdown : nil
+        let change: DayScoreBreakdown.Change? = baseline.flatMap {
+            DayScoreBreakdown.delta(from: $0, to: todayBreakdown)
+        }
+
+        // My events for this pass, all client-stamped `now` (a server sentinel is illegal inside
+        // an array). Empty when nothing moved.
+        let newEvents: [DuelFeedEventDTO] = {
+            guard let baseline, let change else { return [] }
+            // The id is deterministic per (day, category, from→to tenths), so a push that landed
+            // server-side but timed out client-side re-appends nothing on the retry.
+            // DEDUPE SCOPE IS PER DAY: `dayKey` differs across days, so the SAME transition on a
+            // DIFFERENT day is intentionally a distinct event — only a repeat of the same
+            // transition within the same day collapses (accepted flavor loss).
+            let dayKey = Self.feedDayKeyFormatter.string(from: todayStart)
+            return change.componentChanges.map { entry in
+                let fromTenths = Int((baseline.value(entry.component) * 10).rounded())
+                let toTenths = Int((todayBreakdown.value(entry.component) * 10).rounded())
+                return DuelFeedEventDTO(
+                    id: "\(dayKey)_\(entry.component.rawValue)_\(fromTenths)_\(toTenths)",
+                    category: entry.component.rawValue,
+                    delta: entry.delta,
+                    at: now)
+            }
+        }()
+
         for duel in active {
             guard let id = duel.id, let acceptedAt = duel.acceptedAt else { continue }
             let iAmChallenger = duel.isChallenger(me)
@@ -4883,6 +4925,7 @@ final class DataManager {
                 guard let dayStart = calendar.date(byAdding: .day, value: dayIndex, to: day1Start) else { break }
                 if dayStart > now { break }                              // future duel-day — stop
                 if let endAt = duel.endAt, dayStart >= endAt { break }   // past the window — stop
+                if dayStart == todayStart { todayIsInPlay = true }       // DUEL-FEED-1 (toast gate)
                 if let cached = cache[dayStart] {
                     dayScores.append(cached.total)
                 } else {
@@ -4927,20 +4970,34 @@ final class DataManager {
             let current = iAmChallenger ? duel.resolvedChallengerDayScores : duel.resolvedOpponentDayScores
             if current == dayScores { continue }
 
+            // DUEL-FEED-1: append this pass's events to MY side's fetched array, skipping ids
+            // already present, then trim oldest-first to the cap. This intentionally rewrites the
+            // FULL per-side array on every score push; `FieldValue.arrayUnion` is deliberately NOT
+            // used because dedupe is deterministic client-side and the trim requires a whole-array
+            // write anyway. Reached only on a real push — a no-op duel gets no write and no events.
+            var merged = iAmChallenger ? duel.resolvedChallengerFeedEvents : duel.resolvedOpponentFeedEvents
+            let existingIds = Set(merged.map(\.id))
+            merged.append(contentsOf: newEvents.filter { !existingIds.contains($0.id) })
+            let feedEvents = Array(merged.sorted { $0.at < $1.at }.suffix(DuelConstants.feedEventCap))
+
             // Swallow permission-denied (duel ended / froze between fetch and write).
             // DUEL-CLARITY-1: `try?` still swallows, but the outcome is now observed — a FAILED
             // push must never move the toast baseline (we would then diff against state that
             // never landed and silently lose the toast for a real change).
+            // DUEL-FEED-1 partial-failure flavor loss: with several active duels, if duel A's
+            // write fails while duel B's succeeds the baseline still advances, so A never receives
+            // THIS change's events (its scores still resync next pass). Accepted.
             let pushed: Void? = try? await firestoreService.updateDuelScore(
-                duelId: id, isChallenger: iAmChallenger, score: total, dayScores: dayScores)
+                duelId: id, isChallenger: iAmChallenger, score: total, dayScores: dayScores,
+                feedEvents: feedEvents)
             if pushed != nil { didPush = true }
         }
 
         // DUEL-CLARITY-1 points toast — own side only, at this one chokepoint. The day identity
         // is this function's OWN start-of-day (its `calendar` and `now`, the same values that
-        // key the memo above) — computed once here, never restated downstream.
-        let todayStart = calendar.startOfDay(for: now)
-        emitPointsToast(today: cache[todayStart], dayStart: todayStart, didPush: didPush)
+        // key the memo above) — computed once above, never restated downstream.
+        emitPointsToast(change: change, today: todayIsInPlay ? todayBreakdown : nil,
+                        dayStart: todayStart, didPush: didPush)
     }
 
     /// Last successfully-pushed day breakdown and the day it belongs to — the points-toast
@@ -4950,6 +5007,18 @@ final class DataManager {
     /// per tab (the D3a `blockedUids` lesson) and the same change would toast once per tab.
     private static var lastPushedBreakdown: DayScoreBreakdown?
     private static var lastPushedDayStart: Date?
+
+    /// DUEL-FEED-1: the `yyyyMMdd` day key inside a score-event id. `en_US_POSIX` pins a Gregorian
+    /// 4-digit year whatever the user's locale (a Buddhist/Japanese-calendar locale would otherwise
+    /// stamp a different year into the id). The time zone is deliberately left at the default
+    /// (current): the input is a LOCAL midnight, so forcing UTC would roll the key back a day for
+    /// everyone west of Greenwich.
+    private static let feedDayKeyFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter
+    }()
 
     /// Diffs today's just-pushed components against the previous successful push and raises at
     /// most ONE toast — never a stack.
@@ -4965,15 +5034,21 @@ final class DataManager {
     ///
     /// `dayStart` is the caller's day identity — passed in, never recomputed, so the baseline
     /// can't disagree with the memo key across a midnight boundary mid-pass.
-    private func emitPointsToast(today: DayScoreBreakdown?, dayStart: Date, didPush: Bool) {
+    ///
+    /// DUEL-FEED-1: `change` is now computed BY THE CALLER (one diff feeds both this toast and the
+    /// score feed) and arrives pre-made — a nil `change` means exactly what the local
+    /// `delta`-against-baseline call used to mean: no valid baseline for this day, or nothing
+    /// moved. `today` stays optional and is nil when no active duel covers today, so the baseline
+    /// advance is unchanged.
+    private func emitPointsToast(change: DayScoreBreakdown.Change?, today: DayScoreBreakdown?,
+                                 dayStart: Date, didPush: Bool) {
         guard didPush, let today else { return }
         defer {
             Self.lastPushedBreakdown = today
             Self.lastPushedDayStart = dayStart
         }
         // First push after launch, or the first push of a new day → baseline only, no toast.
-        guard let previous = Self.lastPushedBreakdown, Self.lastPushedDayStart == dayStart else { return }
-        guard let change = DayScoreBreakdown.delta(from: previous, to: today),
+        guard let change,
               let toast = DuelPointsToast.make(net: change.net, reason: change.reason) else { return }
 
         Task { @MainActor in DuelPointsToastQueue.shared.enqueue(toast) }
@@ -6185,8 +6260,18 @@ struct DayScoreBreakdown {
     static let zero = DayScoreBreakdown(calories: 0, protein: 0, purity: 0, quests: 0, qteBonus: 0)
 
     /// The five scoring components, in primer order.
-    enum Component: CaseIterable {
-        case calories, protein, purity, quests, qteBonus
+    ///
+    /// DUEL-FEED-1: the raw values are FIRESTORE WIRE FORMAT — pinned forever. Each one is
+    /// stamped into a score-feed event's `category` inside `duels/{duelId}` and decoded back
+    /// via `Component(rawValue:)` (an unrecognized value yields nil and the row is hidden).
+    /// NEVER change or "tidy" a raw value — renaming one silently orphans every stored event.
+    /// Rename the Swift case identity only; a new case pins an explicit raw value from day one.
+    enum Component: String, CaseIterable {
+        case calories = "calories"
+        case protein = "protein"
+        case purity = "purity"
+        case quests = "quests"
+        case qteBonus = "qteBonus"
     }
 
     func value(_ component: Component) -> Double {
@@ -6243,6 +6328,19 @@ struct DayScoreBreakdown {
         return (clamped * 10).rounded() / 10
     }
 
+    /// The outcome of one diff between successive score pushes — DUEL-FEED-1 widened the old
+    /// `(net:reason:)` tuple into this so ONE computation feeds BOTH the points toast (`net` +
+    /// `reason`) and the score feed (`componentChanges`). Never add a second delta computation.
+    struct Change {
+        /// NET points across every changed category (raw sum — NOT tenths-rounded).
+        let net: Double
+        /// The largest-|delta| category (magnitude ties resolve in primer order).
+        let reason: Component
+        /// Every changed component (tenths comparison), primer order, with its signed
+        /// tenths-rounded delta.
+        let componentChanges: [(component: Component, delta: Double)]
+    }
+
     /// What moved between two successive score pushes: the NET points across every CHANGED
     /// category, plus the largest-|delta| category as the toast's reason (magnitude ties
     /// resolve in primer order). nil when nothing moved.
@@ -6250,22 +6348,24 @@ struct DayScoreBreakdown {
     /// "Changed" is a tenths comparison — the same rounded-int convention the duel scores use
     /// everywhere — so floating-point drift never raises a toast.
     static func delta(from old: DayScoreBreakdown,
-                      to new: DayScoreBreakdown) -> (net: Double, reason: Component)? {
+                      to new: DayScoreBreakdown) -> Change? {
         var net = 0.0
         var reason: Component?
         var bestMagnitude = 0.0
+        var componentChanges: [(component: Component, delta: Double)] = []
         for component in Component.allCases {
             let before = old.value(component), after = new.value(component)
             guard tenths(after) != tenths(before) else { continue }
             let change = after - before
             net += change
+            componentChanges.append((component, (change * 10).rounded() / 10))
             if abs(change) > bestMagnitude {
                 bestMagnitude = abs(change)
                 reason = component
             }
         }
         guard let reason else { return nil }
-        return (net, reason)
+        return Change(net: net, reason: reason, componentChanges: componentChanges)
     }
 
     private static func tenths(_ v: Double) -> Int { Int((v * 10).rounded()) }

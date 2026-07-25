@@ -934,28 +934,47 @@ service cloud.firestore {
              );
       }
 
-      // D1b: own-side score write on an active duel, before endAt. Only my three score fields.
+      // D1b: own-side score write on an active duel, before endAt. Only my own score fields.
+      // DUEL-FEED-1 widened each arm by ONE key — my side's score-feed event array.
+      // DEPLOY: rides the 2.1 consolidated attended deploy (DUEL-FEED-1 extension)
+      //
+      // Rules cannot iterate list elements, so the ELEMENT SHAPE IS UNENFORCEABLE server-side —
+      // a size cap is all there is. A participant can therefore stuff arbitrary content into
+      // THEIR OWN array, visible only to the two duel participants: the same trust envelope as
+      // guild chat messages. Accepted.
+      //
+      // The 50 MIRRORS DuelConstants.feedEventCap — edit both places in the same change.
       function isOwnScoreWrite() {
         return resource.data.status == 'active'
           && request.time < resource.data.endAt
           && (
                (request.auth.uid == resource.data.challengerUid
                   && request.resource.data.diff(resource.data).affectedKeys()
-                       .hasOnly(['challengerScore','challengerDayScores','challengerScoreUpdatedAt'])
+                       .hasOnly(['challengerScore','challengerDayScores','challengerScoreUpdatedAt','challengerFeedEvents'])
                   && request.resource.data.challengerScore is number
                   && request.resource.data.challengerScore >= 0
                   && request.resource.data.challengerScore <= resource.data.league * 110
                   && request.resource.data.challengerDayScores is list
-                  && request.resource.data.challengerDayScores.size() <= resource.data.league)
+                  && request.resource.data.challengerDayScores.size() <= resource.data.league
+                  // DUEL-FEED-1: my side's event array. ABSENCE-ESCAPE LEADS THE CLAUSE (mandatory
+                  // idiom): pre-DUEL-FEED clients push scores without this key and MUST keep working.
+                  && (!('challengerFeedEvents' in request.resource.data)
+                       || (request.resource.data.challengerFeedEvents is list
+                            && request.resource.data.challengerFeedEvents.size() <= 50)))
                ||
                (request.auth.uid == resource.data.opponentUid
                   && request.resource.data.diff(resource.data).affectedKeys()
-                       .hasOnly(['opponentScore','opponentDayScores','opponentScoreUpdatedAt'])
+                       .hasOnly(['opponentScore','opponentDayScores','opponentScoreUpdatedAt','opponentFeedEvents'])
                   && request.resource.data.opponentScore is number
                   && request.resource.data.opponentScore >= 0
                   && request.resource.data.opponentScore <= resource.data.league * 110
                   && request.resource.data.opponentDayScores is list
-                  && request.resource.data.opponentDayScores.size() <= resource.data.league)
+                  && request.resource.data.opponentDayScores.size() <= resource.data.league
+                  // DUEL-FEED-1: my side's event array. ABSENCE-ESCAPE LEADS THE CLAUSE (mandatory
+                  // idiom): pre-DUEL-FEED clients push scores without this key and MUST keep working.
+                  && (!('opponentFeedEvents' in request.resource.data)
+                       || (request.resource.data.opponentFeedEvents is list
+                            && request.resource.data.opponentFeedEvents.size() <= 50)))
              );
       }
 

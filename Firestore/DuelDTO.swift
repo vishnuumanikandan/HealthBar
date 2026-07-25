@@ -26,6 +26,25 @@ enum DuelStatus: String {
     case forfeited  // reserved (D1b)
 }
 
+/// One category-level score event (DUEL-FEED-1). Wire format — all four keys pinned.
+/// PRIVACY: category-level only; never food-derived detail beyond the five components.
+///
+/// Stored as an array element inside the shared `duels/{duelId}` doc, on the AUTHOR's own side
+/// (`challengerFeedEvents` / `opponentFeedEvents`) — so the side implies the author and no
+/// per-element `uid` is stored. `at` is CLIENT-stamped because
+/// `FieldValue.serverTimestamp()` is illegal inside an array.
+struct DuelFeedEventDTO: Codable, Equatable {
+    /// Deterministic dedupe id: `"{dayKey}_{category}_{fromTenths}_{toTenths}"` (built at the
+    /// emission site in `DataManager.updateMyDuelScores`).
+    let id: String
+    let category: String   // DayScoreBreakdown.Component rawValue; interpret via componentEnum
+    let delta: Double
+    let at: Date
+
+    /// nil for an unknown/future category — the event stays in the array and is hidden at render.
+    var componentEnum: DayScoreBreakdown.Component? { .init(rawValue: category) }
+}
+
 /// Duel tuning constants — no magic numbers at call sites. Every `48h`, `86400`,
 /// and league validation in the duel flow references these.
 enum DuelConstants {
@@ -149,6 +168,12 @@ enum DuelConstants {
     static let proximityPageSize = 20
     /// Rows fetched from EACH direction (up / down) per page — half of `proximityPageSize`.
     static let proximityPerDirection = 10
+
+    // MARK: - DUEL-FEED-1: score feed
+    /// Max score-feed events retained PER SIDE on a duel doc. Client-trimmed oldest-first on
+    /// append, before the write. MIRRORS the `.size() <= 50` cap in firestore.rules
+    /// `isOwnScoreWrite()` — edit both places in the same change.
+    static let feedEventCap = 50
 }
 
 /// A challengeable person — a friend, a guild-mate, or a ranked player from the RR-proximity
@@ -268,6 +293,13 @@ struct DuelDTO: Codable, Identifiable, Equatable {
     /// Server timestamp of each side's last score write.
     var challengerScoreUpdatedAt: Date?
     var opponentScoreUpdatedAt: Date?
+
+    // MARK: - DUEL-FEED-1: per-side score-feed events
+    /// Each side's own category-level score events, appended by that side at the score-push
+    /// chokepoint and rendered merged (both sides) on the Arena. Optional so pre-DUEL-FEED docs
+    /// decode nil; NOT part of either create rule's key set (the create paths never write them).
+    var challengerFeedEvents: [DuelFeedEventDTO]?
+    var opponentFeedEvents: [DuelFeedEventDTO]?
     /// Winner uid (absent on draw); set at resolution.
     var winnerUid: String?
     var resolvedAt: Date?
@@ -331,6 +363,8 @@ struct DuelDTO: Codable, Identifiable, Equatable {
         self.opponentDayScores = []
         self.challengerScoreUpdatedAt = nil
         self.opponentScoreUpdatedAt = nil
+        self.challengerFeedEvents = nil   // DUEL-FEED-1: never written on create
+        self.opponentFeedEvents = nil
         self.winnerUid = nil
         self.resolvedAt = nil
         self.forfeitedBy = nil
@@ -379,6 +413,19 @@ struct DuelDTO: Codable, Identifiable, Equatable {
 
     var resolvedChallengerDayScores: [Double] { challengerDayScores ?? [] }
     var resolvedOpponentDayScores: [Double] { opponentDayScores ?? [] }
+
+    // MARK: - DUEL-FEED-1 accessors (mirror the dayScores pattern)
+
+    var resolvedChallengerFeedEvents: [DuelFeedEventDTO] { challengerFeedEvents ?? [] }
+    var resolvedOpponentFeedEvents: [DuelFeedEventDTO] { opponentFeedEvents ?? [] }
+
+    /// My own / the counterparty's score-feed events, keyed on `isChallenger`.
+    func myFeedEvents(_ myUid: String) -> [DuelFeedEventDTO] {
+        isChallenger(myUid) ? resolvedChallengerFeedEvents : resolvedOpponentFeedEvents
+    }
+    func theirFeedEvents(_ myUid: String) -> [DuelFeedEventDTO] {
+        isChallenger(myUid) ? resolvedOpponentFeedEvents : resolvedChallengerFeedEvents
+    }
 
     /// Own-side RR-applied flag (absent == false).
     func rrApplied(for myUid: String) -> Bool {
