@@ -96,6 +96,15 @@ final class OnboardingViewModel {
     var saveError: String? = nil
     var isSaving: Bool = false
 
+    /// GOALS-1 — DISPLAY-ONLY cached values for the ResultsStep derivation card;
+    /// never canonical state, never persisted, never read by any computation. Set
+    /// from the same bmr/tdee/localCalories locals calculateAndFetchAI already
+    /// computes (no recomputation, no second math site).
+    private(set) var lastBMR: Double = 0
+    private(set) var lastTDEE: Double = 0
+    private(set) var lastAdjustment: Double = 0
+    private(set) var lastLocalCalories: Int = 0
+
     // MARK: - Edit Mode
 
     /// True when opened from "Edit Health Profile" (existingProfile was provided).
@@ -234,6 +243,23 @@ final class OnboardingViewModel {
         return "You're at your goal weight"
     }
 
+    // MARK: - Goal Direction (GOALS-1)
+
+    /// GOALS-1. rawValues feed the AI prompt payload only (D6) — they are NOT
+    /// persisted wire format and may be renamed alongside the prompt.
+    enum GoalDirection: String {
+        case lose, maintain, gain
+    }
+
+    /// From goal weight vs current weight, using GoalMath.maintainBandKg (the
+    /// weightDirectionLabel convention).
+    var goalDirection: GoalDirection {
+        let delta = computedGoalWeightKg - computedWeightKg
+        if delta > GoalMath.maintainBandKg { return .gain }
+        if delta < -GoalMath.maintainBandKg { return .lose }
+        return .maintain
+    }
+
     // MARK: - BMR / TDEE / Macros
 
     private func calculateBMR() -> Double {
@@ -258,9 +284,35 @@ final class OnboardingViewModel {
         return bmr * (multipliers[activityLevel] ?? 1.55)
     }
 
+    /// GOALS-1 calorie-adjustment constants. calPerLbPerWeek is the standard PLANNING
+    /// APPROXIMATION (500 cal/day ≈ 1 lb/week — a budgeting convention, not a
+    /// physiological law). Deficit cap 1000 (aggressive loss); surplus cap 500
+    /// (faster surplus gain is predominantly fat — lean-bulk ceiling).
+    private enum GoalMath {
+        static let calPerLbPerWeek: Double = 500
+        static let maxDeficit: Double = 1000
+        static let maxSurplus: Double = 500
+        /// SHARED CONVENTION with weightDirectionLabel's ±0.5 kg band — if one ever
+        /// changes, both must (single source of "close enough to maintain").
+        static let maintainBandKg: Double = 0.5
+        static let calorieFloor: Int = 1200       // existing floor, now named
+    }
+
     private func calculateCalorieTarget(tdee: Double) -> Int {
-        let deficit = min(weeklyPaceLbs * 500, 1000)
-        return max(1200, Int(tdee - deficit))
+        let adjustment = calorieAdjustment
+        return max(GoalMath.calorieFloor, Int(tdee + adjustment))
+    }
+
+    /// Signed daily calorie adjustment. Maintain (pace 0 OR direction .maintain) → 0.
+    /// Lose → −min(pace·500, 1000). Gain → +min(pace·500, 500).
+    var calorieAdjustment: Double {
+        guard weeklyPaceLbs > 0 else { return 0 }
+        let magnitude = weeklyPaceLbs * GoalMath.calPerLbPerWeek
+        switch goalDirection {
+        case .maintain: return 0
+        case .gain:     return min(magnitude, GoalMath.maxSurplus)
+        case .lose:     return -min(magnitude, GoalMath.maxDeficit)
+        }
     }
 
     private func macroGrams(calories: Int) -> (protein: Int, carbs: Int, fat: Int) {
@@ -328,6 +380,7 @@ final class OnboardingViewModel {
             "weightKg": computedWeightKg,
             "heightCm": computedHeightCm,
             "goalWeightKg": computedGoalWeightKg,
+            "goalDirection": goalDirection.rawValue,
             "weeklyPaceLbs": weeklyPaceLbs,
             "activityLevel": activityLevel,
             "dietStyle": dietStyle,
@@ -350,6 +403,7 @@ final class OnboardingViewModel {
         You are a concise nutrition coach. Return ONLY a JSON object, no prose, no markdown fences.
         {"calories": Int, "protein": Int, "carbs": Int, "fat": Int, "tip": String}
         tip must be exactly 2 sentences, personalized to the user's profile.
+        Honor goalDirection: for "maintain" keep calories within 5% of formulaCalories; never assume the user wants weight loss.
         """
 
         let requestBody = ClaudeAPIRequest(
@@ -465,6 +519,13 @@ final class OnboardingViewModel {
         let tdee = calculateTDEE(bmr: bmr)
         let localCalories = calculateCalorieTarget(tdee: tdee)
         let (localProtein, localCarbs, localFat) = macroGrams(calories: localCalories)
+
+        // GOALS-1: cache display-only derivation values for the ResultsStep card.
+        // Set before the edit fast-path branch so both paths populate identically.
+        lastBMR = bmr
+        lastTDEE = tdee
+        lastAdjustment = calorieAdjustment
+        lastLocalCalories = localCalories
 
         // Edit mode fast-path: skip Claude when nothing meaningful changed
         if isEditMode, let existing = existingProfile, !hasSignificantChanges(from: existing) {
