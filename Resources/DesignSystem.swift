@@ -1188,40 +1188,50 @@ extension View {
 /// Adaptive font. The flat family (now Erewhon, formerly Clean — the `isCleanUI` name is
 /// retained from the retired Clean era) uses Hanken Grotesk for body/emphasis and Bebas
 /// Neue for display; the pixel family uses Silkscreen (byte-identical to before).
+///
+/// TEXTSIZE-1 INVARIANT: every size-producing member of AppFont MUST apply
+/// SettingsManager.shared.textScaleFactor before constructing the Font.
+/// New members added later inherit this rule — no exceptions.
 enum AppFont {
     /// Emphasis / body-bold. Erewhon: Hanken Grotesk SemiBold (600 — the mockup's
     /// dominant emphasis weight). Pixel: Silkscreen bold.
     static func bold(_ size: CGFloat) -> Font {
+        let scaled = size * SettingsManager.shared.textScaleFactor
         if SettingsManager.shared.isCleanUI {
-            return .custom("HankenGrotesk-SemiBold", size: size)
+            return .custom("HankenGrotesk-SemiBold", size: scaled)
         }
-        return DesignSystem.Typography.pixel(size, weight: .bold)
+        return DesignSystem.Typography.pixel(scaled, weight: .bold)
     }
 
     /// Body / regular. Erewhon: Hanken Grotesk Regular. Pixel: Silkscreen regular.
     static func regular(_ size: CGFloat) -> Font {
+        let scaled = size * SettingsManager.shared.textScaleFactor
         if SettingsManager.shared.isCleanUI {
-            return .custom("HankenGrotesk-Regular", size: size)
+            return .custom("HankenGrotesk-Regular", size: scaled)
         }
-        return DesignSystem.Typography.pixel(size)
+        return DesignSystem.Typography.pixel(scaled)
     }
 
     /// Display type — numerals, titles, and hero/stat text ONLY (never body/paragraph).
     /// Erewhon: Bebas Neue. Pixel: Silkscreen bold.
     static func display(_ size: CGFloat) -> Font {
+        let scaled = size * SettingsManager.shared.textScaleFactor
         if SettingsManager.shared.isCleanUI {
-            return .custom("BebasNeue-Regular", size: size)
+            return .custom("BebasNeue-Regular", size: scaled)
         }
-        return DesignSystem.Typography.pixel(size, weight: .bold)
+        return DesignSystem.Typography.pixel(scaled, weight: .bold)
     }
 
     /// Legacy app-title treatment. The serif era retired with Clean; the flat branch now
     /// routes to `display` (Bebas Neue). Pixel: Silkscreen bold (unchanged).
     static func serifTitle(_ size: CGFloat) -> Font {
         if SettingsManager.shared.isCleanUI {
+            // Delegates to display(_:), which applies textScaleFactor itself. Do NOT
+            // pre-scale here — that would double-apply the factor in the Erewhon branch
+            // (TEXTSIZE-1: scale exactly once, at the point the Font is constructed).
             return display(size)
         }
-        return DesignSystem.Typography.pixel(size, weight: .bold)
+        return DesignSystem.Typography.pixel(size * SettingsManager.shared.textScaleFactor, weight: .bold)
     }
 }
 
