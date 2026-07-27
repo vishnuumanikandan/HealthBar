@@ -40,6 +40,11 @@ struct UserProgressDTO: Codable {
     var tutorialSeen: Bool?
     var tutorialSkipped: Bool?
     var tutorialCompletedStepsArray: [String]?
+    /// Per-quest skips (TUTFIX-1) — wire format is an array of PINNED catalog step ids, exactly
+    /// like the completed array. Optional so pre-TUTFIX docs decode; old clients ignore the
+    /// unknown field on decode, and the monotonic union merge self-heals an old client's
+    /// field-absent overwrite on the next download (the tutorial-fields doctrine).
+    var tutorialSkippedStepsArray: [String]?
 
     // MARK: - Duel record (D1b) — optional for legacy-doc decode; read via resolved accessors.
     var duelWins: Int?
@@ -80,6 +85,7 @@ struct UserProgressDTO: Codable {
     var resolvedTutorialSeen: Bool { tutorialSeen ?? false }
     var resolvedTutorialSkipped: Bool { tutorialSkipped ?? false }
     var resolvedTutorialCompletedSteps: Set<String> { Set(tutorialCompletedStepsArray ?? []) }
+    var resolvedTutorialSkippedSteps: Set<String> { Set(tutorialSkippedStepsArray ?? []) }
 
     // Daily-goal XP (FIXES-1) — nil-PRESERVING (nil = never awarded is meaningful, so
     // it is not coalesced to a sentinel the way `resolvedRR`/duel accessors are). Kept as
@@ -113,6 +119,7 @@ struct UserProgressDTO: Codable {
         self.tutorialSeen = progress.tutorialSeen
         self.tutorialSkipped = progress.tutorialSkipped
         self.tutorialCompletedStepsArray = Array(progress.tutorialCompletedStepSet).sorted()
+        self.tutorialSkippedStepsArray = Array(progress.tutorialSkippedStepSet).sorted()
         self.lastDailyGoalXPDate = progress.lastDailyGoalXPDate
     }
 
@@ -137,6 +144,7 @@ struct UserProgressDTO: Codable {
         progress.tutorialSeen = resolvedTutorialSeen
         progress.tutorialSkipped = resolvedTutorialSkipped
         progress.tutorialCompletedSteps = resolvedTutorialCompletedSteps.sorted().joined(separator: ",")
+        progress.tutorialSkippedSteps = resolvedTutorialSkippedSteps.sorted().joined(separator: ",")
         progress.duelWins = resolvedDuelWins
         progress.duelLosses = resolvedDuelLosses
         progress.duelDraws = resolvedDuelDraws
@@ -180,6 +188,7 @@ struct UserProgressDTO: Codable {
             || resolvedTutorialSeen != progress.tutorialSeen
             || resolvedTutorialSkipped != progress.tutorialSkipped
             || resolvedTutorialCompletedSteps != progress.tutorialCompletedStepSet
+            || resolvedTutorialSkippedSteps != progress.tutorialSkippedStepSet
             || resolvedLastDailyGoalXPDate != progress.lastDailyGoalXPDate
     }
 }

@@ -638,9 +638,10 @@ final class AppCoordinator {
         await dataManager.markTutorialSeen()
     }
 
-    /// Skips the tutorial — no late XP (passthrough).
-    func skipTutorial() async {
-        await dataManager.skipTutorial()
+    /// Skips a single tutorial quest — the pinned card's SKIP (passthrough; guest-guarded,
+    /// idempotent and XP-free in DataManager).
+    func skipTutorialStep(_ stepId: String) async {
+        await dataManager.skipTutorialStep(stepId)
     }
 
     /// Completes a tutorial step and awards its one-time XP. Mirrors `completeQuest`'s

@@ -239,14 +239,12 @@ final class HomeViewModel {
         await loadTutorialState()
     }
 
-    /// SKIP tapped (welcome popup or pinned card): skip + mark seen, dismiss, reload. The
-    /// mark-seen is a no-op from the card (it only appears once the popup is dismissed,
-    /// i.e. already seen), so one method serves both call sites.
+    /// Per-quest SKIP tapped on the pinned card (TUTFIX-1 Part C) — the only skip in the
+    /// product. Skips that one quest, then reloads state (the coordinator + reload are the
+    /// single source; the VM never mutates a duplicate copy).
     @MainActor
-    func skipTutorialTapped() async {
-        showTutorialPopup = false
-        await coordinator.skipTutorial()
-        await coordinator.markTutorialSeen()
+    func skipTutorialStepTapped(_ stepId: String) async {
+        await coordinator.skipTutorialStep(stepId)
         await loadTutorialState()
     }
 

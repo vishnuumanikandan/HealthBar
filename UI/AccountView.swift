@@ -370,7 +370,7 @@ struct AccountView: View {
                     greetingName: viewModel.currentUsername.isEmpty ? nil : "@\(viewModel.currentUsername)",
                     isReplay: true,
                     onStart: { showReplayTutorial = false },
-                    onSkip: { showReplayTutorial = false }
+                    onClose: { showReplayTutorial = false }
                 )
                 .transition(.opacity)
             }

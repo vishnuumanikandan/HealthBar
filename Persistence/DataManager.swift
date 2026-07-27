@@ -739,8 +739,9 @@ final class DataManager {
     /// - `totalXP`, `longestStreak` → `max()` wins (never decrease)
     /// - `lastActiveDate` → `max()` wins
     /// - `claimedMilestones` → set union (milestones are never un-claimed)
-    /// - tutorial fields (TUT-1a) → completed-step set union, seen/skipped OR (monotonic,
-    ///   self-protecting; NOT confirmation-gated — see the inline note below)
+    /// - tutorial fields (TUT-1a, TUTFIX-1) → completed-step and skipped-step set unions,
+    ///   seen/skipped OR (monotonic, self-protecting; NOT confirmation-gated — see the
+    ///   inline note below)
     /// - `currentStreak` → Firestore value wins (NON-monotonic — a missed-day reset must
     ///   propagate across devices; `max()` would resurrect a broken streak — review finding H1)
     /// - `rr` → Firestore value wins (server-authoritative, NON-monotonic — never `max()`);
@@ -776,6 +777,9 @@ final class DataManager {
             let mergedTutorialSteps = mergedTutorialStepSet.sorted().joined(separator: ",")
             let mergedTutorialSeen = dto.resolvedTutorialSeen || local.tutorialSeen
             let mergedTutorialSkipped = dto.resolvedTutorialSkipped || local.tutorialSkipped
+            // Per-quest skips (TUTFIX-1) — same monotonic union, same exclusions.
+            let mergedTutorialSkippedSet = dto.resolvedTutorialSkippedSteps.union(local.tutorialSkippedStepSet)
+            let mergedTutorialSkippedSteps = mergedTutorialSkippedSet.sorted().joined(separator: ",")
             // Daily-goal XP date (FIXES-1) — MONOTONIC latest-date-wins, the SAME self-protecting
             // posture as the tutorial fields above: a field-absent older-client snapshot merges
             // harmlessly (nil orders as the distant past), so it is likewise deliberately ABSENT
@@ -855,6 +859,7 @@ final class DataManager {
                 || mergedTutorialStepSet != local.tutorialCompletedStepSet
                 || mergedTutorialSeen != local.tutorialSeen
                 || mergedTutorialSkipped != local.tutorialSkipped
+                || mergedTutorialSkippedSet != local.tutorialSkippedStepSet
                 || mergedLastDailyGoalXPDate != local.lastDailyGoalXPDate
 
             if changed {
@@ -878,6 +883,7 @@ final class DataManager {
                 local.tutorialCompletedSteps = mergedTutorialSteps
                 local.tutorialSeen = mergedTutorialSeen
                 local.tutorialSkipped = mergedTutorialSkipped
+                local.tutorialSkippedSteps = mergedTutorialSkippedSteps
                 local.lastDailyGoalXPDate = mergedLastDailyGoalXPDate
                 try modelContext.save()
             }
@@ -1501,11 +1507,12 @@ final class DataManager {
             state = TutorialState(
                 seen: progress.tutorialSeen,
                 skipped: progress.tutorialSkipped,
-                completed: progress.tutorialCompletedStepSet
+                completed: progress.tutorialCompletedStepSet,
+                skippedSteps: progress.tutorialSkippedStepSet
             )
         } else {
             // No local UserProgress yet (pre-bootstrap edge) — treat as a fresh tutorial.
-            state = TutorialState(seen: false, skipped: false, completed: [])
+            state = TutorialState(seen: false, skipped: false, completed: [], skippedSteps: [])
         }
         TutorialProgress.shared.update(state)
         return state
@@ -1529,12 +1536,21 @@ final class DataManager {
         await refreshTutorialStore()
     }
 
-    /// Skips the tutorial (no-op if already done). Never touches the completed set; no XP.
+    /// Skips ONE quest — the pinned card's per-quest SKIP (TUTFIX-1 Part C), the only skip in
+    /// the product. NO XP, no badge check, no feed event: it merely suppresses the card/beacon
+    /// prompt for that step, and a skipped step the user later performs still completes and
+    /// awards normally (`shouldAttempt` stays completed-only). Idempotent — an unknown id, an
+    /// already-completed or already-skipped id, and a done tutorial are all no-ops. Every
+    /// condition sits in the chain (never an early return) so the store refresh always runs.
     @MainActor
-    func skipTutorial() async {
+    func skipTutorialStep(_ stepId: String) async {
         guard !isGuest else { return }
-        if let progress = try? await getUserProgress(), !progress.tutorialDone {
-            progress.tutorialSkipped = true
+        if TutorialCatalog.step(id: stepId) != nil,
+           let progress = try? await getUserProgress(),
+           !progress.tutorialDone,
+           !progress.hasCompletedTutorialStep(stepId),
+           !progress.tutorialSkippedStepSet.contains(stepId) {
+            progress.markTutorialStepSkipped(stepId)
             try? await saveUserProgress()
         }
         await refreshTutorialStore()

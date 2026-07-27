@@ -66,6 +66,10 @@ final class UserProgress {
     var tutorialSeen: Bool = false
     var tutorialSkipped: Bool = false
     var tutorialCompletedSteps: String = ""   // comma-separated step ids
+    // Per-quest skips (TUTFIX-1) — same monotonic, comma-separated encoding as the completed
+    // set. `tutorialSkipped` above is the LEGACY whole-tutorial flag (wire format, read-only
+    // as of TUTFIX-1 Part D); this is the per-step set the pinned card's SKIP writes.
+    var tutorialSkippedSteps: String = ""     // comma-separated step ids
 
     // MARK: - Duel record (D1b)
     // Server-authoritative and NON-monotonic (win streak resets; W/L/D accumulate).
@@ -147,10 +151,30 @@ final class UserProgress {
         }
     }
 
-    /// Done := skipped OR all catalog steps completed (Decision 5). Delegates to the
-    /// single `TutorialState.done` predicate — never restates it here.
+    /// Returns the set of per-quest-skipped tutorial step ids (empty String → empty set).
+    var tutorialSkippedStepSet: Set<String> {
+        guard !tutorialSkippedSteps.isEmpty else { return [] }
+        return Set(tutorialSkippedSteps.split(separator: ",").map { String($0) })
+    }
+
+    /// Skips a single tutorial step (append-if-absent — mirrors `completeTutorialStep(_:)`).
+    /// No XP, no badge: skipping suppresses the prompt, it never counts as doing the quest.
+    func markTutorialStepSkipped(_ id: String) {
+        guard !tutorialSkippedStepSet.contains(id) else { return }
+        if tutorialSkippedSteps.isEmpty {
+            tutorialSkippedSteps = id
+        } else {
+            tutorialSkippedSteps += ",\(id)"
+        }
+    }
+
+    /// Done := skipped OR all catalog steps completed-or-skipped (Decision 5, extended by
+    /// TUTFIX-1). Delegates to the single `TutorialState.done` predicate — never restates it here.
     var tutorialDone: Bool {
-        TutorialState(seen: tutorialSeen, skipped: tutorialSkipped, completed: tutorialCompletedStepSet).done
+        TutorialState(seen: tutorialSeen,
+                      skipped: tutorialSkipped,
+                      completed: tutorialCompletedStepSet,
+                      skippedSteps: tutorialSkippedStepSet).done
     }
 
     /// Initializes user progress with starting values
