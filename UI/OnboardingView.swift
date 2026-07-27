@@ -456,7 +456,7 @@ private struct GoalWeightStep: View {
 
 private struct WeeklyPaceStep: View {
     @Binding var pace: Double
-    private let options: [Double] = [0.5, 1.0, 1.5, 2.0]
+    private let options: [Double] = [0.0, 0.5, 1.0, 1.5, 2.0]
 
     @State private var settings = SettingsManager.shared
     private var tc: ThemeColors { settings.activeColors }
@@ -474,7 +474,7 @@ private struct WeeklyPaceStep: View {
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                                Text("\(option, specifier: "%.1f") lbs / week")
+                                Text(option == 0 ? "Maintain current weight" : "\(option, specifier: "%.1f") lbs / week")
                                     .font(isSelected ? AppFont.bold(16) : AppFont.regular(16))
                                     .foregroundColor(tc.textPrimary)
                                 Text(paceDescription(option))
@@ -496,7 +496,9 @@ private struct WeeklyPaceStep: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(option, specifier: "%.1f") lbs per week, \(paceDescription(option))")
+                    .accessibilityLabel(option == 0
+                        ? "Maintain current weight, \(paceDescription(option))"
+                        : "\(option, specifier: "%.1f") lbs per week, \(paceDescription(option))")
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
@@ -505,6 +507,7 @@ private struct WeeklyPaceStep: View {
 
     private func paceDescription(_ lbs: Double) -> String {
         switch lbs {
+        case 0.0: return "Eat at maintenance — no deficit or surplus"
         case 0.5: return "Gentle — easier to sustain long-term"
         case 1.0: return "Steady — recommended for most people"
         case 1.5: return "Aggressive — requires strong discipline"
@@ -967,6 +970,58 @@ private struct ResultsStep: View {
                 // Accent-bordered emphasis card (R6c: isSelected drives the accent stroke)
                 .adaptiveCard(borderColor: tc.primary, fillColor: tc.cardBackground, isSelected: true)
 
+                // Derivation card (GOALS-1) — makes the calorie number explainable
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+                    Text("HOW WE GOT THIS")
+                        .font(AppFont.display(11))
+                        .tracking(1.1)
+                        .foregroundColor(tc.primary)
+
+                    derivationRow("Base metabolism (BMR)", value: "\(Int(viewModel.lastBMR)) cal")
+                    derivationRow("Maintenance (TDEE)", value: "\(Int(viewModel.lastTDEE)) cal")
+
+                    // Sign of the applied adjustment picks the copy — pace 0 or a
+                    // maintain-direction goal both yield 0 → the maintenance line.
+                    if viewModel.lastAdjustment < 0 {
+                        derivationRow(
+                            "Loss pace −\(Int(abs(viewModel.lastAdjustment))) cal/day",
+                            value: "\(String(format: "%.1f", viewModel.weeklyPaceLbs)) lb/wk"
+                        )
+                    } else if viewModel.lastAdjustment > 0 {
+                        derivationRow(
+                            "Gain pace +\(Int(viewModel.lastAdjustment)) cal/day",
+                            value: "\(String(format: "%.1f", viewModel.weeklyPaceLbs)) lb/wk"
+                        )
+                    } else {
+                        Text("Maintenance goal — no adjustment")
+                            .font(AppFont.regular(13))
+                            .foregroundColor(tc.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    // Floor note — shown iff the raw formula (tdee + adjustment) fell
+                    // below the safety floor. lastLocalCalories == max(floor, raw), so
+                    // raw < lastLocalCalories is exactly "floor engaged" — keeps the VM's
+                    // private GoalMath.calorieFloor out of the view (no magic 1200 here).
+                    if Int(viewModel.lastTDEE + viewModel.lastAdjustment) < viewModel.lastLocalCalories {
+                        Text("Raised to the 1,200 cal safety floor")
+                            .font(AppFont.regular(12))
+                            .foregroundColor(tc.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    // AI fine-tune note — final calories diverged from the formula value.
+                    if viewModel.calculatedCalories != viewModel.lastLocalCalories {
+                        Text("Fine-tuned by AI from the formula value of \(viewModel.lastLocalCalories)")
+                            .font(AppFont.regular(12))
+                            .foregroundColor(tc.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(DesignSystem.Spacing.md)
+                .adaptiveCard(borderColor: tc.primary.opacity(0.2), fillColor: tc.cardBackground)
+
                 // Macro grid
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
                           spacing: DesignSystem.Spacing.md) {
@@ -1021,6 +1076,20 @@ private struct ResultsStep: View {
                 Spacer(minLength: DesignSystem.Spacing.xxl)
             }
             .padding(.horizontal, DesignSystem.Spacing.md)
+        }
+    }
+
+    /// GOALS-1 derivation-card row: label left, value right. Mirrors macroCard's
+    /// local-view-builder pattern (no new abstraction).
+    private func derivationRow(_ label: String, value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(AppFont.regular(13))
+                .foregroundColor(tc.textSecondary)
+            Spacer()
+            Text(value)
+                .font(AppFont.bold(13))
+                .foregroundColor(tc.textPrimary)
         }
     }
 
