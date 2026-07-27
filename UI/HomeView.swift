@@ -769,8 +769,7 @@ struct HomeView: View {
                 if viewModel.showTutorialPopup {
                     TutorialWelcomePopup(
                         greetingName: viewModel.greetingName,
-                        onStart: { Task { await viewModel.startTutorial() } },
-                        onSkip: { Task { await viewModel.skipTutorialTapped() } }
+                        onStart: { Task { await viewModel.startTutorial() } }
                     )
                     .transition(.opacity)
                 }
@@ -908,7 +907,7 @@ struct HomeView: View {
                     // so visibility, N/6 and the current step advance the moment a step completes on
                     // any tab. The VM mirror only refreshed on Home re-appearance. nil/done ⇒ nothing.
                     if let tut = TutorialProgress.shared.state {
-                        FirstQuestsCard(state: tut, onSkip: { Task { await viewModel.skipTutorialTapped() } })
+                        FirstQuestsCard(state: tut, onSkipStep: { id in Task { await viewModel.skipTutorialStepTapped(id) } })
                     }
 
                     // 1. XP / Rank Card
@@ -1026,7 +1025,7 @@ struct HomeView: View {
                 // visibility, N/6 and the current step advance the moment a step completes on any
                 // tab. The VM mirror only refreshed on Home re-appearance. nil/done ⇒ nothing.
                 if let tut = TutorialProgress.shared.state {
-                    FirstQuestsCard(state: tut, onSkip: { Task { await viewModel.skipTutorialTapped() } })
+                    FirstQuestsCard(state: tut, onSkipStep: { id in Task { await viewModel.skipTutorialStepTapped(id) } })
                         .padding(.top, 18)
                         .modifier(EntranceReveal(index: 0, isRevealed: hasRevealed, reduceMotion: reduceMotion))
                 }
@@ -1471,9 +1470,6 @@ struct HomeView: View {
                       action: { selectedTab = 1 }, icon: "arrow.up.right")
             AppButton(title: "Scan", style: .secondary,
                       action: { viewModel.showQuickScan = true }, icon: "viewfinder")
-                // TUT-2 aiLog beacon (Decision 3) — the Home quick-log/scan control (clean arm).
-                // AppButton's own radius IS the modifier default (Erewhon.buttonRadius, 14).
-                .questBeacon(TutorialCatalog.aiLogId)
         }
         .sheet(isPresented: $viewModel.showQuickScan) {
             QuickScanView(viewModel: viewModel, selectedTab: $selectedTab)
@@ -2023,9 +2019,6 @@ struct HomeView: View {
                 }
                 .frame(width: 80, height: 54)
             }
-            // TUT-2 aiLog beacon (Decision 3) — the Home quick-log/scan control (pixel arm).
-            // The pixel Scan button is a stepped AdaptiveCard tile — trace it near-square.
-            .questBeacon(TutorialCatalog.aiLogId, cornerRadius: DesignSystem.CornerRadius.sm)
         }
         .sheet(isPresented: $viewModel.showQuickScan) {
             QuickScanView(viewModel: viewModel, selectedTab: $selectedTab)
@@ -2980,12 +2973,6 @@ struct QuickScanAddFoodView: View {
             #endif
 
             isSubmitting = false
-            // TUT-2 aiLog detection (Decision 2) — QuickScan save success. One of two aiLog sites
-            // (the describe path in FoodLogViewModel is the other); the membership guard in
-            // completeTutorialStep dedups if any future flow ever hits both.
-            if TutorialProgress.shared.shouldAttempt(TutorialCatalog.aiLogId) {
-                Task { _ = try? await coordinator.completeTutorialStep(TutorialCatalog.aiLogId) }
-            }
             onComplete()
 
         } catch {

@@ -1278,6 +1278,10 @@ struct FoodLogView: View {
                     viewModel.pendingMealType = .uncategorized
                     viewModel.openDescribeMeal()
                 }
+                // TUTFIX-1 aiLog beacon — the AI describe entry affordance (one target; retargeted
+                // from the Home Quick Scan, which is barcode-only). A flat method row inside the
+                // 14-radius group — trace it with the small radius.
+                .questBeacon(TutorialCatalog.aiLogId, cornerRadius: DesignSystem.CornerRadius.sm)
                 addRow(
                     icon: "magnifyingglass", title: "Food database",
                     subtitle: "Search thousands of foods",

@@ -66,16 +66,16 @@ enum TutorialCatalog {
     /// pinned constants above (single literal per id) and are stored in the Firestore
     /// UserProgress doc — NEVER rename; a new step gets an explicit pinned id.
     static let steps: [TutorialStep] = [
-        TutorialStep(id: aiLogId,        ordinal:  1, title: "Log a meal with AI",       detail: "Describe or scan a meal — the AI does the rest", xp: 25),
-        TutorialStep(id: openDatabaseId, ordinal:  2, title: "Browse the food database", detail: "Open the Log tab's food database",               xp: 20),
-        TutorialStep(id: barcodeScanId,  ordinal:  3, title: "Try the barcode scanner",  detail: "Open the scanner from the Log tab",              xp: 25),
-        TutorialStep(id: friendsId,      ordinal:  4, title: "Find your friends",        detail: "Visit Friends — or send a request",              xp: 20),
-        TutorialStep(id: duelPrimerId,   ordinal:  5, title: "Learn how duels work",     detail: "Read How Duels Work in Battle",                  xp: 25),
-        TutorialStep(id: joinGuildId,    ordinal:  6, title: "Join a guild",             detail: "Join or request one from the directory",         xp: 25),
-        TutorialStep(id: weeklyStatsId,  ordinal:  7, title: "Check your week",          detail: "Explore your weekly stats",                      xp: 15),
-        TutorialStep(id: openProfileId,  ordinal:  8, title: "Visit your profile",       detail: "See your rank journey and badges",               xp: 15),
-        TutorialStep(id: changeThemeId,  ordinal:  9, title: "Try a new theme",          detail: "Settings → appearance",                          xp: 15),
-        TutorialStep(id: perfectDayId,   ordinal: 10, title: "Meet all your goals",      detail: "Hit calories, protein, and purity in one day",   xp: 60),
+        TutorialStep(id: aiLogId,        ordinal:  1, title: "Log a meal with AI",       detail: "Describe a meal in the Log tab — AI does the rest", xp: 25),
+        TutorialStep(id: openDatabaseId, ordinal:  2, title: "Browse the food database", detail: "Open the Log tab's food database",                  xp: 20),
+        TutorialStep(id: barcodeScanId,  ordinal:  3, title: "Try the barcode scanner",  detail: "Open the scanner from the Log tab",                 xp: 25),
+        TutorialStep(id: friendsId,      ordinal:  4, title: "Find your friends",        detail: "Visit Friends — or send a request",                 xp: 20),
+        TutorialStep(id: duelPrimerId,   ordinal:  5, title: "Learn how duels work",     detail: "Read How Duels Work in Battle",                     xp: 25),
+        TutorialStep(id: joinGuildId,    ordinal:  6, title: "Join a guild",             detail: "Join or request one from the directory",            xp: 25),
+        TutorialStep(id: weeklyStatsId,  ordinal:  7, title: "Check your week",          detail: "Explore your weekly stats",                         xp: 15),
+        TutorialStep(id: openProfileId,  ordinal:  8, title: "Visit your profile",       detail: "See your rank journey and badges",                  xp: 15),
+        TutorialStep(id: changeThemeId,  ordinal:  9, title: "Try a new theme",          detail: "Settings → appearance",                             xp: 15),
+        TutorialStep(id: perfectDayId,   ordinal: 10, title: "Meet all your goals",      detail: "Hit calories, protein, and purity in one day",      xp: 60),
     ]
 
     /// The set of all catalog step ids — the target of the `done` superset check.
@@ -98,14 +98,21 @@ struct TutorialState: Equatable {
     let seen: Bool
     let skipped: Bool
     let completed: Set<String>
+    /// Per-quest skips (TUTFIX-1 Part C) — the ids the user dismissed one at a time from the
+    /// pinned card. Monotonic like `completed`, and disjoint from it only by convention: a
+    /// skipped step the user later performs still completes (and still earns its XP).
+    let skippedSteps: Set<String>
 
-    /// Done := skipped OR every catalog id completed. A superset (an extra unknown id
-    /// from a future version) still counts as done — the check is against `allIds`.
-    var done: Bool { skipped || completed.isSuperset(of: TutorialCatalog.allIds) }
+    /// Done via any of three routes: legacy whole-tutorial skip (the skipped flag — no write
+    /// path remains as of Part D, read-only for legacy users and guests), full completion, or
+    /// every step individually completed-or-skipped. INVARIANT: !done ⇒ at least one catalog
+    /// step is neither completed nor skipped, which is what guarantees
+    /// FirstQuestsCard.currentStep is non-nil whenever the card renders.
+    var done: Bool { skipped || completed.union(skippedSteps).isSuperset(of: TutorialCatalog.allIds) }
 
     /// Guests are excluded entirely (Decision 7): treated as seen + skipped ⇒ done, so
     /// no popup, no pinned card, no writes.
-    static let guest = TutorialState(seen: true, skipped: true, completed: [])
+    static let guest = TutorialState(seen: true, skipped: true, completed: [], skippedSteps: [])
 }
 
 // MARK: - Shared Read-Model Store
@@ -137,6 +144,9 @@ final class TutorialProgress {
     /// inlined. False when the tutorial is unloaded, done (skipped or fully complete —
     /// guests included), or already holds `stepId`; true otherwise. An optimization only:
     /// the `completeTutorialStep` chokepoint stays the correctness boundary, not this.
+    /// Deliberately COMPLETED-ONLY (TUTFIX-1 Part C): a per-quest-skipped step the user later
+    /// performs anyway still completes and still awards its XP — skipping only suppresses the
+    /// card/beacon prompt, so the Tutorial Complete badge stays reachable after skips.
     func shouldAttempt(_ stepId: String) -> Bool {
         guard let state, !state.done else { return false }
         return !state.completed.contains(stepId)
@@ -146,20 +156,22 @@ final class TutorialProgress {
 // MARK: - Welcome Popup
 
 /// The 3-page welcome card, shown as a centered OVERLAY over the dimmed Home (never a
-/// sheet / fullScreenCover). Owns NO persistence — it takes `onStart` / `onSkip`
+/// sheet / fullScreenCover). Owns NO persistence — it takes `onStart` / `onClose`
 /// closures the presenter wires (the AvatarPickerSheet `onSave` precedent) and never
-/// touches AppCoordinator, DataManager, or any store. `isReplay` (Settings replay) is
-/// visually identical; the presenter simply supplies dismiss-only closures.
+/// touches AppCoordinator, DataManager, or any store. `isReplay` (Settings replay) adds the
+/// header Close button; the presenter simply supplies dismiss-only closures.
 struct TutorialWelcomePopup: View {
 
     /// Greeting subject as plain data — the presenter passes the cached UserProfile
     /// displayName for first-run (or an @handle for Settings replay). nil / empty ⇒
     /// "Hey there". The popup never resolves identity itself (stays persistence-free).
     let greetingName: String?
-    /// Read-only replay (Settings). Visuals identical; only the a11y verb differs.
+    /// Read-only replay (Settings). Gates the header Close button, which first-run does not get.
     var isReplay: Bool = false
     let onStart: () -> Void
-    let onSkip: () -> Void
+    /// Replay-only dismiss (TUTFIX-1 Part D). Defaulted because first-run never renders the
+    /// button that calls it — first-run's only action is `onStart`.
+    var onClose: () -> Void = {}
 
     @State private var page = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -188,17 +200,20 @@ struct TutorialWelcomePopup: View {
 
     private var card: some View {
         VStack(spacing: DesignSystem.Spacing.md) {
-            // SKIP persists on every page (Decision / spec).
+            // Close button — REPLAY ONLY (TUTFIX-1 Part D): first-run has no whole-skip; the
+            // card's per-quest SKIP is the only skip.
             HStack {
                 Spacer()
-                Button(action: onSkip) {
-                    Text("SKIP")
-                        .font(AppFont.bold(11))
-                        .tracking(1.4)
-                        .foregroundColor(tc.textTertiary)
+                if isReplay {
+                    Button(action: onClose) {
+                        Text("SKIP")
+                            .font(AppFont.bold(11))
+                            .tracking(1.4)
+                            .foregroundColor(tc.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(isReplay ? "Close" : "Skip tutorial")
             }
 
             // Paged content — only the current page mounts, so each page re-stages its
@@ -440,30 +455,37 @@ private struct TutorialReveal: ViewModifier {
 
 // MARK: - First-Quests Card
 
+// TODO-tutorial-prebootstrap-skip: skipTutorialStep/markTutorialSeen silently no-op if UserProgress doesn't exist yet (pre-bootstrap edge, documented in refreshTutorialStore); harden if the edge ever fires in practice.
 /// The pinned Home card that tracks tutorial progress. Owns NO persistence — it takes a
-/// resolved `TutorialState` and an `onSkip` closure (the presenter wires it). Renders
+/// resolved `TutorialState` and an `onSkipStep` closure (the presenter wires it). Renders
 /// nothing once the tutorial is done (the unloaded / guest case is filtered by the
 /// caller's `if let`). Card body tap is inert (Decision 13 — navigation is TUT-1b).
 struct FirstQuestsCard: View {
     let state: TutorialState
-    let onSkip: () -> Void
+    /// Per-quest SKIP (TUTFIX-1 Part C) — receives the id of the quest currently shown. This
+    /// is the ONLY skip in the product; the welcome popup's whole-tutorial skip is gone.
+    let onSkipStep: (String) -> Void
 
     private var tc: ThemeColors { SettingsManager.shared.activeColors }
 
-    /// Lowest-ordinal step not yet completed. nil only when all are done (⇒ card hidden).
+    /// Lowest-ordinal step neither completed NOR per-quest-skipped. nil when every catalog
+    /// step is one or the other; a legacy whole-SKIPPED tutorial keeps this non-nil —
+    /// visibility is gated on state.done, not on this.
     private var currentStep: TutorialCatalog.TutorialStep? {
-        TutorialCatalog.steps.first { !state.completed.contains($0.id) }
+        TutorialCatalog.steps.first { !state.completed.contains($0.id) && !state.skippedSteps.contains($0.id) }
     }
 
     /// Completed count, guarded to catalog ids so a future unknown id can't inflate it.
+    /// Skipped quests deliberately do NOT count — the header tracks quests actually done.
     private var completedCount: Int {
         state.completed.intersection(TutorialCatalog.allIds).count
     }
 
     var body: some View {
-        if state.done, currentStep == nil {
-            EmptyView()
-        } else if let step = currentStep {
+        // Hidden whenever the tutorial is done — SKIPPED (completed set untouched, so
+        // currentStep is non-nil) or fully completed. The old `done && currentStep == nil`
+        // form only covered the completion path and rendered the card forever after a skip.
+        if !state.done, let step = currentStep {
             content(step)
         }
     }
@@ -479,7 +501,7 @@ struct FirstQuestsCard: View {
                 Text("\(completedCount) / \(TutorialCatalog.steps.count)")
                     .font(AppFont.regular(11))
                     .foregroundColor(tc.textTertiary)
-                Button(action: onSkip) {
+                Button(action: { onSkipStep(step.id) }) {
                     Text("SKIP")
                         .font(AppFont.bold(9))
                         .tracking(1.0)
@@ -487,7 +509,7 @@ struct FirstQuestsCard: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.leading, DesignSystem.Spacing.sm)
-                .accessibilityLabel("Skip tutorial")
+                .accessibilityLabel("Skip this quest")
             }
 
             HStack(spacing: 10) {
@@ -554,7 +576,11 @@ private struct QuestBeacon: ViewModifier {
     /// `state` directly so @Observable re-evaluates it as the store changes.
     private var isActiveBeacon: Bool {
         guard let state = TutorialProgress.shared.state, !state.done else { return false }
-        let firstIncomplete = TutorialCatalog.steps.first { !state.completed.contains($0.id) }
+        // Predicate byte-identical to FirstQuestsCard.currentStep so the glow always tracks
+        // the card's current quest — including past per-quest skips (TUTFIX-1 Part C).
+        let firstIncomplete = TutorialCatalog.steps.first {
+            !state.completed.contains($0.id) && !state.skippedSteps.contains($0.id)
+        }
         return firstIncomplete?.id == stepId
     }
 
