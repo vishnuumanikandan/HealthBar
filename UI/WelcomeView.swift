@@ -20,17 +20,19 @@ import SwiftUI
 /// alongside Bebas/Hanken. Precedent: the R7a fixed-light celebration overlay.
 ///
 /// Navigation state lives in ContentView — this view owns none of it. The two CTAs
-/// invoke injected closures (`onGetStarted` / `onLogIn`); ContentView persists the
-/// `hasSeenWelcome` flag and drives the NavigationPath. The screen makes ZERO data
-/// calls (no Firestore, no SwiftData), so no guest guard applies here.
+/// invoke injected closures (`onGetStarted` / `onLogIn`); ContentView drives the
+/// NavigationPath. WELCOMEROOT-1: this is the PERMANENT auth root — every signed-out
+/// state (cold launch, logout, account deletion) lands here, with Login/SignUp reachable
+/// as pushes from the CTAs. There is no longer a "seen" flag of any kind. The screen makes
+/// ZERO data calls (no Firestore, no SwiftData), so no guest guard applies here.
 struct WelcomeView: View {
 
     // MARK: - Injected actions
 
-    /// "Get Started" — ContentView persists the welcome flag and pushes SignUp.
+    /// "Get Started" — ContentView pushes SignUp.
     let onGetStarted: () -> Void
 
-    /// "Log In" — ContentView persists the welcome flag and pushes the pushed-variant LoginView.
+    /// "Log In" — ContentView pushes the pushed-variant LoginView.
     let onLogIn: () -> Void
 
     // MARK: - State
