@@ -185,7 +185,7 @@ struct TutorialWelcomePopup: View {
     var body: some View {
         ZStack {
             // Dim scrim over the live Home content. Absorbs taps (no scrim-dismiss —
-            // the tutorial requires an explicit Start / Skip choice).
+            // the tutorial requires an explicit Start (or, in Replay, Close) choice).
             Color.black.opacity(0.6)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
@@ -201,10 +201,11 @@ struct TutorialWelcomePopup: View {
     private var card: some View {
         VStack(spacing: DesignSystem.Spacing.md) {
             // Close button — REPLAY ONLY (TUTFIX-1 Part D): first-run has no whole-skip; the
-            // card's per-quest SKIP is the only skip.
-            HStack {
-                Spacer()
-                if isReplay {
+            // card's per-quest SKIP is the only skip. The whole ROW is gated, not just the
+            // button, so first-run carries no dead Spacing.md gap where SKIP used to sit.
+            if isReplay {
+                HStack {
+                    Spacer()
                     Button(action: onClose) {
                         Text("SKIP")
                             .font(AppFont.bold(11))
