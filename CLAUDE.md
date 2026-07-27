@@ -95,7 +95,7 @@ of implementing.
 - Deterministic doc IDs collide across users; composite identity (`uid + "_" + id`)
   where lists merge multiple users' docs.
 - Listener ordering needs a `documentID()` tie-break when timestamps can collide.
-- Prod rules are TRANSITIONAL since GUILD-RULES-1 — bi-generational GUILD-CAP arms; strict forms restore at 2.1 via the TODO-strict-rules-at-2.1 comments.
+- Prod rules: live ruleset c725190f-0d3b-45ca-9ebb-732c939d3796 (consolidated 2.1 deploy, 2026-07-25: FEEDBACK-1 block + DUEL-FEED-1 widening). The bi-generational GUILD-CAP arms remain TRANSITIONAL by ruling (Option A, 2026-07-25): the strict TODO-strict-rules-at-2.1 conversions are ADOPTION-GATED — they deploy only after 2.1 dominates installs, via their own prompt + attended deploy + a memberCount true-up backfill. Strict edits must NOT merge to main before their deploy window: `deploy --only firestore:rules` ships the whole file, so anything staged on main rides the next deploy whether intended or not.
 
 ## Listener policy
 - Default is fetch-on-view + pull-to-refresh. The global listener registry
@@ -126,3 +126,17 @@ of implementing.
 - Git hygiene in agent sessions: NEVER `git reset --hard`. Use `git stash -u` for anything in the way (recoverable). If a hard reset ever seems necessary, STOP and ask before running it.
 - Active duels persist through a block: the Arena opponent head still opens the shared duel surface for both participants (SMOKE-5C finding, accepted). `TODO-block-active-duel`: proper resolution is block-forfeits/ends-the-duel — a duel-lifecycle pass, post-2.1.
 - AILOG-1a removed the empty-items `detailRequest` bridge — vague zero-item recognitions fall to `noFoodFound`; clarifications are the sole question mechanism. (Spec's "detailRequest is universally inert" + the acceptance allowlist grep required dropping the surfacing use; the sanctioned `clarification` path survives and 1b's structured fields shrink the vague-input class. Accepted tradeoff.)
+
+## Lessons (2.1 close-out)
+- hasOnly breaks in both directions: a deploy must never shrink a rule's key set (breaks the shipped client), and a client must never ship a write that widens a rule-pinned affectedKeys set before the widened rule deploys (the new client's own pushes permission-deny — and try? chokepoints swallow it silently).
+- DEPLOY-marker staging taxonomy: additive new-path rule blocks may sit undeployed on main indefinitely (feature dark until deploy); widenings of an existing client write path are merge-safe but RELEASE-BLOCKING — rules deploy must precede any build reaching users.
+- dayScore is guest-zero as of DUEL-CLARITY-1; any future non-guest-guarded caller must handle it.
+- Post-AILOG-1b, model clarifying questions surface via the error card (Q&A UI retired).
+- .onDisappear fires on programmatic dismissal too — success paths that dismiss-then-present race their own cleanup; clear session state at the open site, never the disappear site.
+- VM snapshots must never render state a live store owns — one renderer, one source (the #50 FirstQuestsCard bug).
+- TUT-1b's databaseLog fires-on-return residual: RETIRED by TUT-2 (site deleted).
+- PHPicker is out-of-process and cannot be sim-automated; photo flows verify on device only.
+- Per-day award idempotency pattern: date field + startOfDay comparison, never Date equality (FIXES-1).
+- AppFont TEXTSIZE-1 invariant: every size-producing member of AppFont applies SettingsManager.shared.textScaleFactor exactly once at Font construction. Members that DELEGATE to another AppFont member (serifTitle → display) must not pre-scale — that double-applies the factor.
+- GoalMath.maintainBandKg (±0.5 kg) is a SHARED CONVENTION with weightDirectionLabel — if one changes, both must.
+- Named TODOs parked this era: TODO-dish-toxin (composite Dish saves toxin 0, mirroring manual flow) · TODO-photo-downsample (split cards decode UIImage(data:) main-thread, matching existing precedent) · TODO-arena-primer-detection (primer opened from Arena doesn't fire tutorial step 5; one closure wire when ArenaView is next touched) · TODO-orphaned-updateStreak (GamificationManager.updateStreak lost its only caller when dead checkAndAwardDailyXP was deleted; never ran in prod) · TODO-force-update-rail (no minimum-version flag exists; the client cannot be warned to update — this forced the Option A strict-rules deferral) · TODO-pace-gain-guidance (gain pace 1.5/2.0 clamps to the +500 surplus cap with no UI note) · TODO-ai-direction-validation (isValid does not bound AI output by goal direction; intentionally deferred — a hard bound could reject legitimate AI personalization) · TODO-calculator-direction-parity (standalone TDEE/goal calculators keep the pre-GOALS-1 deficit-only math) · TODO-dynamic-type (text scale caps at 1.3×; larger needs adaptive layout on the layout-frozen surfaces).
