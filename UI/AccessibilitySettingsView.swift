@@ -89,6 +89,19 @@ struct AccessibilitySettingsView: View {
                 }
                 .listRowBackground(tc.cardBackground)
 
+                // Text Size Section (TEXTSIZE-1) — above the first accessibility toggle.
+                // Each row renders at the CURRENT global scale via AppFont, so selecting
+                // an option re-renders the whole screen at the new size: the list IS the preview.
+                Section {
+                    ForEach(TextSizeOption.allCases, id: \.self) { option in
+                        textSizeRow(option)
+                    }
+                } header: {
+                    Text("TEXT SIZE")
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
                 // Nutrition Display Section
                 Section {
                     Toggle(isOn: $settings.trackAdvancedNutrition) {
@@ -189,6 +202,46 @@ struct AccessibilitySettingsView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Text Size Row (TEXTSIZE-1)
+
+    /// Selection row for a text-size option, using the R2 selection convention
+    /// (WeeklyPaceStep). Title/subtitle render through AppFont at the CURRENT global
+    /// scale, so the row previews the active size live. Tapping writes the persisted
+    /// rawValue; the whole screen re-renders immediately — that live flip is the preview.
+    @ViewBuilder
+    private func textSizeRow(_ option: TextSizeOption) -> some View {
+        let isSelected = settings.textSizeOption == option
+        Button {
+            settings.textSizePreference = option.rawValue
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                    Text(option.displayName)
+                        .font(isSelected ? AppFont.bold(16) : AppFont.regular(16))
+                        .foregroundColor(tc.textPrimary)
+                    Text("Preview: The quick brown fox")
+                        .font(AppFont.regular(13))
+                        .foregroundColor(tc.textSecondary)
+                }
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(tc.primary)
+                }
+            }
+            .padding(DesignSystem.Spacing.md)
+            // R2 selection convention (isSelected drives the accent stroke; R6c)
+            .adaptiveCard(
+                borderColor: isSelected ? tc.primary : tc.primary.opacity(0.2),
+                fillColor: tc.cardBackground,
+                isSelected: isSelected
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Text size \(option.displayName)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func themeSubtitle(for theme: TimeOfDayTheme) -> String {

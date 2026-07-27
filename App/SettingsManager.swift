@@ -8,6 +8,33 @@
 import Foundation
 import SwiftUI
 
+/// TEXTSIZE-1. rawValues are persisted in UserDefaults — PERMANENT identifiers;
+/// never rename them. Display names and scale factors may be retuned freely.
+enum TextSizeOption: String, CaseIterable {
+    case standard = "standard"
+    case large = "large"
+    case extraLarge = "xlarge"
+
+    var displayName: String {
+        switch self {
+        case .standard: return "Default"
+        case .large: return "Large"
+        case .extraLarge: return "Extra Large"
+        }
+    }
+
+    /// Global multiplier applied inside AppFont. Capped at 1.3 — fixed-height
+    /// surfaces (PhotoSplitCard, toasts, RankPlaque) are layout-frozen and larger
+    /// factors clip (TODO-dynamic-type for true adaptive layout).
+    var scaleFactor: CGFloat {
+        switch self {
+        case .standard: return 1.0
+        case .large: return 1.15
+        case .extraLarge: return 1.3
+        }
+    }
+}
+
 /// Manages user preferences and app settings
 ///
 /// Uses UserDefaults for persistent storage. All settings update UI immediately.
@@ -26,6 +53,7 @@ final class SettingsManager {
         static let trackAdvancedNutrition = "trackAdvancedNutrition"
         static let dailyMoodCheckEnabled = "dailyMoodCheckEnabled"
         static let themePreference = "themePreference"
+        static let textSizePreference = "textSizePreference"
         static let didMigrateToErewhon = "didMigrateToErewhon"
         static let hasSeenWelcome = "hasSeenWelcome"
     }
@@ -103,6 +131,22 @@ final class SettingsManager {
         }
     }
 
+    // MARK: - Text Size (TEXTSIZE-1)
+
+    /// TEXTSIZE-1: stored TextSizeOption rawValue. Unknown/legacy values resolve to standard.
+    /// Device-scoped (UserDefaults only, never synced). Mirrors the `themePreference` shape.
+    var textSizePreference: String {
+        didSet {
+            UserDefaults.standard.set(textSizePreference, forKey: Keys.textSizePreference)
+        }
+    }
+
+    var textSizeOption: TextSizeOption {
+        TextSizeOption(rawValue: textSizePreference) ?? .standard
+    }
+
+    var textScaleFactor: CGFloat { textSizeOption.scaleFactor }
+
     // MARK: - Initialization
 
     private init() {
@@ -125,6 +169,14 @@ final class SettingsManager {
             self.themePreference = pref
         } else {
             self.themePreference = "erewhonLight"
+        }
+
+        // Text size preference (fresh installs default to standard — TEXTSIZE-1).
+        // Unknown/legacy stored values resolve to standard via the textSizeOption accessor.
+        if let sizePref = UserDefaults.standard.string(forKey: Keys.textSizePreference) {
+            self.textSizePreference = sizePref
+        } else {
+            self.textSizePreference = "standard"
         }
 
         // One-time migration to the Erewhon reskin (D2). Runs once, after the pref loads.
