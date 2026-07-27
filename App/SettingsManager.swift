@@ -164,11 +164,11 @@ final class SettingsManager {
             self.dailyMoodCheckEnabled = UserDefaults.standard.bool(forKey: Keys.dailyMoodCheckEnabled)
         }
 
-        // Theme preference (fresh installs default to Erewhon Light — D2).
+        // Theme preference (fresh installs default to Erewhon Dark — DARKDEFAULT-1; was Light per D2).
         if let pref = UserDefaults.standard.string(forKey: Keys.themePreference) {
             self.themePreference = pref
         } else {
-            self.themePreference = "erewhonLight"
+            self.themePreference = "erewhonDark"
         }
 
         // Text size preference (fresh installs default to standard — TEXTSIZE-1).
@@ -189,7 +189,7 @@ final class SettingsManager {
     func resetToDefaults() {
         trackAdvancedNutrition = false
         dailyMoodCheckEnabled = true
-        themePreference = "erewhonLight"
+        themePreference = "erewhonDark"
     }
 
     // MARK: - Erewhon Migration (D2)
