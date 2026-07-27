@@ -55,7 +55,6 @@ final class SettingsManager {
         static let themePreference = "themePreference"
         static let textSizePreference = "textSizePreference"
         static let didMigrateToErewhon = "didMigrateToErewhon"
-        static let hasSeenWelcome = "hasSeenWelcome"
     }
 
     // MARK: - Settings Properties
@@ -74,17 +73,6 @@ final class SettingsManager {
     var dailyMoodCheckEnabled: Bool {
         didSet {
             UserDefaults.standard.set(dailyMoodCheckEnabled, forKey: Keys.dailyMoodCheckEnabled)
-        }
-    }
-
-    /// B1: whether the one-time first-launch welcome screen has been shown.
-    /// Device-scoped (UserDefaults only, never synced). Set `true` when the user taps
-    /// either Welcome CTA (Get Started / Log In) or on any authenticated session
-    /// (grandfathering existing users). Deliberately NOT touched by `resetToDefaults()`
-    /// — resetting settings must never resurface the welcome.
-    var hasSeenWelcome: Bool {
-        didSet {
-            UserDefaults.standard.set(hasSeenWelcome, forKey: Keys.hasSeenWelcome)
         }
     }
 
@@ -152,9 +140,6 @@ final class SettingsManager {
     private init() {
         // Load settings from UserDefaults
         self.trackAdvancedNutrition = UserDefaults.standard.bool(forKey: Keys.trackAdvancedNutrition)
-
-        // B1: one-time welcome flag. Absent reads `false` (never seen) — the correct default.
-        self.hasSeenWelcome = UserDefaults.standard.bool(forKey: Keys.hasSeenWelcome)
 
         // Default to true if never set before
         if UserDefaults.standard.object(forKey: Keys.dailyMoodCheckEnabled) == nil {

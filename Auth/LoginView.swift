@@ -16,8 +16,9 @@ import SwiftUI
 /// Defined here since LoginView is the root of the auth navigation stack.
 enum AuthDestination: Hashable {
     case signUp
-    /// B1: pushed from WelcomeView's "Log In" CTA. Renders the pushed-variant LoginView
-    /// (`showNavBar: true`) — back button visible, guest/sign-up section hidden.
+    /// Pushed from WelcomeView's "Log In" CTA. Renders the pushed-variant LoginView
+    /// (`showNavBar: true`) — back button visible. WELCOMEROOT-1: the sign-up/guest section
+    /// STAYS visible here (`showsAlternatives` defaults true); this is the only route to it.
     case login
 }
 
@@ -38,9 +39,17 @@ struct LoginView: View {
     /// Shared ViewModel driving this screen and SignUpView.
     @Bindable var viewModel: AuthViewModel
 
-    /// When false (default), hides the navigation bar (LoginView is the root).
-    /// Set to true when pushed from SignUpView inside the guest sheet so the back button is visible.
+    /// When false (default), hides the navigation bar. Set to true whenever LoginView is
+    /// PUSHED (from WelcomeView's "Log In" CTA, or from SignUpView inside the guest sheet)
+    /// so the back button is visible. WELCOMEROOT-1: nav-bar visibility ONLY — it no longer
+    /// gates the sign-up/guest section; use `showsAlternatives` for that.
     var showNavBar: Bool = false
+
+    /// WELCOMEROOT-1: whether to show the alternatives section below the Log In button —
+    /// the "Don't have an account? Sign Up" link and Continue as Guest. Defaults to true;
+    /// Continue as Guest is the ONLY entry point to guest mode, so hide this only where it
+    /// would be circular (the guest sheet's own SignUpView → Login push passes false).
+    var showsAlternatives: Bool = true
 
     @State private var settings = SettingsManager.shared
     private var tc: ThemeColors { settings.activeColors }
@@ -197,7 +206,7 @@ struct LoginView: View {
             .accessibilityLabel(viewModel.isLoading ? "Logging in" : "Log In")
             .accessibilityHint("Double-tap to log into your Overheal account")
 
-            if !showNavBar {
+            if showsAlternatives {
                 // Navigate to SignUpView
                 NavigationLink(value: AuthDestination.signUp) {
                     HStack(spacing: DesignSystem.Spacing.xs) {

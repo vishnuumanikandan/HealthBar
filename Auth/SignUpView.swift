@@ -87,7 +87,10 @@ struct SignUpView: View {
             }
         }
         .navigationDestination(isPresented: $showLogin) {
-            LoginView(viewModel: viewModel, showNavBar: true)
+            // WELCOMEROOT-1: alternatives hidden here — inside the guest sheet the guest
+            // button is circular and the Sign Up link points back at this screen. Preserves
+            // today's behavior, which the retired `!showNavBar` gate produced implicitly.
+            LoginView(viewModel: viewModel, showNavBar: true, showsAlternatives: false)
         }
     }
 
