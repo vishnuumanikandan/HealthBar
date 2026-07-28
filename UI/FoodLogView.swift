@@ -699,70 +699,30 @@ struct FoodLogView: View {
         let bundleName = components.first?.mealBundleName ?? "Meal Bundle"
         let totalCal = components.reduce(0) { $0 + $1.calories }
         let isExpanded = expandedBundles.contains(bundleId)
+        // MEALPHOTO-1: the bundle's photo lives on exactly one component (the first item
+        // logged from an AI recognition); nil once that component is deleted, or when the
+        // bundle was never photographed — either way the header falls back to today's row.
+        let bundlePhoto = components.compactMap(\.photoData).first.flatMap(UIImage.init(data:))
 
         return VStack(spacing: 4) {
-            // Bundle header row
-            HStack(spacing: DesignSystem.Spacing.sm) {
-                ZStack {
-                    AdaptiveCardShapeStyle()
-                        .fill(tc.iconAmber.mid.opacity(0.15))
-                        .frame(width: 32, height: 32)
-                    Image(systemName: "rectangle.stack.fill")
-                        .font(AppFont.regular(13))
-                        .foregroundColor(tc.iconAmber.mid)
+            // Bundle header row — photo-conditional split card (MEALROW-1 pattern), else
+            // the existing header unchanged. The expanded children render below either.
+            if let bundlePhoto {
+                PhotoSplitCard(image: bundlePhoto, cornerRadius: DesignSystem.Erewhon.cardRadius) {
+                    bundleHeaderContent(bundleId: bundleId, bundleName: bundleName,
+                                        totalCal: totalCal, componentCount: components.count,
+                                        isExpanded: isExpanded)
                 }
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(bundleName)
-                        .font(AppFont.bold(DesignSystem.FontSizes.callout))
-                        .foregroundColor(tc.textPrimary)
-                        .lineLimit(1)
-                    Text("\(totalCal) cal · \(components.count) item\(components.count == 1 ? "" : "s")")
-                        .font(AppFont.regular(DesignSystem.FontSizes.caption))
-                        .foregroundColor(tc.textSecondary)
-                }
-
-                Spacer()
-
-                // Collapse/expand toggle
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        if isExpanded {
-                            expandedBundles.remove(bundleId)
-                        } else {
-                            expandedBundles.insert(bundleId)
-                        }
-                    }
-                } label: {
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(AppFont.bold(12))
-                        .foregroundColor(tc.textSecondary)
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(PlainButtonStyle())
-
-                // Three-dot menu: delete entire bundle
-                Menu {
-                    Button(role: .destructive) {
-                        Task { await viewModel.deleteBundle(bundleId: bundleId) }
-                    } label: {
-                        Label("Delete Meal", systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(AppFont.regular(14))
-                        .foregroundColor(tc.textSecondary)
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(PlainButtonStyle())
+                .adaptiveCard(borderColor: tc.iconAmber.mid.opacity(0.25), fillColor: tc.cardBackground)
+                .draggable("bundle:\(bundleId)")
+            } else {
+                bundleHeaderContent(bundleId: bundleId, bundleName: bundleName,
+                                    totalCal: totalCal, componentCount: components.count,
+                                    isExpanded: isExpanded)
+                    .adaptiveCard(borderColor: tc.iconAmber.mid.opacity(0.25), fillColor: tc.cardBackground)
+                    // Drag entire bundle to a new section
+                    .draggable("bundle:\(bundleId)")
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, DesignSystem.Spacing.md)
-            .adaptiveCard(borderColor: tc.iconAmber.mid.opacity(0.25), fillColor: tc.cardBackground)
-            // Drag entire bundle to a new section
-            .draggable("bundle:\(bundleId)")
 
             // Expanded component rows
             if isExpanded {
@@ -805,6 +765,72 @@ struct FoodLogView: View {
                 }
             }
         }
+    }
+
+    /// The bundle header's inner content (icon + name/total + expand + menu), extracted so
+    /// the photo and photo-less arms share ONE definition — layout identical to the
+    /// pre-MEALPHOTO-1 header; card chrome stays at the call site.
+    @ViewBuilder
+    private func bundleHeaderContent(bundleId: String, bundleName: String, totalCal: Int,
+                                     componentCount: Int, isExpanded: Bool) -> some View {
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                ZStack {
+                    AdaptiveCardShapeStyle()
+                        .fill(tc.iconAmber.mid.opacity(0.15))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: "rectangle.stack.fill")
+                        .font(AppFont.regular(13))
+                        .foregroundColor(tc.iconAmber.mid)
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(bundleName)
+                        .font(AppFont.bold(DesignSystem.FontSizes.callout))
+                        .foregroundColor(tc.textPrimary)
+                        .lineLimit(1)
+                    Text("\(totalCal) cal · \(componentCount) item\(componentCount == 1 ? "" : "s")")
+                        .font(AppFont.regular(DesignSystem.FontSizes.caption))
+                        .foregroundColor(tc.textSecondary)
+                }
+
+                Spacer()
+
+                // Collapse/expand toggle
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        if isExpanded {
+                            expandedBundles.remove(bundleId)
+                        } else {
+                            expandedBundles.insert(bundleId)
+                        }
+                    }
+                } label: {
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(AppFont.bold(12))
+                        .foregroundColor(tc.textSecondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                // Three-dot menu: delete entire bundle
+                Menu {
+                    Button(role: .destructive) {
+                        Task { await viewModel.deleteBundle(bundleId: bundleId) }
+                    } label: {
+                        Label("Delete Meal", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(AppFont.regular(14))
+                        .foregroundColor(tc.textSecondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, DesignSystem.Spacing.md)
     }
 
     // MARK: - Progress Section

@@ -1775,8 +1775,11 @@ final class FoodLogViewModel {
     /// Each included item becomes one `FoodEntry`. `toxinScore` is the AI's per-item
     /// estimate (service-normalized, fallback 30), and the advanced micros
     /// (fiber/sugar/sodium/saturatedFat/cholesterol/potassium) pass through when present
-    /// (`nil` stored as `nil`). `mealType` comes from `formMealType`. When a describe-meal
-    /// photo was used, it is attached to every entry created from this recognition.
+    /// (`nil` stored as `nil`). `mealType` comes from `formMealType`.
+    ///
+    /// MEALPHOTO-1: 2+ items log as ONE meal bundle and the describe-meal photo goes on the
+    /// first successfully logged entry only (the bundle row renders it); a single item logs
+    /// as a solo entry with the photo attached, exactly as before.
     ///
     /// AILOG-1b: captures each logged entry's exact fingerprint into `loggedFingerprints`
     /// (the review strip's Favorite gate) and leaves the review sheet OPEN so the destination
@@ -1789,18 +1792,41 @@ final class FoodLogViewModel {
         isSubmittingForm = true
 
         // The session photo in effect AT LOG TIME, read before anything can clear it
-        // (nil when the user attached none → entries stay photo-less). Every item from this
-        // recognition is stamped with the SAME photo: it is the meal's photo, so N identical
-        // split cards for one photographed meal is the intended rendering. The duplicated
-        // bytes are accepted — `attachDescribeMealPhoto` already JPEG-compresses to <1MB and
-        // item counts are small.
+        // (nil when the user attached none → entries stay photo-less).
+        //
+        // MEALPHOTO-1: a recognition of 2+ items logs as ONE meal bundle (the same
+        // `mealBundleId` mechanism the saved-meal flow uses) instead of N sibling solo
+        // entries. The BUNDLE ROW carries the photo and the items inside are photo-less:
+        // the photo is stamped on the FIRST item that logs successfully, so `bundleRow`'s
+        // `compactMap(\.photoData).first` finds it. A single-item recognition is unchanged
+        // — a solo entry with the photo attached (nil bundle id/name = today's path).
+        // Deletion edge: if the user deletes the photo-holding item out of the bundle, the
+        // bundle simply renders photo-less. Accepted — the photo is not re-homed.
         let mealPhoto = describeMealPhotoData
+
+        // Bundle identity for a multi-item recognition; both nil for a single item.
+        // Name precedence: the typed meal description, else the Dish destination's
+        // derivation over the item names (`RecognizedFoodsReviewView.truncateDishName`,
+        // the one and only dish-name helper — never a second implementation).
+        let isBundle = items.count >= 2
+        let bundleId: String? = isBundle ? UUID().uuidString : nil
+        let bundleName: String? = {
+            guard isBundle else { return nil }
+            let trimmedDish = mealDescriptionInput.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmedDish.isEmpty
+                ? RecognizedFoodsReviewView.truncateDishName(items.map(\.name).joined(separator: " + "))
+                : trimmedDish
+        }()
 
         var totalXP = 0
         var loggedCount = 0
         var fingerprints: [FoodFingerprint] = []
+        // Set once the photo has been stamped onto a SUCCESSFULLY logged entry — so a
+        // throwing first item hands the photo to the first item that actually lands.
+        var photoAssigned = false
 
         for item in items {
+            let itemPhoto = photoAssigned ? nil : mealPhoto
             do {
                 let result = try await coordinator.addFoodEntry(
                     name: item.name,
@@ -1810,15 +1836,18 @@ final class FoodLogViewModel {
                     fat: item.fat,
                     toxinScore: item.toxinScore,
                     date: selectedDate,
-                    photoData: mealPhoto,
+                    photoData: itemPhoto,
                     mealType: formMealType,
                     fiber: item.fiber,
                     sugar: item.sugar,
                     sodium: item.sodium,
                     saturatedFat: item.saturatedFat,
                     cholesterol: item.cholesterol,
-                    potassium: item.potassium
+                    potassium: item.potassium,
+                    mealBundleId: bundleId,
+                    mealBundleName: bundleName
                 )
+                if itemPhoto != nil { photoAssigned = true }
                 totalXP += result.xpEarned
                 loggedCount += 1
                 // The exact fingerprint the logged entry carries (never recomputed).

@@ -18,6 +18,7 @@ import Foundation
 /// It is used as the Firestore document ID and is the single stable link between SwiftData and Firestore.
 ///
 /// Dates are stored as Firestore Timestamps automatically by the Firestore Codable encoder.
+// TODO-bundle-sync: mealBundleId/mealBundleName are local-only (deliberately excluded here) — bundles flatten to solo entries on a cross-device re-download, matching the saved-meal precedent. Add both as optional fields with a rules check if bundles ever need to survive sync.
 struct FoodEntryDTO: Codable {
 
     // MARK: - Fields (mirrors FoodEntry, minus photoData and userId)
