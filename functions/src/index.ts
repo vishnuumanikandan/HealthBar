@@ -30,10 +30,14 @@ import { CallableRequest, HttpsError, onCall } from 'firebase-functions/v2/https
 import * as logger from 'firebase-functions/logger';
 
 import {
-  DESCRIBE_MEAL_SYSTEM_PROMPT,
+  CATEGORY_GUIDANCE,
+  FOOD_CATEGORIES,
+  FoodCategory,
   IMAGE_ONLY_USER_PROMPT,
+  IMAGE_RECONCILIATION_RULE,
   ONBOARDING_GOALS_SYSTEM_PROMPT,
-  PHOTO_RECOGNITION_SYSTEM_PROMPT,
+  SYSTEM_PROMPT_GENERAL,
+  SYSTEM_PROMPT_SCHEMA_ONWARD,
 } from './prompts';
 
 // MARK: - Deployment constants
@@ -71,6 +75,19 @@ const UPDATED_AT_FIELD = 'updatedAt';
 
 const MAX_IMAGE_BYTES = 8_000_000;
 const MAX_TEXT_CHARS = 4000;
+/** Accept bound for the short structured fields (`amount`, `extras`). */
+const MAX_FIELD_CHARS = 200;
+
+/**
+ * Port of `AIFoodRecognitionService.maxInputLength` (500).
+ *
+ * VERIFIED at the 1a base commit: 500 <= MAX_TEXT_CHARS (4000), so the server's
+ * ACCEPT bound is looser than the client's truncation, as required. The two are
+ * different things and must stay that way: MAX_TEXT_CHARS rejects an absurd
+ * payload, MAX_INPUT_LENGTH reproduces the client's own truncation so the
+ * assembled prompt is identical.
+ */
+const MAX_INPUT_LENGTH = 500;
 const ALLOWED_MEDIA_TYPES = [
   'image/jpeg',
   'image/png',
@@ -108,18 +125,37 @@ const MAX_TOKENS_ONBOARDING_GOALS = 256;
 
 type AllowedMediaType = (typeof ALLOWED_MEDIA_TYPES)[number];
 
-type AiProxyKind = 'photoRecognition' | 'describeMeal' | 'onboardingGoals';
+type AiProxyKind = 'foodRecognition' | 'onboardingGoals';
 
-const AI_PROXY_KINDS: readonly AiProxyKind[] = [
-  'photoRecognition',
-  'describeMeal',
-  'onboardingGoals',
-];
+const AI_PROXY_KINDS: readonly AiProxyKind[] = ['foodRecognition', 'onboardingGoals'];
 
-/** A validated request. Parsing produces one of these or throws. */
+interface ValidatedImage {
+  base64: string;
+  mediaType: AllowedMediaType;
+}
+
+/**
+ * A validated request. Parsing produces one of these or throws.
+ *
+ * The `foodRecognition` shape mirrors
+ * `AIFoodRecognitionService.recognize(description:imageData:category:amount:extras:)`
+ * one-for-one. Fields are NORMALISED at parse time — trimmed, truncated, and
+ * collapsed to `undefined` when the client's equivalent `hasText` / `hasAmount`
+ * / `hasExtras` flag would be false — so the assembly port below can branch on
+ * presence exactly as the Swift does.
+ */
 type ValidatedRequest =
-  | { kind: 'photoRecognition'; imageBase64: string; mediaType: AllowedMediaType }
-  | { kind: 'describeMeal'; text: string }
+  | {
+      kind: 'foodRecognition';
+      /** Trimmed then truncated to MAX_INPUT_LENGTH; undefined when !hasText. */
+      description: string | undefined;
+      image: ValidatedImage | undefined;
+      category: FoodCategory | undefined;
+      /** Trimmed; undefined when !hasAmount. */
+      amount: string | undefined;
+      /** Trimmed; undefined when !hasExtras. */
+      extras: string | undefined;
+    }
   | { kind: 'onboardingGoals'; text: string };
 
 interface AiProxyResponse {
@@ -130,28 +166,20 @@ interface AiProxyResponse {
 interface KindConfig {
   readonly model: string;
   readonly maxTokens: number;
-  readonly systemPrompt: string;
 }
 
 /**
- * Per-kind model, token cap, and system prompt. This table is the ONLY source
- * of those three values; nothing derived from the request can reach them.
+ * Per-kind model and token cap. This table is the ONLY source of those two
+ * values; nothing derived from the request can reach them.
  */
 const KIND_CONFIG: Readonly<Record<AiProxyKind, KindConfig>> = {
-  photoRecognition: {
+  foodRecognition: {
     model: MODEL_SONNET,
     maxTokens: MAX_TOKENS_RECOGNITION,
-    systemPrompt: PHOTO_RECOGNITION_SYSTEM_PROMPT,
-  },
-  describeMeal: {
-    model: MODEL_SONNET,
-    maxTokens: MAX_TOKENS_RECOGNITION,
-    systemPrompt: DESCRIBE_MEAL_SYSTEM_PROMPT,
   },
   onboardingGoals: {
     model: MODEL_SONNET,
     maxTokens: MAX_TOKENS_ONBOARDING_GOALS,
-    systemPrompt: ONBOARDING_GOALS_SYSTEM_PROMPT,
   },
 };
 
@@ -237,6 +265,70 @@ function isAllowedMediaType(value: unknown): value is AllowedMediaType {
   );
 }
 
+function isFoodCategory(value: unknown): value is FoodCategory {
+  return typeof value === 'string' && FOOD_CATEGORIES.includes(value as FoodCategory);
+}
+
+/**
+ * Port of Swift's `CharacterSet.whitespacesAndNewlines`: the Unicode Zs
+ * category plus U+0009, U+000A-U+000D, U+0085, U+2028 and U+2029.
+ *
+ * Deliberately NOT `String.prototype.trim()`. JS trims U+FEFF (which Swift does
+ * not) and does not trim U+0085 (which Swift does), so `.trim()` would produce
+ * a different `hasText` verdict and a different assembled prompt on those two
+ * characters.
+ */
+const SWIFT_WHITESPACE_CLASS =
+  '\\t\\n\\v\\f\\r\\u0085\\u0020\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000';
+const SWIFT_TRIM_PATTERN = new RegExp(
+  `^[${SWIFT_WHITESPACE_CLASS}]+|[${SWIFT_WHITESPACE_CLASS}]+$`,
+  'g'
+);
+
+/** Port of `.trimmingCharacters(in: .whitespacesAndNewlines)`. */
+function swiftTrim(value: string): string {
+  return value.replace(SWIFT_TRIM_PATTERN, '');
+}
+
+/**
+ * Grapheme-cluster segmenter, pinned to a fixed locale for determinism.
+ * Swift's `String.prefix(_:)` counts Characters (extended grapheme clusters),
+ * NOT UTF-16 code units, so a naive `.slice()` would cut a different amount of
+ * text out of any string containing emoji or combining marks.
+ */
+const GRAPHEME_SEGMENTER = new Intl.Segmenter('en', { granularity: 'grapheme' });
+
+/** Port of `String(value.prefix(limit))`. */
+function truncateToCharacters(value: string, limit: number): string {
+  // A string can never have more Characters than UTF-16 code units, so this
+  // fast path is exact, and it keeps the common case off the segmenter.
+  if (value.length <= limit) {
+    return value;
+  }
+  let result = '';
+  let taken = 0;
+  for (const { segment } of GRAPHEME_SEGMENTER.segment(value)) {
+    if (taken === limit) {
+      break;
+    }
+    result += segment;
+    taken += 1;
+  }
+  return result;
+}
+
+/**
+ * Trims, then collapses an empty result to undefined — the server-side
+ * equivalent of the client computing `hasAmount` / `hasExtras`.
+ */
+function normalizeOptionalField(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const trimmed = swiftTrim(value);
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 /**
  * Decoded byte length of a well-formed base64 string, computed without
  * allocating the buffer.
@@ -261,12 +353,69 @@ function requireString(data: Record<string, unknown>, field: string): string {
   return value;
 }
 
+/** Absent (undefined or null) or a string; anything else is invalid-argument. */
+function optionalString(
+  data: Record<string, unknown>,
+  field: string
+): string | undefined {
+  const value = data[field];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    throw invalid(`${field} must be a string`);
+  }
+  return value;
+}
+
+function boundedField(
+  data: Record<string, unknown>,
+  field: string,
+  limit: number
+): string | undefined {
+  const value = optionalString(data, field);
+  if (value !== undefined && value.length > limit) {
+    throw invalid(`${field} exceeds ${limit} characters`);
+  }
+  return value;
+}
+
+/** Validates the image pair. Both fields present or both absent. */
+function parseImage(data: Record<string, unknown>): ValidatedImage | undefined {
+  const base64 = optionalString(data, 'imageBase64');
+  const rawMediaType = data.mediaType;
+  const hasMediaType = rawMediaType !== undefined && rawMediaType !== null;
+
+  if (base64 === undefined) {
+    if (hasMediaType) {
+      throw invalid('mediaType requires imageBase64');
+    }
+    return undefined;
+  }
+  if (!hasMediaType) {
+    throw invalid('imageBase64 requires mediaType');
+  }
+  if (!isAllowedMediaType(rawMediaType)) {
+    throw invalid('mediaType must be one of: ' + ALLOWED_MEDIA_TYPES.join(', '));
+  }
+  if (base64.length === 0) {
+    throw invalid('imageBase64 must not be empty');
+  }
+  if (!isWellFormedBase64(base64)) {
+    throw invalid('imageBase64 must be valid base64');
+  }
+  if (base64DecodedByteLength(base64) > MAX_IMAGE_BYTES) {
+    throw invalid(`imageBase64 exceeds ${MAX_IMAGE_BYTES} decoded bytes`);
+  }
+  return { base64, mediaType: rawMediaType };
+}
+
 /**
  * Validates `kind` and the per-kind fields. Every invalid-argument check runs
  * here, before any Firestore access, so a malformed request never burns a
  * credit.
  */
-function parseRequest(raw: unknown): ValidatedRequest {
+export function parseRequest(raw: unknown): ValidatedRequest {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw invalid('request data must be an object');
   }
@@ -277,22 +426,39 @@ function parseRequest(raw: unknown): ValidatedRequest {
     throw invalid('kind must be one of: ' + AI_PROXY_KINDS.join(', '));
   }
 
-  if (kind === 'photoRecognition') {
-    const imageBase64 = requireString(data, 'imageBase64');
-    const mediaType = data.mediaType;
-    if (!isAllowedMediaType(mediaType)) {
-      throw invalid('mediaType must be one of: ' + ALLOWED_MEDIA_TYPES.join(', '));
+  if (kind === 'foodRecognition') {
+    const image = parseImage(data);
+
+    const rawText = boundedField(data, 'text', MAX_TEXT_CHARS);
+    // Mirrors the client: trim first, and `hasText` is the POST-trim verdict,
+    // so a whitespace-only description does not count as text.
+    const trimmedText = rawText === undefined ? '' : swiftTrim(rawText);
+    const hasText = trimmedText.length > 0;
+
+    // Mirrors `guard hasText || hasImage else { throw .noFoodFound }`.
+    if (!hasText && image === undefined) {
+      throw invalid('foodRecognition requires text or imageBase64');
     }
-    if (imageBase64.length === 0) {
-      throw invalid('imageBase64 must not be empty');
+
+    const rawCategory = optionalString(data, 'category');
+    let category: FoodCategory | undefined;
+    if (rawCategory !== undefined) {
+      if (!isFoodCategory(rawCategory)) {
+        throw invalid('category must be one of: ' + FOOD_CATEGORIES.join(', '));
+      }
+      category = rawCategory;
     }
-    if (!isWellFormedBase64(imageBase64)) {
-      throw invalid('imageBase64 must be valid base64');
-    }
-    if (base64DecodedByteLength(imageBase64) > MAX_IMAGE_BYTES) {
-      throw invalid(`imageBase64 exceeds ${MAX_IMAGE_BYTES} decoded bytes`);
-    }
-    return { kind, imageBase64, mediaType };
+
+    return {
+      kind,
+      description: hasText
+        ? truncateToCharacters(trimmedText, MAX_INPUT_LENGTH)
+        : undefined,
+      image,
+      category,
+      amount: normalizeOptionalField(boundedField(data, 'amount', MAX_FIELD_CHARS)),
+      extras: normalizeOptionalField(boundedField(data, 'extras', MAX_FIELD_CHARS)),
+    };
   }
 
   const text = requireString(data, 'text');
@@ -382,29 +548,121 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Assembles the request body server-side from constants plus validated input. */
-function buildAnthropicBody(request: ValidatedRequest): Record<string, unknown> {
-  const config = KIND_CONFIG[request.kind];
-  const content =
-    request.kind === 'photoRecognition'
-      ? [
-          {
-            type: ANTHROPIC_IMAGE_BLOCK,
-            source: {
-              type: ANTHROPIC_BASE64_SOURCE,
-              media_type: request.mediaType,
-              data: request.imageBase64,
-            },
-          },
-          { type: ANTHROPIC_TEXT_BLOCK, text: IMAGE_ONLY_USER_PROMPT },
-        ]
-      : request.text;
+// MARK: - Prompt assembly (port of AIFoodRecognitionService)
 
+const CATEGORY_LINE_PREFIX = 'Category: ';
+const ITEM_LINE_PREFIX = 'Item: ';
+const AMOUNT_LINE_PREFIX = 'Amount: ';
+const EXTRAS_LINE_PREFIX = 'Extras: ';
+const STRUCTURED_LINE_SEPARATOR = '\n';
+
+/**
+ * Port of `AIFoodRecognitionService.buildSystemPromptBase(category:)`.
+ *
+ * No category -> general + " " + schema. With a category, that category's
+ * frozen guidance is injected between the two, joined by single spaces.
+ */
+export function buildSystemPromptBase(category: FoodCategory | undefined): string {
+  if (category === undefined) {
+    return SYSTEM_PROMPT_GENERAL + ' ' + SYSTEM_PROMPT_SCHEMA_ONWARD;
+  }
+  return (
+    SYSTEM_PROMPT_GENERAL +
+    ' ' +
+    CATEGORY_GUIDANCE[category] +
+    ' ' +
+    SYSTEM_PROMPT_SCHEMA_ONWARD
+  );
+}
+
+/**
+ * Port of `AIFoodRecognitionService.composeStructuredInput(...)`.
+ *
+ * Callers pass ALREADY-NORMALISED values, so `!== undefined` here is exactly
+ * the client's `hasText` / `category != nil` / `hasAmount` / `hasExtras`.
+ *
+ * Two subtleties this port preserves:
+ *  - With no structured field at all, the result is the raw description, or —
+ *    when there is no text — the `imageOnlyPrompt` constant.
+ *  - With a structured field present but NO text, the line block is emitted
+ *    WITHOUT an `Item:` line. It does NOT fall back to `imageOnlyPrompt`, and
+ *    no placeholder sentence is invented.
+ */
+export function composeStructuredInput(
+  description: string | undefined,
+  category: FoodCategory | undefined,
+  amount: string | undefined,
+  extras: string | undefined
+): string {
+  if (category === undefined && amount === undefined && extras === undefined) {
+    return description !== undefined ? description : IMAGE_ONLY_USER_PROMPT;
+  }
+
+  const lines: string[] = [];
+  if (category !== undefined) {
+    lines.push(CATEGORY_LINE_PREFIX + category);
+  }
+  if (description !== undefined) {
+    lines.push(ITEM_LINE_PREFIX + description);
+  }
+  if (amount !== undefined) {
+    lines.push(AMOUNT_LINE_PREFIX + amount);
+  }
+  if (extras !== undefined) {
+    lines.push(EXTRAS_LINE_PREFIX + extras);
+  }
+  return lines.join(STRUCTURED_LINE_SEPARATOR);
+}
+
+/** Port of the `system:` argument at both `recognize()` call sites. */
+function systemPromptFor(request: ValidatedRequest): string {
+  if (request.kind === 'onboardingGoals') {
+    return ONBOARDING_GOALS_SYSTEM_PROMPT;
+  }
+  const base = buildSystemPromptBase(request.category);
+  // Swift appends the reconciliation rule on the multimodal branch only.
+  return request.image === undefined ? base : base + IMAGE_RECONCILIATION_RULE;
+}
+
+/**
+ * Port of the `messages[0].content` at both `recognize()` call sites: a plain
+ * string when there is no image, otherwise `[image, text]` content blocks in
+ * that order.
+ */
+function userContentFor(request: ValidatedRequest): unknown {
+  if (request.kind === 'onboardingGoals') {
+    return request.text;
+  }
+  const userText = composeStructuredInput(
+    request.description,
+    request.category,
+    request.amount,
+    request.extras
+  );
+  if (request.image === undefined) {
+    return userText;
+  }
+  return [
+    {
+      type: ANTHROPIC_IMAGE_BLOCK,
+      source: {
+        type: ANTHROPIC_BASE64_SOURCE,
+        media_type: request.image.mediaType,
+        data: request.image.base64,
+      },
+    },
+    { type: ANTHROPIC_TEXT_BLOCK, text: userText },
+  ];
+}
+
+/** Assembles the request body server-side from constants plus validated input. */
+export function buildAnthropicBody(request: ValidatedRequest): Record<string, unknown> {
+  const config = KIND_CONFIG[request.kind];
   return {
     model: config.model,
     max_tokens: config.maxTokens,
-    system: config.systemPrompt,
-    messages: [{ role: ANTHROPIC_USER_ROLE, content }],
+    system: systemPromptFor(request),
+    messages: [{ role: ANTHROPIC_USER_ROLE, content: userContentFor(request) }],
   };
 }
 

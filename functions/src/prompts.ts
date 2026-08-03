@@ -12,18 +12,64 @@
  * AIPROXY-1b retires the client-side copies.
  *
  * Sources (line numbers are the AIPROXY-1a base commit, 6f840da):
+ *   Nutrition/AIFoodRecognitionService.swift:70-85    FoodCategory.guidance
  *   Nutrition/AIFoodRecognitionService.swift:216      imageOnlyPrompt
  *   Nutrition/AIFoodRecognitionService.swift:220      systemPromptGeneral
  *   Nutrition/AIFoodRecognitionService.swift:223-239  systemPromptSchemaOnward
  *   Nutrition/AIFoodRecognitionService.swift:241-243  imageReconciliationRule
  *   UI/OnboardingViewModel.swift:402-407              callClaudeAPI systemPrompt
+ *
+ * This module is frozen DATA only — no assembly logic — so that a byte-level
+ * diff against the Swift sources is a meaningful gate. The assembly that
+ * combines these pieces is a separate, separately-gated port in index.ts.
  */
+
+/**
+ * The user-declared food category. These are `FoodCategory` RAW VALUES, which
+ * are pinned wire/prompt format: they appear verbatim in the `Category:` line
+ * of the user turn and are keys into the guidance table below. A case may be
+ * renamed in Swift; a raw value must NEVER change.
+ *
+ * Swift: AIFoodRecognitionService.FoodCategory
+ */
+export const FOOD_CATEGORIES = [
+  'meal',
+  'snack',
+  'drink',
+  'fruit',
+  'veggie',
+  'sweet',
+] as const;
+
+export type FoodCategory = (typeof FOOD_CATEGORIES)[number];
+
+/**
+ * Per-category estimation guidance injected into the system prompt when a
+ * category is provided (AILOG-1a).
+ *
+ * Swift: AIFoodRecognitionService.FoodCategory.guidance
+ */
+export const CATEGORY_GUIDANCE: Readonly<Record<FoodCategory, string>> = {
+  meal:
+    'This is a composed meal. Estimate each component separately. If Amount is given, anchor portions to it; otherwise assume typical restaurant portions.',
+  snack:
+    'This is a snack. Prefer package-size portions; if a brand is named in Extras, use that product\'s published nutrition.',
+  drink:
+    'This is a beverage. Anchor to the stated size; account for milk, sweeteners, and mix-ins from Extras. A plain water/black coffee/plain tea is near-zero calories.',
+  fruit:
+    'This is fruit. Use whole-fruit or cup measures; toppings from Extras (e.g. peanut butter, honey) often exceed the fruit\'s own calories — include them.',
+  veggie:
+    'These are vegetables. Raw vs cooked matters; oils and dressings from Extras usually dominate calories — include them.',
+  sweet:
+    'This is a dessert/sweet. Portion sizes are commonly understated; use the stated Amount, and include sauces/toppings from Extras.',
+};
 
 /**
  * The general instruction that leads every recognition request.
  * Swift: AIFoodRecognitionService.systemPromptGeneral
  */
-const SYSTEM_PROMPT_GENERAL = 'Return ONLY a JSON object, no prose, no markdown fences.';
+export const SYSTEM_PROMPT_GENERAL =
+  'Return ONLY a JSON object, no prose, no markdown fences.';
 
 /**
  * Schema description -> example -> units -> toxin-scoring -> clarification rules.
@@ -35,7 +81,7 @@ const SYSTEM_PROMPT_GENERAL = 'Return ONLY a JSON object, no prose, no markdown 
  *
  * Swift: AIFoodRecognitionService.systemPromptSchemaOnward
  */
-const SYSTEM_PROMPT_SCHEMA_ONWARD =
+export const SYSTEM_PROMPT_SCHEMA_ONWARD =
   'Schema:' +
   '{"items":[{"name":String,"quantity":String,"calories":Int,"protein":Number,"carbs":Number,"fat":Number,"toxinScore":Int,"fiber":Number|null,"sugar":Number|null,"sodium":Number|null,"saturatedFat":Number|null,"cholesterol":Number|null,"potassium":Number|null,"confidence":"high"|"medium"|"low","confidenceReason":String|null}],' +
   '"clarification":String|null,' +
@@ -59,7 +105,7 @@ const SYSTEM_PROMPT_SCHEMA_ONWARD =
  *
  * Swift: AIFoodRecognitionService.imageReconciliationRule
  */
-const IMAGE_RECONCILIATION_RULE =
+export const IMAGE_RECONCILIATION_RULE =
   ' When both text and image are provided: prefer the text for food identity when they conflict; use the image to estimate portion/quantity and to include clearly visible foods the text omitted. Return ONLY the JSON object.';
 
 /**
@@ -70,25 +116,6 @@ const IMAGE_RECONCILIATION_RULE =
  * Swift: AIFoodRecognitionService.imageOnlyPrompt
  */
 export const IMAGE_ONLY_USER_PROMPT = 'Identify the foods in this image and estimate their nutrition.';
-
-/**
- * System prompt for the text describe path.
- *
- * Assembled exactly as buildSystemPromptBase(category: nil) does — general,
- * a single space, then the schema block. The proxy never takes a category, so
- * the no-category branch is the only one reachable and the result is
- * byte-identical to what the client sends today.
- */
-export const DESCRIBE_MEAL_SYSTEM_PROMPT =
-  SYSTEM_PROMPT_GENERAL + ' ' + SYSTEM_PROMPT_SCHEMA_ONWARD;
-
-/**
- * System prompt for the photo recognition path: the describe prompt plus the
- * image reconciliation rule, matching the Swift multimodal branch
- * (buildSystemPromptBase(category:) + imageReconciliationRule).
- */
-export const PHOTO_RECOGNITION_SYSTEM_PROMPT =
-  DESCRIBE_MEAL_SYSTEM_PROMPT + IMAGE_RECONCILIATION_RULE;
 
 /**
  * System prompt for onboarding goal personalisation. Unlike the recognition
