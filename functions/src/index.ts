@@ -17,7 +17,7 @@
  * deletion-cascade: aiUsage handled in AIPROXY-1b
  */
 
-import { getApps, initializeApp } from 'firebase-admin/app';
+import { App, getApp, initializeApp } from 'firebase-admin/app';
 import {
   DocumentReference,
   DocumentSnapshot,
@@ -187,13 +187,31 @@ const KIND_CONFIG: Readonly<Record<AiProxyKind, KindConfig>> = {
 
 let firestoreInstance: Firestore | undefined;
 
-/** Lazy so that importing this module never requires credentials. */
+/**
+ * Lazy so that importing this module never requires credentials.
+ *
+ * Gate on `getApp()`, NOT on `getApps().length`. Those ask different questions:
+ * `getApps()` returns EVERY app including named ones, while `getFirestore()`
+ * needs the DEFAULT app specifically. The callable runtime verifies the auth
+ * token before our handler runs and initialises its own named app along the
+ * way, so `getApps().length` is already non-zero by then — the old guard
+ * skipped `initializeApp()` and every request died with "The default Firebase
+ * app does not exist" (outcome: counter-error). `getApp()` throws iff the
+ * default app is absent, which is exactly the precondition being checked.
+ *
+ * The try/catch also stays correct if something else initialises the default
+ * app first, where an unconditional module-scope `initializeApp()` would throw
+ * at load time and take the whole function down.
+ */
 function db(): Firestore {
   if (firestoreInstance === undefined) {
-    if (getApps().length === 0) {
-      initializeApp();
+    let app: App;
+    try {
+      app = getApp();
+    } catch {
+      app = initializeApp();
     }
-    firestoreInstance = getFirestore();
+    firestoreInstance = getFirestore(app);
   }
   return firestoreInstance;
 }
