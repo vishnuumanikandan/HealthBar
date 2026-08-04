@@ -172,6 +172,7 @@
 		BEF96B572F88515200FB0F83 /* BadgeProgressDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96B562F88515200FB0F83 /* BadgeProgressDTO.swift */; };
 		BEF96B592F88515A00FB0F83 /* AccountInfoDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96B582F88515A00FB0F83 /* AccountInfoDTO.swift */; };
 		BEF96B5B2F88519800FB0F83 /* BadgeToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96B5A2F88519800FB0F83 /* BadgeToast.swift */; };
+		BEF96B7B2F88519800FB0F90 /* DownsampledPhotoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96B7A2F88519800FB0F90 /* DownsampledPhotoView.swift */; };
 		BEF96B5D2F8851B200FB0F83 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96B5C2F8851B200FB0F83 /* AccountView.swift */; };
 		BEF96D092FC8F45B00FB0F83 /* RecognizedFoodItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96D082FC8F45B00FB0F83 /* RecognizedFoodItem.swift */; };
 		BEF96D0B2FC8F47900FB0F83 /* AIFoodRecognitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96D0A2FC8F47900FB0F83 /* AIFoodRecognitionService.swift */; };
@@ -362,6 +363,7 @@
 		BEF96B562F88515200FB0F83 /* BadgeProgressDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeProgressDTO.swift; sourceTree = "<group>"; };
 		BEF96B582F88515A00FB0F83 /* AccountInfoDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountInfoDTO.swift; sourceTree = "<group>"; };
 		BEF96B5A2F88519800FB0F83 /* BadgeToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeToast.swift; sourceTree = "<group>"; };
+		BEF96B7A2F88519800FB0F90 /* DownsampledPhotoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownsampledPhotoView.swift; sourceTree = "<group>"; };
 		BEF96B5C2F8851B200FB0F83 /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
 		BEF96B5E2FA3258900FB0F83 /* pixelscreenhomeprompt.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = pixelscreenhomeprompt.md; sourceTree = "<group>"; };
 		BEF96D082FC8F45B00FB0F83 /* RecognizedFoodItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecognizedFoodItem.swift; sourceTree = "<group>"; };
@@ -650,6 +652,7 @@
 				BE7B0A012FE5000000000001 /* TopBar.swift */,
 				AACC7A012F500000000000A1 /* RankPlaque.swift */,
 				BEF96B5A2F88519800FB0F83 /* BadgeToast.swift */,
+				BEF96B7A2F88519800FB0F90 /* DownsampledPhotoView.swift */,
 				1111E1972F32DFEE006EF76F /* StreakMilestoneToast.swift */,
 				1111E1952F32DFE5006EF76F /* MealTypePill.swift */,
 				1111E18C2F29B129006EF76F /* PurityScoreInfoSheet.swift */,
@@ -1013,6 +1016,7 @@
 				BEF96ABC2F7CC7F600FB0F83 /* MoodEntry.swift in Sources */,
 				BEF96ABD2F7CC7F600FB0F83 /* SavedRecipe.swift in Sources */,
 				BEF96B5B2F88519800FB0F83 /* BadgeToast.swift in Sources */,
+				BEF96B7B2F88519800FB0F90 /* DownsampledPhotoView.swift in Sources */,
 				BEF969F02F7BA74500FB0F83 /* CalculatorViews.swift in Sources */,
 				BE7787962F72699800666EE3 /* FirebaseAuthService.swift in Sources */,
 				BE102F5A2FDD018600E9744F /* SharedItemDTO.swift in Sources */,
