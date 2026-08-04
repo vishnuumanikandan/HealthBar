@@ -16,15 +16,26 @@ import PhotosUI
 struct DescribeMealView: View {
 
     @Bindable var viewModel: FoodLogViewModel
+    /// Triggers the existing guest → signup path (provided by ContentView via FoodLogView).
+    private let onCreateAccount: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var settings = SettingsManager.shared
     /// AIPROXY-1b: gates the AI composer behind sign-in. Read from the shared
-    /// @Observable singleton rather than injected, so the single presentation site
-    /// (`FoodLogView`) needs no change.
+    /// @Observable singleton rather than injected.
     @State private var authService = FirebaseAuthService.shared
     @FocusState private var isInputFocused: Bool
     @State private var showingPhotoSourceSheet: Bool = false
     @State private var photoPickerItem: PhotosPickerItem? = nil
+
+    // MARK: - Initialization
+
+    init(
+        viewModel: FoodLogViewModel,
+        onCreateAccount: @escaping () -> Void = {}
+    ) {
+        self._viewModel = Bindable(viewModel)
+        self.onCreateAccount = onCreateAccount
+    }
 
     private var tc: ThemeColors { settings.activeColors }
 
@@ -120,13 +131,6 @@ struct DescribeMealView: View {
 
     /// Mirrors the per-surface guest card used on the other gated tabs
     /// (`BattleView.guestCard`, `GuildView`, `FriendsView`).
-    ///
-    /// TODO-describe-guest-signup: the other surfaces' cards call an `onCreateAccount`
-    /// closure that ContentView threads down to flip `showSignUpFromGuest`. This sheet is
-    /// presented from FoodLogView, which never receives that closure, so wiring it would
-    /// mean changing ContentView and FoodLogView — both outside this prompt's Files list.
-    /// The button dismisses instead of shipping one that silently does nothing; the copy
-    /// names the Profile tab, which is where the real signup entry point already lives.
     private var guestCard: some View {
         VStack(spacing: DesignSystem.Spacing.md) {
             Image(systemName: "sparkles")
@@ -137,7 +141,7 @@ struct DescribeMealView: View {
                 .font(AppFont.bold(20))
                 .foregroundColor(tc.textPrimary)
 
-            Text("QuickLog reads your meal description and estimates the nutrition for you. Create a free account from the Profile tab to turn it on — you can still add food manually any time.")
+            Text("QuickLog reads your meal description and estimates the nutrition for you. Create a free account to turn it on — you can still add food manually any time.")
                 .font(AppFont.regular(14))
                 .foregroundColor(tc.textSecondary)
                 .multilineTextAlignment(.center)
@@ -145,7 +149,12 @@ struct DescribeMealView: View {
                 // detent — the same fix the error card above uses.
                 .fixedSize(horizontal: false, vertical: true)
 
-            AppButton(title: "Got It", style: .primary, action: { dismiss() })
+            // Dismiss this sheet FIRST, then hand off: the signup flow is itself a
+            // sheet presented from ContentView, and the two cannot be on screen at once.
+            AppButton(title: "Create Account", style: .primary, action: {
+                dismiss()
+                onCreateAccount()
+            })
         }
         .padding(DesignSystem.Spacing.lg)
         .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
