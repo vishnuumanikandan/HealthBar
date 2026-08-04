@@ -1086,14 +1086,20 @@ final class FoodLogViewModel {
     /// Selects and processes a photo from UIImage
     /// - Parameter image: The UIImage to process
     ///
-    /// Converts the image to JPEG data with compression, validates size (< 1MB),
-    /// and stores it for saving. Runs asynchronously to prevent UI blocking.
+    /// Caps the stored dimensions (PHOTOPERF-1), converts the image to JPEG data with
+    /// compression, validates size (< 1MB), and stores it for saving. Runs
+    /// asynchronously to prevent UI blocking.
     func selectPhoto(_ image: UIImage) async {
         isProcessingPhoto = true
         defer { isProcessingPhoto = false }
 
+        // PHOTOPERF-1: cap the stored long edge before compressing. Returns the original
+        // untouched when it is already within the cap, so small photos keep the exact
+        // compression-only path they had before.
+        let storedImage = Self.downsampleForStorage(image)
+
         // Convert to JPEG with 0.7 quality
-        guard var data = image.jpegData(compressionQuality: 0.7) else {
+        guard var data = storedImage.jpegData(compressionQuality: 0.7) else {
             errorMessage = "Failed to process photo"
             return
         }
@@ -1105,7 +1111,7 @@ final class FoodLogViewModel {
         // Iteratively reduce quality if over 1MB
         while data.count > maxSize && quality > 0.1 {
             quality -= 0.1
-            if let compressedData = image.jpegData(compressionQuality: quality) {
+            if let compressedData = storedImage.jpegData(compressionQuality: quality) {
                 data = compressedData
             } else {
                 break
@@ -1118,9 +1124,11 @@ final class FoodLogViewModel {
             return
         }
 
+        print("[PHOTOPERF-1] Stored photo \(Self.pixelDescription(image)) → \(Self.pixelDescription(storedImage)), \(data.count) bytes")
+
         // Success - store photo
         photoData = data
-        selectedPhoto = image
+        selectedPhoto = storedImage
 
         // Provide haptic feedback for successful selection
         #if os(iOS)
@@ -1139,6 +1147,54 @@ final class FoodLogViewModel {
         let generator = UIImpactFeedbackGenerator(style: .light)
         generator.impactOccurred()
         #endif
+    }
+
+    /// PHOTOPERF-1: caps a manually attached photo's long edge before it is compressed
+    /// into SwiftData. Manual attachments were dimensionally uncapped (only quality-
+    /// iterated under 1MB), so a 4032px camera shot was stored — and later decoded — at
+    /// full resolution.
+    ///
+    /// Deliberately SEPARATE from `processImageForRecognition` (the 1568px AI-upload
+    /// pipeline) and NOT refactored to share code with it: that path is risk-isolated
+    /// after AIPROXY-1b and carries a different cap for a different consumer.
+    ///
+    /// Returns the original image untouched when it is already within the cap — there is
+    /// no upscaling path — and also on any ImageIO failure, which degrades to exactly the
+    /// pre-PHOTOPERF-1 behavior rather than losing the photo.
+    private static nonisolated func downsampleForStorage(_ image: UIImage) -> UIImage {
+        let maxStoredPhotoDimension: CGFloat = 1200
+
+        guard longEdgeInPixels(image) > maxStoredPhotoDimension else { return image }
+
+        // Round-trip through JPEG data so ImageIO downsamples during decode rather than
+        // holding the full-resolution bitmap (same technique as the AI pipeline).
+        guard let sourceData = image.jpegData(compressionQuality: 1.0),
+              let source = CGImageSourceCreateWithData(sourceData as CFData, nil) else {
+            return image
+        }
+
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true, // normalizes orientation
+            kCGImageSourceThumbnailMaxPixelSize: maxStoredPhotoDimension
+        ]
+
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return image
+        }
+
+        // Pixels are physically rotated upright by the transform option above.
+        return UIImage(cgImage: cgImage, scale: 1.0, orientation: .up)
+    }
+
+    /// Long edge in PIXELS (`size` is in points; `scale` converts).
+    private static nonisolated func longEdgeInPixels(_ image: UIImage) -> CGFloat {
+        max(image.size.width, image.size.height) * image.scale
+    }
+
+    /// `WIDTHxHEIGHT` in pixels, for the PHOTOPERF-1 storage log.
+    private static nonisolated func pixelDescription(_ image: UIImage) -> String {
+        "\(Int(image.size.width * image.scale))x\(Int(image.size.height * image.scale))"
     }
 
     /// Shows the camera picker

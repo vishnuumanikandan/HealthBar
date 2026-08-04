@@ -1556,15 +1556,19 @@ struct HomeView: View {
         }
     }
 
-    // MEALROW-1: photo-conditional — split-card face when a photo decodes (photo left,
+    // MEALROW-1: photo-conditional — split-card face when a photo EXISTS (photo left,
     // the existing icon/time/name/calories restacked into the right column), else the
     // existing meal slot unchanged.
+    // PHOTOPERF-1 compile fix: `PhotoSplitCard` now takes raw `photoData` and decodes
+    // asynchronously, so this branch keys on presence rather than on decode success.
     @ViewBuilder
     private func mealSlot(_ entry: FoodEntry) -> some View {
-        if let photoData = entry.photoData,
-           let uiImage = UIImage(data: photoData) {
+        if let photoData = entry.photoData {
             flatCard(radius: DesignSystem.CornerRadius.lg) {
-                PhotoSplitCard(image: uiImage, cornerRadius: DesignSystem.CornerRadius.lg, height: 116) {
+                PhotoSplitCard(photoData: photoData,
+                               cacheKey: entry.id.uuidString,
+                               cornerRadius: DesignSystem.CornerRadius.lg,
+                               height: 116) {
                     VStack(alignment: .leading, spacing: 0) {
                         HStack {
                             Image(systemName: entry.mealType.icon)

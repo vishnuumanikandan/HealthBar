@@ -709,13 +709,22 @@ struct FoodLogView: View {
         // MEALPHOTO-1: the bundle's photo lives on exactly one component (the first item
         // logged from an AI recognition); nil once that component is deleted, or when the
         // bundle was never photographed — either way the header falls back to today's row.
-        let bundlePhoto = components.compactMap(\.photoData).first.flatMap(UIImage.init(data:))
+        //
+        // PHOTOPERF-1: carry the OWNING component's id alongside the data — keying the
+        // decode cache on the bundle id would let a key outlive the photo it names.
+        let bundlePhoto = components
+            .compactMap { component in
+                component.photoData.map { (data: $0, cacheKey: component.id.uuidString) }
+            }
+            .first
 
         return VStack(spacing: 4) {
             // Bundle header row — photo-conditional split card (MEALROW-1 pattern), else
             // the existing header unchanged. The expanded children render below either.
             if let bundlePhoto {
-                PhotoSplitCard(image: bundlePhoto, cornerRadius: DesignSystem.Erewhon.cardRadius) {
+                PhotoSplitCard(photoData: bundlePhoto.data,
+                               cacheKey: bundlePhoto.cacheKey,
+                               cornerRadius: DesignSystem.Erewhon.cardRadius) {
                     bundleHeaderContent(bundleId: bundleId, bundleName: bundleName,
                                         totalCal: totalCal, componentCount: components.count,
                                         isExpanded: isExpanded)
@@ -1169,6 +1178,9 @@ struct FoodLogView: View {
 
     // MARK: - Quick Log Card
 
+    /// Rendered size of the quick-log card's photo/icon well (mockup `.ph`).
+    private static let quickLogPhotoSize = CGSize(width: 120, height: 70)
+
     /// Mockup `.rfood`: photo/icon header + name + display calories + relative time, with
     /// the favorite star kept as an in-chip affordance (D5). Behavior (tap-to-quick-log,
     /// favorite toggle) unchanged; still fed by `recentFoods` only (no new dedup).
@@ -1179,18 +1191,22 @@ struct FoodLogView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Photo / icon area (mockup `.ph`)
                 ZStack(alignment: .topTrailing) {
-                    if let photoData = entry.photoData,
-                       let uiImage = UIImage(data: photoData) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 120, height: 70)
-                            .clipped()
+                    if let photoData = entry.photoData {
+                        // PHOTOPERF-1: async decode at the rendered size; the placeholder
+                        // holds the identical frame so the card never resizes on arrival.
+                        DownsampledPhotoView(
+                            photoData: photoData,
+                            targetSize: Self.quickLogPhotoSize,
+                            cacheKey: entry.id.uuidString
+                        ) {
+                            Rectangle().fill(tc.ringEmpty)
+                        }
                     } else {
                         ZStack {
                             Rectangle()
                                 .fill(tc.ringEmpty)
-                                .frame(width: 120, height: 70)
+                                .frame(width: Self.quickLogPhotoSize.width,
+                                       height: Self.quickLogPhotoSize.height)
                             Image(systemName: "fork.knife")
                                 .font(AppFont.regular(24))
                                 .foregroundColor(tc.textSecondary)
@@ -1438,15 +1454,22 @@ struct FoodLogView: View {
 /// Card is intentionally thin for a compact log view.
 // MARK: - MEALROW-1: Photo Split Card
 
-/// Photo-conditional split-card *face*: a decoded photo fills the left `splitRatio`
+/// Photo-conditional split-card *face*: the photo fills the left `splitRatio`
 /// of the card edge-to-edge; caller-supplied content fills the right. Layout ONLY —
 /// background, border, and shadow come from the call site's card styling (the
 /// adaptiveCard / flatCard family); this view adds none of its own. `cornerRadius`
 /// matches the enclosing card so the photo's outer (left) corners round while its
 /// inner (right) edge at the split line stays square. One shared type referenced by
 /// both call sites (SwipeableEntryCard here + HomeView.mealSlot) — no per-surface copies.
+///
+/// PHOTOPERF-1: takes raw `photoData` and decodes it asynchronously at the rendered size
+/// via `DownsampledPhotoView`. There is deliberately no `UIImage` initializer — a call
+/// site that decoded eagerly just to construct this view would reintroduce the
+/// main-thread decode this change removes.
 struct PhotoSplitCard<Content: View>: View {
-    let image: UIImage
+    let photoData: Data
+    /// Stable identity of the photo's owning entry — the decode cache key's base.
+    let cacheKey: String
     let cornerRadius: CGFloat
     var height: CGFloat = Layout.cardHeight
     @ViewBuilder let content: () -> Content
@@ -1462,19 +1485,24 @@ struct PhotoSplitCard<Content: View>: View {
         GeometryReader { proxy in
             let photoWidth = proxy.size.width * Layout.splitRatio
             HStack(spacing: 0) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: photoWidth, height: height)
-                    .clipShape(
-                        UnevenRoundedRectangle(
-                            topLeadingRadius: cornerRadius,
-                            bottomLeadingRadius: cornerRadius,
-                            bottomTrailingRadius: 0,
-                            topTrailingRadius: 0
-                        )
+                DownsampledPhotoView(
+                    photoData: photoData,
+                    targetSize: CGSize(width: photoWidth, height: height),
+                    cacheKey: cacheKey
+                ) {
+                    // Layout-only contract: no fill of its own, so the call site's card
+                    // styling shows through for the frame or two before the decode lands.
+                    Color.clear
+                }
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: cornerRadius,
+                        bottomLeadingRadius: cornerRadius,
+                        bottomTrailingRadius: 0,
+                        topTrailingRadius: 0
                     )
-                    .accessibilityHidden(true)
+                )
+                .accessibilityHidden(true)
 
                 content()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1620,13 +1648,17 @@ private struct SwipeableEntryCard: View {
     }
 
     // Fix #7: Thin card layout
-    // MEALROW-1: photo-conditional — split-card face when a photo decodes (photo left,
+    // MEALROW-1: photo-conditional — split-card face when a photo EXISTS (photo left,
     // the existing content restacked right), else the existing thin row unchanged.
+    // PHOTOPERF-1: the branch keys on `photoData != nil` rather than on decode success,
+    // so the split face no longer waits on a main-thread decode; a corrupt photo keeps
+    // the split face and shows the placeholder, matching "photo exists" semantics.
     @ViewBuilder
     private var thinCard: some View {
-        if let photoData = entry.photoData,
-           let uiImage = UIImage(data: photoData) {
-            PhotoSplitCard(image: uiImage, cornerRadius: DesignSystem.Erewhon.cardRadius) {
+        if let photoData = entry.photoData {
+            PhotoSplitCard(photoData: photoData,
+                           cacheKey: entry.id.uuidString,
+                           cornerRadius: DesignSystem.Erewhon.cardRadius) {
                 HStack(spacing: DesignSystem.Spacing.sm) {
                     // Food info: name + cal + time on two lines
                     VStack(alignment: .leading, spacing: 2) {
@@ -1692,17 +1724,11 @@ private struct SwipeableEntryCard: View {
             }
             .adaptiveCard(borderColor: tc.primary.opacity(0.15), fillColor: tc.cardBackground)
         } else {
+            // Reached only when `entry.photoData == nil`, so the 32×32 thumbnail this
+            // branch used to carry was unreachable (MEALROW-1 left it behind when it added
+            // the split-card face above, which already tested the same condition).
+            // PHOTOPERF-1 removed it.
             HStack(spacing: DesignSystem.Spacing.sm) {
-                // Photo thumbnail — only show if actual photo exists (no placeholder for thin cards)
-                if let photoData = entry.photoData,
-                   let uiImage = UIImage(data: photoData) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 32, height: 32)
-                        .clipShape(AdaptiveCardShapeStyle())
-                }
-
                 // Food info: name + cal + time on two lines
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.name)
