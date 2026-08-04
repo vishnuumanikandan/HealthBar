@@ -113,6 +113,33 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
+    // AIPROXY-1b: per-day AI credit counters (users/{uid}/aiUsage/{yyyyMMdd}), written
+    // by the aiProxy Cloud Function via the Admin SDK (which bypasses these rules).
+    //
+    // DELETE-ONLY, owner-only. The counter is the daily-limit enforcement point, so the
+    // client must never create, update, or otherwise influence it — and read/list stay
+    // denied too, so a client cannot enumerate the collection. The single legitimate
+    // client need is account deletion: subcollections do not cascade, so without a delete
+    // grant these counters would outlive the deleted user.
+    //
+    // The rule body checks ONLY request.auth — never resource.data. Account deletion
+    // addresses day keys deterministically and most of them will not exist; a
+    // resource-dependent condition would deny those no-op deletes.
+    //
+    // Deliberately a flat sibling block, not an entry in the users/{userId}/{collection}
+    // allowlist above: that block grants `read, write`, which would hand the client both
+    // the read and the create/update this collection must never allow.
+    //
+    // DEPLOY: rides the NEXT attended rules deploy — NOT deployed by AIPROXY-1b.
+    // Additive new-path block, so it is merge-safe to sit here undeployed: no shipped
+    // client write path changes shape. Until it deploys, the client's aiUsage delete
+    // permission-denies and is caught and logged (FirestoreServiceImpl
+    // .deleteAIUsageCounters); the rest of the deletion cascade is unaffected.
+    match /users/{userId}/aiUsage/{dayKey} {
+      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow read, create, update: if false;
+    }
+
     // Username uniqueness index (Friend System Phase 1)
     match /usernames/{handleKey} {
       allow read: if request.auth != null;

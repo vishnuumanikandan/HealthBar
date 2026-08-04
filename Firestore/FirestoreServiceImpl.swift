@@ -2204,8 +2204,71 @@ final class FirestoreServiceImpl: FirestoreService {
             }
         }
 
+        // AIPROXY-1b: the aiProxy per-day credit counters (users/{uid}/aiUsage/{yyyyMMdd}).
+        // Deliberately NOT in knownSubcollections — that loop LISTS each collection first,
+        // and aiUsage is never listable by the client (see below).
+        await deleteAIUsageCounters(userId: userId)
+
         // Delete the root users/{userId} document
         try await deleteDocument(ref: userDoc)
+    }
+
+    /// Deletes the `aiUsage` per-day counter documents written by the `aiProxy` function.
+    ///
+    /// Addressed by DETERMINISTIC doc id, never by query. The rule for this collection
+    /// grants `delete` only — counter integrity is server-owned, so the client can neither
+    /// read nor list it, and `getDocuments()` would permission-deny permanently rather than
+    /// only until the rule deploys. The ids are the function's own UTC `yyyyMMdd` day keys
+    /// (`functions/src/index.ts` → `utcDayKey`), so they can be reconstructed exactly.
+    /// Deleting a day the user never used is a harmless no-op.
+    ///
+    /// Best-effort by design: a counter that outlives its user is a stale row in a
+    /// server-owned collection, never leaked user content, and must not abort a deletion
+    /// that has already torn down the user's real data.
+    ///
+    /// TODO-aiusage-server-delete: the window bounds this at `aiUsageDeletionWindowDays`
+    /// days back, so an account still holding counters older than that orphans the excess.
+    /// The complete fix belongs where the collection is owned — the function should delete
+    /// its own counters — which needs a functions change, out of scope for AIPROXY-1b.
+    private func deleteAIUsageCounters(userId: String) async {
+        let calendar = Self.utcGregorianCalendar
+        let today = Date()
+
+        let refs: [DocumentReference] = (0..<Self.aiUsageDeletionWindowDays).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
+            return db.collection("users")
+                .document(userId)
+                .collection("aiUsage")
+                .document(Self.utcDayKey(day, calendar: calendar))
+        }
+
+        do {
+            try await deleteInBatches(refs)
+        } catch {
+            // pre-deploy window for the aiUsage delete rule — see DEPLOY marker in firestore.rules
+            print("[FirestoreService] aiUsage counter cleanup skipped for \(userId): \(error)")
+        }
+    }
+
+    /// Days back from today swept for `aiUsage` counters. Stays under the 450-op batch
+    /// chunk so the sweep is always a single commit.
+    private static let aiUsageDeletionWindowDays = 400
+
+    /// Explicitly Gregorian, explicitly UTC — the calendar the function's day keys use.
+    private static let utcGregorianCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar
+    }()
+
+    /// The UTC calendar day as `yyyyMMdd`, byte-identical to the function's `utcDayKey`.
+    ///
+    /// Manual zero-padding via an explicit Gregorian/UTC calendar. `DateFormatter` is
+    /// deliberately NOT used: it is locale- and calendar-sensitive, so a non-Gregorian
+    /// calendar locale or non-ASCII digits would silently produce keys that match nothing.
+    private static func utcDayKey(_ date: Date, calendar: Calendar) -> String {
+        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d%02d%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
     // MARK: - Lifecycle

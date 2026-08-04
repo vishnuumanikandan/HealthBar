@@ -1589,6 +1589,14 @@ final class FoodLogViewModel {
     /// - Minimum 1s between request starts (rate gate).
     /// - Results are discarded if the task is cancelled or the sheet closed.
     func recognizeMeal() async {
+        // AIPROXY-1b: defense in depth. DescribeMealView shows the guest card instead of
+        // the input UI, so a guest has no way to reach this — but the proxy requires an
+        // authenticated caller, and a guest request could only fail. Unreachable by design.
+        guard !coordinator.isGuest else {
+            print("[AIFoodRecognition] Guest reached recognizeMeal — blocked (view-layer gate should have prevented this)")
+            return
+        }
+
         let trimmed = mealDescriptionInput.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasText = !trimmed.isEmpty
         let hasImage = describeMealPhotoData != nil

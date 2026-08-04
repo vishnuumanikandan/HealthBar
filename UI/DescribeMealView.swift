@@ -16,11 +16,26 @@ import PhotosUI
 struct DescribeMealView: View {
 
     @Bindable var viewModel: FoodLogViewModel
+    /// Triggers the existing guest → signup path (provided by ContentView via FoodLogView).
+    private let onCreateAccount: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var settings = SettingsManager.shared
+    /// AIPROXY-1b: gates the AI composer behind sign-in. Read from the shared
+    /// @Observable singleton rather than injected.
+    @State private var authService = FirebaseAuthService.shared
     @FocusState private var isInputFocused: Bool
     @State private var showingPhotoSourceSheet: Bool = false
     @State private var photoPickerItem: PhotosPickerItem? = nil
+
+    // MARK: - Initialization
+
+    init(
+        viewModel: FoodLogViewModel,
+        onCreateAccount: @escaping () -> Void = {}
+    ) {
+        self._viewModel = Bindable(viewModel)
+        self.onCreateAccount = onCreateAccount
+    }
 
     private var tc: ThemeColors { settings.activeColors }
 
@@ -51,34 +66,15 @@ struct DescribeMealView: View {
                 .padding(.horizontal, DesignSystem.Spacing.lg)
                 .padding(.bottom, DesignSystem.Spacing.md)
 
-                ScrollView {
-                    VStack(spacing: DesignSystem.Spacing.md) {
-                        // Category chips (AILOG-1b) — directly under the header.
-                        categoryChipRow
-
-                        // Error / clarification message
-                        if let error = viewModel.recognitionError {
-                            HStack(alignment: .top, spacing: DesignSystem.Spacing.sm) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(AppFont.bold(14))
-                                    .foregroundColor(DesignSystem.Colors.warning)
-                                Text(error)
-                                    .font(AppFont.regular(13))
-                                    .foregroundColor(DesignSystem.Colors.warning)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .padding(DesignSystem.Spacing.md)
-                            .adaptiveCard(
-                                borderColor: DesignSystem.Colors.warning.opacity(0.4),
-                                fillColor: DesignSystem.Colors.warning.opacity(0.08)
-                            )
-                            .accessibilityLabel("Error: \(error)")
-                        }
-
-                        composerSection
-                    }
-                    .padding(.horizontal, DesignSystem.Spacing.lg)
-                    .padding(.bottom, DesignSystem.Spacing.lg)
+                // AIPROXY-1b: AI logging runs through an authenticated callable, so guests
+                // get the established sign-in card instead of the input UI and start zero
+                // AI I/O. Evaluated per presentation — a guest who signs up mid-session
+                // sees the composer the next time the sheet opens.
+                if authService.isGuest {
+                    guestCard
+                    Spacer(minLength: 0)
+                } else {
+                    composerScroll
                 }
             }
             .background(tc.cardBackground.ignoresSafeArea())
@@ -95,7 +91,9 @@ struct DescribeMealView: View {
         .presentationDragIndicator(.hidden)
         .presentationCornerRadius(DesignSystem.CornerRadius.xl)
         .onAppear {
-            isInputFocused = true
+            // Guests have no text field to focus, and raising the keyboard behind the
+            // sign-in card would leave it stranded with nothing to type into.
+            isInputFocused = !authService.isGuest
         }
         .onDisappear {
             viewModel.cancelRecognition()
@@ -126,6 +124,72 @@ struct DescribeMealView: View {
                 }
                 photoPickerItem = nil
             }
+        }
+    }
+
+    // MARK: - Guest State
+
+    /// Mirrors the per-surface guest card used on the other gated tabs
+    /// (`BattleView.guestCard`, `GuildView`, `FriendsView`).
+    private var guestCard: some View {
+        VStack(spacing: DesignSystem.Spacing.md) {
+            Image(systemName: "sparkles")
+                .font(AppFont.regular(44))
+                .foregroundColor(tc.textTertiary)
+
+            Text("Sign in to use QuickLog")
+                .font(AppFont.bold(20))
+                .foregroundColor(tc.textPrimary)
+
+            Text("QuickLog reads your meal description and estimates the nutrition for you. Create a free account to turn it on — you can still add food manually any time.")
+                .font(AppFont.regular(14))
+                .foregroundColor(tc.textSecondary)
+                .multilineTextAlignment(.center)
+                // Without this the copy truncates to one line in the sheet's `.medium`
+                // detent — the same fix the error card above uses.
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Dismiss this sheet FIRST, then hand off: the signup flow is itself a
+            // sheet presented from ContentView, and the two cannot be on screen at once.
+            AppButton(title: "Create Account", style: .primary, action: {
+                dismiss()
+                onCreateAccount()
+            })
+        }
+        .padding(DesignSystem.Spacing.lg)
+        .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
+        .padding(DesignSystem.Spacing.lg)
+    }
+
+    private var composerScroll: some View {
+        ScrollView {
+            VStack(spacing: DesignSystem.Spacing.md) {
+                // Category chips (AILOG-1b) — directly under the header.
+                categoryChipRow
+
+                // Error / clarification message
+                if let error = viewModel.recognitionError {
+                    HStack(alignment: .top, spacing: DesignSystem.Spacing.sm) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(AppFont.bold(14))
+                            .foregroundColor(DesignSystem.Colors.warning)
+                        Text(error)
+                            .font(AppFont.regular(13))
+                            .foregroundColor(DesignSystem.Colors.warning)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(DesignSystem.Spacing.md)
+                    .adaptiveCard(
+                        borderColor: DesignSystem.Colors.warning.opacity(0.4),
+                        fillColor: DesignSystem.Colors.warning.opacity(0.08)
+                    )
+                    .accessibilityLabel("Error: \(error)")
+                }
+
+                composerSection
+            }
+            .padding(.horizontal, DesignSystem.Spacing.lg)
+            .padding(.bottom, DesignSystem.Spacing.lg)
         }
     }
 

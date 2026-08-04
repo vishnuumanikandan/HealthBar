@@ -181,10 +181,13 @@ struct ContentView: View {
             .tag(0)
 
             // Food Log Tab
-            FoodLogView(coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared))
-                .background(tc.primaryBackground.ignoresSafeArea())
-                .toolbar(.hidden, for: .tabBar)
-                .tag(1)
+            FoodLogView(
+                coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
+                onCreateAccount: { showSignUpFromGuest = true }
+            )
+            .background(tc.primaryBackground.ignoresSafeArea())
+            .toolbar(.hidden, for: .tabBar)
+            .tag(1)
 
             // Battle Tab (D1a) — center slot
             BattleView(

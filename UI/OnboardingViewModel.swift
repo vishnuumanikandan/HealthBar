@@ -120,6 +120,10 @@ final class OnboardingViewModel {
     private let coordinator: AppCoordinator
     let authService: any AuthService
 
+    /// The single `aiProxy` call site (AIPROXY-1b). Onboarding does no networking of
+    /// its own; it builds the profile summary and hands it to this service.
+    private let aiService = AIFoodRecognitionService()
+
     /// Tracks the last known userId to detect account switches.
     private var lastKnownUserId: String?
 
@@ -334,20 +338,11 @@ final class OnboardingViewModel {
         )
     }
 
-    // MARK: - Claude API
+    // MARK: - AI Goal Personalisation
 
-    private struct ClaudeAPIRequest: Encodable {
-        let model: String
-        let max_tokens: Int
-        let system: String
-        let messages: [Message]
-        struct Message: Encodable { let role: String; let content: String }
-    }
-
-    private struct ClaudeAPIResponse: Decodable {
-        let content: [ContentBlock]
-        struct ContentBlock: Decodable { let type: String; let text: String }
-    }
+    // AIPROXY-1b: the Anthropic request/response types and the URLSession call are gone.
+    // This view model no longer does its own networking — it builds the profile summary
+    // and hands it to `AIFoodRecognitionService`, the single `aiProxy` call site.
 
     private struct ClaudeTargetResponse: Codable {
         let calories: Int
@@ -371,8 +366,13 @@ final class OnboardingViewModel {
         localCarbs: Int,
         localFat: Int
     ) async -> ClaudeTargetResponse? {
-        let key = APIConfig.claudeAPIKey
-        guard !key.isEmpty else { return nil }
+        // Guests never reach the proxy: it requires an authenticated caller, so the call
+        // could only fail. Returning nil here takes the SAME pre-existing local-math
+        // fallback every other failure takes — no new UI, no error surfaced.
+        guard !authService.isGuest else {
+            print("[OnboardingVM] Guest — skipping AI personalisation, using local math")
+            return nil
+        }
 
         let profileSummary: [String: Any] = [
             "sex": sex,
@@ -394,60 +394,25 @@ final class OnboardingViewModel {
             "formulaFat": localFat
         ]
 
-        guard let profileJSON = try? JSONSerialization.data(withJSONObject: profileSummary),
+        // `.sortedKeys` makes the serialization deterministic. The pre-AIPROXY-1b call
+        // used the same dictionary with no options, so key order came out of Dictionary's
+        // unspecified iteration order and varied run to run. Same key-value SET, now in a
+        // stable order — semantically identical input for the model.
+        guard let profileJSON = try? JSONSerialization.data(withJSONObject: profileSummary, options: [.sortedKeys]),
               let profileString = String(data: profileJSON, encoding: .utf8) else {
             return nil
         }
 
-        let systemPrompt = """
-        You are a concise nutrition coach. Return ONLY a JSON object, no prose, no markdown fences.
-        {"calories": Int, "protein": Int, "carbs": Int, "fat": Int, "tip": String}
-        tip must be exactly 2 sentences, personalized to the user's profile.
-        Honor goalDirection: for "maintain" keep calories within 5% of formulaCalories; never assume the user wants weight loss.
-        """
-
-        let requestBody = ClaudeAPIRequest(
-            model: "claude-sonnet-4-6",
-            max_tokens: 256,
-            system: systemPrompt,
-            messages: [ClaudeAPIRequest.Message(role: "user", content: profileString)]
-        )
-
-        guard let bodyData = try? JSONEncoder().encode(requestBody) else { return nil }
-
-        var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
-        request.httpMethod = "POST"
-        request.setValue(key, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = bodyData
-
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                print("[OnboardingVM] Claude API: missing HTTP response")
-                return nil
-            }
-            guard httpResponse.statusCode == 200 else {
-                let body = String(data: data, encoding: .utf8) ?? "<non-UTF8 body>"
-                print("[OnboardingVM] Claude API non-200 (\(httpResponse.statusCode)): \(String(body.prefix(200)))")
-                return nil
-            }
-
-            let apiResponse = try JSONDecoder().decode(ClaudeAPIResponse.self, from: data)
-            guard let textBlock = apiResponse.content.first(where: { $0.type == "text" }) else {
-                print("[OnboardingVM] Claude API: no text block in response")
-                return nil
-            }
-
-            // Extraction mirrors the recognition service (strip fences → slice braces →
-            // decode). Fixes markdown-fenced / preamble replies that previously threw and
-            // silently fell back to the generic coaching tip.
-            return extractTargetResponse(from: textBlock.text)
-        } catch {
-            print("[OnboardingVM] Claude API error: \(error)")
+        // The system prompt moved to the server (functions/src/prompts.ts,
+        // ONBOARDING_GOALS_SYSTEM_PROMPT) along with the model and token cap.
+        guard let rawText = await aiService.generateOnboardingGoals(profileSummaryText: profileString) else {
             return nil
         }
+
+        // Extraction mirrors the recognition service (strip fences → slice braces →
+        // decode). Fixes markdown-fenced / preamble replies that previously threw and
+        // silently fell back to the generic coaching tip.
+        return extractTargetResponse(from: rawText)
     }
 
     /// Extracts and decodes the target JSON from Claude's raw text reply.

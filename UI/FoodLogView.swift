@@ -27,6 +27,9 @@ struct FoodLogView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var settings = SettingsManager.shared
     @State private var draggingOver: MealType? = nil
+    /// Triggers the existing guest → signup path (provided by ContentView).
+    /// Threaded through to the describe sheet's guest card (AIPROXY-1b).
+    private let onCreateAccount: () -> Void
 
     private var tc: ThemeColors { settings.activeColors }
 
@@ -45,8 +48,12 @@ struct FoodLogView: View {
 
     // MARK: - Initialization
 
-    init(coordinator: AppCoordinator) {
+    init(
+        coordinator: AppCoordinator,
+        onCreateAccount: @escaping () -> Void = {}
+    ) {
         self._viewModel = State(initialValue: FoodLogViewModel(coordinator: coordinator))
+        self.onCreateAccount = onCreateAccount
     }
 
     // MARK: - Body
@@ -82,7 +89,7 @@ struct FoodLogView: View {
             }
             // AI Describe Meal input sheet
             .sheet(isPresented: $viewModel.showingDescribeMeal) {
-                DescribeMealView(viewModel: viewModel)
+                DescribeMealView(viewModel: viewModel, onCreateAccount: onCreateAccount)
             }
             // AI Recognized Foods review sheet
             .sheet(isPresented: $viewModel.showingRecognitionReview) {
