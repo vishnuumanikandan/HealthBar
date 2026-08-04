@@ -5,6 +5,7 @@
 //  Created by Claude on 5/28/26.
 //
 
+import FirebaseFunctions
 import Foundation
 
 // MARK: - Food Category
@@ -65,24 +66,11 @@ enum FoodCategory: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Per-category estimation guidance injected into the system prompt when a category
-    /// is provided (AILOG-1a). Frozen text — prompt wording is behavior; do not edit.
-    var guidance: String {
-        switch self {
-        case .meal:
-            return "This is a composed meal. Estimate each component separately. If Amount is given, anchor portions to it; otherwise assume typical restaurant portions."
-        case .snack:
-            return "This is a snack. Prefer package-size portions; if a brand is named in Extras, use that product's published nutrition."
-        case .drink:
-            return "This is a beverage. Anchor to the stated size; account for milk, sweeteners, and mix-ins from Extras. A plain water/black coffee/plain tea is near-zero calories."
-        case .fruit:
-            return "This is fruit. Use whole-fruit or cup measures; toppings from Extras (e.g. peanut butter, honey) often exceed the fruit's own calories — include them."
-        case .veggie:
-            return "These are vegetables. Raw vs cooked matters; oils and dressings from Extras usually dominate calories — include them."
-        case .sweet:
-            return "This is a dessert/sweet. Portion sizes are commonly understated; use the stated Amount, and include sauces/toppings from Extras."
-        }
-    }
+    // AIPROXY-1b: `guidance` was deleted here. Per-category estimation guidance is
+    // prompt text, and prompts moved server-side with the bundled key — it now lives
+    // in `functions/src/prompts.ts` (`CATEGORY_GUIDANCE`), which is the only copy.
+    // A second copy here would be dead text that a future reader could edit expecting
+    // a behavior change that can no longer happen.
 }
 
 // MARK: - Public Types
@@ -102,60 +90,10 @@ final class AIFoodRecognitionService {
 
     // MARK: - Private Wire Types
 
-    /// Text-only request (string content).
-    private struct APIRequestTextOnly: Encodable {
-        let model: String
-        let max_tokens: Int
-        let system: String
-        let messages: [Message]
-        struct Message: Encodable { let role: String; let content: String }
-    }
-
-    /// Multimodal request (content-block array).
-    private struct APIRequestMultimodal: Encodable {
-        let model: String
-        let max_tokens: Int
-        let system: String
-        let messages: [Message]
-
-        struct Message: Encodable {
-            let role: String
-            let content: [ContentBlock]
-        }
-
-        enum ContentBlock: Encodable {
-            case image(ImageBlock)
-            case text(TextBlock)
-
-            struct ImageBlock: Encodable {
-                let type = "image"
-                let source: Source
-                struct Source: Encodable {
-                    let type = "base64"
-                    let media_type = "image/jpeg"
-                    let data: String
-                }
-            }
-
-            struct TextBlock: Encodable {
-                let type = "text"
-                let text: String
-            }
-
-            func encode(to encoder: Encoder) throws {
-                var container = encoder.singleValueContainer()
-                switch self {
-                case .image(let block): try container.encode(block)
-                case .text(let block): try container.encode(block)
-                }
-            }
-        }
-    }
-
-    private struct APIResponse: Decodable {
-        let content: [ContentBlock]
-        struct ContentBlock: Decodable { let type: String; let text: String }
-    }
+    // AIPROXY-1b: the Anthropic request/response types are gone. The client no longer
+    // knows about models, token caps, system prompts, or content blocks — the `aiProxy`
+    // callable owns all of it and returns the model's text verbatim. What survives here
+    // is the parsing of THAT text, which was always client-side.
 
     private struct RecognitionResponse: Decodable {
         let items: [RawItem]?
@@ -199,9 +137,26 @@ final class AIFoodRecognitionService {
 
     // MARK: - Constants
 
-    private static let apiURL = URL(string: "https://api.anthropic.com/v1/messages")!
-    private static let model = "claude-sonnet-4-6"
-    private static let maxTokens = 4096
+    /// The deployed `aiProxy` region. MUST match `FUNCTION_REGION` in
+    /// `functions/src/index.ts` — a callable built for the wrong region resolves a URL
+    /// that does not exist and fails as a transport error. Every callable construction
+    /// in this file reads this symbol; never inline the string.
+    private static let aiProxyRegion = "us-central1"
+
+    /// The callable's deployed name.
+    private static let callableName = "aiProxy"
+
+    /// The `details.code` the function attaches to its daily-limit `resource-exhausted`
+    /// error. Matched as a field, never by parsing the localized message.
+    private static let aiDailyLimitCode = "AI_DAILY_LIMIT"
+
+    /// Shown when the server's per-day credit ceiling is hit. Declared ONCE — every
+    /// surface that shows this state reads this symbol.
+    ///
+    /// Deliberately promises no reset time: the server's day boundary is UTC, so a
+    /// "resets at midnight" promise would be wrong for most of the world.
+    static let aiDailyLimitMessage = "You've used all your QuickLog credits for today. They refresh daily."
+
     private static let maxInputLength = 500
     private static let maxItems = 20
     private static let maxClarificationsTotal = 3
@@ -213,43 +168,20 @@ final class AIFoodRecognitionService {
     private static let maxMicroGrams = 500.0         // fiber, sugar, saturatedFat
     private static let maxMicroMilligrams = 10_000.0 // sodium, cholesterol, potassium
 
-    private static let imageOnlyPrompt = "Identify the foods in this image and estimate their nutrition."
-
-    /// The general instruction that leads every request. AILOG-1a inserts per-category
-    /// guidance immediately after this and before the schema (see `buildSystemPromptBase`).
-    private static let systemPromptGeneral = "Return ONLY a JSON object, no prose, no markdown fences."
-
-    /// Schema description → example → units → toxin-scoring → clarification rules.
-    private static let systemPromptSchemaOnward = """
-    Schema:\
-    {"items":[{"name":String,"quantity":String,"calories":Int,"protein":Number,"carbs":Number,"fat":Number,"toxinScore":Int,"fiber":Number|null,"sugar":Number|null,"sodium":Number|null,"saturatedFat":Number|null,"cholesterol":Number|null,"potassium":Number|null,"confidence":"high"|"medium"|"low","confidenceReason":String|null}],\
-    "clarification":String|null,\
-    "clarifications":[{"itemIndex":Int,"question":String,"importance":Number,"defaultOptionIndex":Int,"options":[{"label":String,"dCalories":Int,"dProtein":Number,"dCarbs":Number,"dFat":Number}]}]}\
-    Example: "2 scrambled eggs, toast" → {"items":[{"name":"Scrambled Eggs","quantity":"2 eggs","calories":182,"protein":12.6,"carbs":1.6,"fat":13.6,"toxinScore":10,"fiber":0,"sugar":0.6,"sodium":180,"saturatedFat":4.1,"cholesterol":372,"potassium":176,"confidence":"high","confidenceReason":null},{"name":"Toast","quantity":"1 slice","calories":79,"protein":2.7,"carbs":14.7,"fat":1.0,"toxinScore":40,"fiber":1.9,"sugar":1.5,"sodium":150,"saturatedFat":0.2,"cholesterol":0,"potassium":50,"confidence":"medium","confidenceReason":null}],"clarification":null,"clarifications":[]}\
-    Units: fiber/sugar/saturatedFat in grams; sodium/cholesterol/potassium in milligrams. Omit (null) any micronutrient you cannot reasonably estimate for this specific food — never guess sodium/cholesterol/potassium for foods where it is highly variable.\
-    toxinScore rates how processed/unhealthy the item is, 0–100: 0–15 whole unprocessed foods (fruits, vegetables, plain meats, eggs, plain grains); 16–35 lightly processed (plain yogurt, whole-grain bread, cheese, home-cooked mixed dishes); 36–60 moderately processed (white bread, deli meat, granola bars, restaurant meals with unknown oils); 61–85 ultra-processed (chips, candy, soda, fast food); 86–100 extreme (energy drinks with candy, deep-fried ultra-processed combinations). Score the item as described, not a worst-case version of it.\
-    Set confidence:"low" when portion or identity is uncertain. If input is too vague to estimate any items, return {"items":[],"clarification":"<your question>","clarifications":[]}.\
-    Emit clarifications ONLY for genuinely ambiguous items — unknown portion, likely-hidden added fats (oil/butter/dressing/sauce), or ambiguous size. High-confidence items get none.\
-    Max 3 clarifications total; max 4 options each; options mutually exclusive; labels ≤14 chars.\
-    Each option's deltas are relative to that item's returned baseline macros. Exactly one option per question is the default (defaultOptionIndex) with all-zero deltas.\
-    Set importance per clarification by expected calorie swing: portion of staples, added oil/butter, dressing, sauce score high; herbs, lettuce, spices, garnishes score low.\
-    Provide confidenceReason for every non-high-confidence item — the single biggest source of uncertainty.\
-    Each option's deltas must stay within ±2000 calories and ±250g per macro.\
-    Option deltas must be nutritionally plausible: calorie delta ≈ P·4 + C·4 + F·9. Do not return calorie-only deltas with zero macro change.
-    """
-
-    private static let imageReconciliationRule = """
-     When both text and image are provided: prefer the text for food identity when they conflict; use the image to estimate portion/quantity and to include clearly visible foods the text omitted. Return ONLY the JSON object.
-    """
-
-    // MARK: - Dependencies
-
-    private let session: URLSession
+    // AIPROXY-1b: every prompt constant that used to sit here — `imageOnlyPrompt`,
+    // `systemPromptGeneral`, `systemPromptSchemaOnward`, `imageReconciliationRule` —
+    // moved to `functions/src/prompts.ts`. Prompt text is only enforceable where the
+    // API key lives, so it belongs on the server with it.
 
     // MARK: - Initialization
 
-    init(session: URLSession = .shared) {
-        self.session = session
+    init() {}
+
+    /// The callable handle. `Functions.functions(region:)` memoizes per (app, region),
+    /// so building it per request is cheap and avoids holding a reference that would
+    /// outlive a Firebase reconfiguration.
+    private func aiProxyCallable() -> HTTPSCallable {
+        Functions.functions(region: Self.aiProxyRegion).httpsCallable(Self.callableName)
     }
 
     // MARK: - Public API
@@ -276,12 +208,6 @@ final class AIFoodRecognitionService {
         amount: String? = nil,
         extras: String? = nil
     ) async throws -> RecognitionResult {
-        // Validate API key
-        let key = APIConfig.claudeAPIKey
-        guard !key.isEmpty else {
-            throw AIFoodRecognitionError.missingAPIKey
-        }
-
         // Validate at least one usable input
         let trimmed = (description ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let hasText = !trimmed.isEmpty
@@ -294,103 +220,39 @@ final class AIFoodRecognitionService {
         // Truncate text to max length
         let input = String(trimmed.prefix(Self.maxInputLength))
 
-        // The structured-input block when any of category/amount/extras is present
-        // (AILOG-1a), else the legacy description or the image-only prompt.
-        let userContent = Self.composeStructuredInput(
-            description: input,
-            hasText: hasText,
-            category: category,
-            amount: amount,
-            extras: extras
-        )
-
         print("[AIFoodRecognition] Request started — text: \(hasText), image: \(hasImage)\(hasImage ? ", imageBytes: \(imageData!.count)" : "")")
 
-        // Build request body
-        let bodyData: Data
-
-        if let imageData = imageData {
-            // Multimodal request: image + text content blocks
-            let systemPrompt = Self.buildSystemPromptBase(category: category) + Self.imageReconciliationRule
-
-            let contentBlocks: [APIRequestMultimodal.ContentBlock] = [
-                .image(.init(source: .init(data: imageData.base64EncodedString()))),
-                .text(.init(text: userContent))
-            ]
-
-            let requestBody = APIRequestMultimodal(
-                model: Self.model,
-                max_tokens: Self.maxTokens,
-                system: systemPrompt,
-                messages: [.init(role: "user", content: contentBlocks)]
-            )
-
-            guard let encoded = try? JSONEncoder().encode(requestBody) else {
-                throw AIFoodRecognitionError.decodingFailed
-            }
-            bodyData = encoded
-        } else {
-            // Text-only request (Feature 1 path, unchanged)
-            let requestBody = APIRequestTextOnly(
-                model: Self.model,
-                max_tokens: Self.maxTokens,
-                system: Self.buildSystemPromptBase(category: category),
-                messages: [.init(role: "user", content: userContent)]
-            )
-
-            guard let encoded = try? JSONEncoder().encode(requestBody) else {
-                throw AIFoodRecognitionError.decodingFailed
-            }
-            bodyData = encoded
+        // Build the callable payload. Maps 1:1 onto the `foodRecognition` request:
+        // absent fields are OMITTED, never sent as null/empty, mirroring the server's
+        // own presence checks. Prompt assembly happens server-side from these fields.
+        var payload: [String: Any] = ["kind": "foodRecognition"]
+        if hasText {
+            payload["text"] = input
+        }
+        if let imageData {
+            // The describe-meal pipeline compresses to JPEG exclusively before it
+            // reaches here, so the media type is a constant rather than a sniffed value.
+            payload["imageBase64"] = imageData.base64EncodedString()
+            payload["mediaType"] = "image/jpeg"
+        }
+        if let category {
+            payload["category"] = category.rawValue
+        }
+        let trimmedAmount = (amount ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedAmount.isEmpty {
+            payload["amount"] = trimmedAmount
+        }
+        let trimmedExtras = (extras ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedExtras.isEmpty {
+            payload["extras"] = trimmedExtras
         }
 
-        var request = URLRequest(url: Self.apiURL)
-        request.httpMethod = "POST"
-        request.setValue(key, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = bodyData
-        request.timeoutInterval = 30
-
-        // Execute network request
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch is CancellationError {
-            print("[AIFoodRecognition] Request cancelled")
-            throw CancellationError()
-        } catch {
-            print("[AIFoodRecognition] Network error: \(error)")
-            throw AIFoodRecognitionError.network(error)
-        }
-
-        // Check HTTP status
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIFoodRecognitionError.network(URLError(.badServerResponse))
-        }
-        guard httpResponse.statusCode == 200 else {
-            print("[AIFoodRecognition] API status error: \(httpResponse.statusCode)")
-            throw AIFoodRecognitionError.apiError(status: httpResponse.statusCode)
-        }
-
-        // Decode API envelope
-        let apiResponse: APIResponse
-        do {
-            apiResponse = try JSONDecoder().decode(APIResponse.self, from: data)
-        } catch {
-            print("[AIFoodRecognition] Envelope decode failed: \(error)")
-            throw AIFoodRecognitionError.decodingFailed
-        }
-
-        // Extract text block
-        guard let textBlock = apiResponse.content.first(where: { $0.type == "text" }) else {
-            print("[AIFoodRecognition] No text block in response")
-            throw AIFoodRecognitionError.decodingFailed
-        }
+        // The proxy returns the model's text verbatim — the same string the raw API
+        // path used to dig out of a content block.
+        let modelText = try await callAIProxy(payload: payload)
 
         // Parse the JSON content (strip fences, extract braces)
-        let recognitionResponse = try parseRecognitionJSON(textBlock.text)
+        let recognitionResponse = try parseRecognitionJSON(modelText)
 
         // Convert and validate items
         var items = normalizeItems(recognitionResponse.items ?? [])
@@ -413,51 +275,96 @@ final class AIFoodRecognitionService {
         return RecognitionResult(items: items)
     }
 
-    // MARK: - Prompt Construction (pure)
+    // MARK: - Onboarding Goals
 
-    /// Assembles the base system prompt: general instructions, then — only when a
-    /// `category` is provided (AILOG-1a) — that category's estimation guidance, then the
-    /// schema, examples, and scoring rules. With no category the result is byte-identical
-    /// to the pre-AILOG-1a prompt.
-    static func buildSystemPromptBase(category: FoodCategory?) -> String {
-        guard let category else {
-            return systemPromptGeneral + " " + systemPromptSchemaOnward
+    /// Asks the proxy for personalized calorie/macro targets and a coaching tip.
+    ///
+    /// Returns the model's raw text reply, or `nil` on ANY failure — including the daily
+    /// limit. Onboarding has an established local-math fallback and deliberately surfaces
+    /// no error UI, so every failure collapses to the same silent `nil` the caller
+    /// already handles.
+    ///
+    /// - Parameter profileSummaryText: The serialized profile summary, built by the caller.
+    func generateOnboardingGoals(profileSummaryText: String) async -> String? {
+        let trimmed = profileSummaryText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        do {
+            return try await callAIProxy(payload: ["kind": "onboardingGoals", "text": trimmed])
+        } catch {
+            print("[AIFoodRecognition] onboardingGoals failed: \(error) — falling back to local math")
+            return nil
         }
-        return systemPromptGeneral + " " + category.guidance + " " + systemPromptSchemaOnward
     }
 
-    /// Builds the base user content from the structured fields (AILOG-1a).
-    ///
-    /// When any of `category`, `amount`, or `extras` is present, renders labeled lines —
-    /// `Category` / `Item` / `Amount` / `Extras`, in that order — each present line joined
-    /// by a single newline, absent lines omitted, never a blank line. A field is absent
-    /// when nil or empty after trimming (`description` is the already-trimmed input;
-    /// `hasText` marks it present). With no structured field present, returns the legacy
-    /// input verbatim — the description if any, else the image-only prompt — so the default
-    /// path is byte-identical to the pre-AILOG-1a build.
-    static func composeStructuredInput(
-        description: String,
-        hasText: Bool,
-        category: FoodCategory?,
-        amount: String?,
-        extras: String?
-    ) -> String {
-        let trimmedAmount = (amount ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedExtras = (extras ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let hasAmount = !trimmedAmount.isEmpty
-        let hasExtras = !trimmedExtras.isEmpty
+    // MARK: - Callable Transport
 
-        // No structured field → legacy input, byte-identical to today's originalInput.
-        guard category != nil || hasAmount || hasExtras else {
-            return hasText ? description : imageOnlyPrompt
+    /// Invokes `aiProxy` and returns the model text from its `{ text, requestsRemainingToday }`
+    /// response.
+    ///
+    /// `requestsRemainingToday` is deliberately ignored — no surface displays remaining
+    /// credits yet, and reading it here would invite a UI that AIPROXY-1b does not build.
+    private func callAIProxy(payload: [String: Any]) async throws -> String {
+        do {
+            let result = try await aiProxyCallable().call(payload)
+            guard let dict = result.data as? [String: Any],
+                  let text = dict["text"] as? String else {
+                print("[AIFoodRecognition] Malformed aiProxy response envelope")
+                throw AIFoodRecognitionError.decodingFailed
+            }
+            return text
+        } catch let error as AIFoodRecognitionError {
+            throw error
+        } catch is CancellationError {
+            print("[AIFoodRecognition] Request cancelled")
+            throw CancellationError()
+        } catch {
+            throw Self.mapCallableError(error)
+        }
+    }
+
+    /// The ONE place a callable error becomes an `AIFoodRecognitionError`.
+    ///
+    /// Matching is on the error CODE and on `details.code` — never on message text.
+    /// A localized description is presentation, not contract: it changes with locale and
+    /// SDK version, so string-matching it would fail silently and unpredictably.
+    private static func mapCallableError(_ error: Error) -> AIFoodRecognitionError {
+        let ns = error as NSError
+
+        // Anything not from the Functions SDK is transport or decoding.
+        guard ns.domain == FunctionsErrorDomain,
+              let code = FunctionsErrorCode(rawValue: ns.code) else {
+            print("[AIFoodRecognition] Non-Functions error from aiProxy: \(error)")
+            return .requestFailed
         }
 
-        var lines: [String] = []
-        if let category { lines.append("Category: \(category.rawValue)") }
-        if hasText { lines.append("Item: \(description)") }
-        if hasAmount { lines.append("Amount: \(trimmedAmount)") }
-        if hasExtras { lines.append("Extras: \(trimmedExtras)") }
-        return lines.joined(separator: "\n")
+        switch code {
+        case .resourceExhausted:
+            // ONLY the function's own daily-limit marker earns the credits copy. A future
+            // server-side throttle also arrives as resource-exhausted, and must not
+            // masquerade as "you used all your credits".
+            let details = ns.userInfo[FunctionsErrorDetailsKey] as? [String: Any]
+            if let detailCode = details?["code"] as? String, detailCode == aiDailyLimitCode {
+                print("[AIFoodRecognition] Daily AI limit reached")
+                return .dailyLimitReached
+            }
+            print("[AIFoodRecognition] resource-exhausted WITHOUT \(aiDailyLimitCode) — treating as a generic failure")
+            return .requestFailed
+
+        case .unauthenticated:
+            print("[AIFoodRecognition] aiProxy rejected an unauthenticated call")
+            return .notSignedIn
+
+        case .invalidArgument:
+            // The client validates the same preconditions the server does, so a rejection
+            // here means the two contracts have drifted — a defect to fix, not a user state.
+            print("[AIFoodRecognition] CONTRACT DRIFT: aiProxy returned invalid-argument — client and server request contracts disagree: \(ns.localizedDescription)")
+            return .requestFailed
+
+        default:
+            print("[AIFoodRecognition] aiProxy failed (\(code)): \(ns.localizedDescription)")
+            return .requestFailed
+        }
     }
 
     // MARK: - JSON Parsing
@@ -734,22 +641,32 @@ final class AIFoodRecognitionService {
 
 // MARK: - Error Type
 
+/// AIPROXY-1b removed `missingAPIKey`, `network(Error)`, and `apiError(status:)`. All
+/// three were produced ONLY by the deleted bundled-key/URLSession path: there is no
+/// client API key to be missing, and callable transport and HTTP status now arrive as
+/// Functions error codes that `mapCallableError` folds into `requestFailed`. They were
+/// unreachable after the migration, and `missingAPIKey`'s copy ("AI logging isn't set up
+/// yet") would have been actively misleading.
 enum AIFoodRecognitionError: Error {
-    case missingAPIKey
-    case network(Error)
-    case apiError(status: Int)
+    case dailyLimitReached
+    case notSignedIn
+    case requestFailed
     case decodingFailed
     case noFoodFound
     case needsClarification(String)
 
     var userMessage: String {
         switch self {
-        case .missingAPIKey:
-            return "AI logging isn't set up yet. You can still add food manually."
-        case .network:
+        case .dailyLimitReached:
+            return AIFoodRecognitionService.aiDailyLimitMessage
+        case .notSignedIn:
+            // Guest gates make this unreachable in practice; it must never read as the
+            // credits message, which would tell a signed-out user to wait for a reset
+            // that will never help them.
+            return "Couldn't verify your account. Sign in and try again, or add food manually."
+        case .requestFailed:
+            // Preserves the pre-migration network copy verbatim.
             return "Couldn't reach the server. Check your connection and try again."
-        case .apiError(let status):
-            return "Something went wrong (error \(status)). Try again or add food manually."
         case .decodingFailed:
             return "Couldn't understand the response. Try rephrasing or add food manually."
         case .noFoodFound:

@@ -7,10 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		BE7B0D022FE5000000000008 /* StandingsPieces.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0D012FE5000000000007 /* StandingsPieces.swift */; };
-		BE7B0A022FE5000000000002 /* TopBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0A012FE5000000000001 /* TopBar.swift */; };
-		BE7B0B022FE5000000000004 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0B012FE5000000000003 /* SettingsView.swift */; };
-		BE7B0C022FE5000000000006 /* RankLadderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0C012FE5000000000005 /* RankLadderSheet.swift */; };
 		1111E0C82F248958006EF76F /* BarcodeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E0C72F248958006EF76F /* BarcodeService.swift */; };
 		1111E0CA2F248975006EF76F /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E0C92F248975006EF76F /* BarcodeScannerView.swift */; };
 		1111E13A2F285E98006EF76F /* EditMealView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E1372F285E98006EF76F /* EditMealView.swift */; };
@@ -18,7 +14,6 @@
 		1111E13E2F285ECD006EF76F /* DailyGoalsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E13D2F285ECD006EF76F /* DailyGoalsViewModel.swift */; };
 		1111E1402F285EF3006EF76F /* AllQuestsCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E13F2F285EF3006EF76F /* AllQuestsCompleteView.swift */; };
 		1111E1442F285F10006EF76F /* UndoToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E1432F285F10006EF76F /* UndoToast.swift */; };
-		AACC7A022F500000000000A2 /* RankPlaque.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACC7A012F500000000000A1 /* RankPlaque.swift */; };
 		1111E1462F285F22006EF76F /* XPToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E1452F285F22006EF76F /* XPToast.swift */; };
 		1111E1892F29B0EE006EF76F /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E1882F29B0EE006EF76F /* SettingsManager.swift */; };
 		1111E18B2F29B117006EF76F /* AdvancedNutrientCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E18A2F29B117006EF76F /* AdvancedNutrientCard.swift */; };
@@ -31,22 +26,24 @@
 		1111E1B02F32E133006EF76F /* MoodCheckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E1AF2F32E133006EF76F /* MoodCheckView.swift */; };
 		1111E1B22F32E13B006EF76F /* AccessibilitySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111E1B12F32E13B006EF76F /* AccessibilitySettingsView.swift */; };
 		1146B26C2F1F493D004767C9 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B26B2F1F493D004767C9 /* DesignSystem.swift */; };
-		D3A0AA710000000000000002 /* AvatarKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A0AA710000000000000001 /* AvatarKit.swift */; };
-		D3A0AA720000000000000002 /* TutorialKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A0AA720000000000000001 /* TutorialKit.swift */; };
-		D3B0AA710000000000000002 /* RankJourneyCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B0AA710000000000000001 /* RankJourneyCard.swift */; };
 		1146B2E02F2341D1004767C9 /* AddFoodViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2B92F233CD5004767C9 /* AddFoodViewModel.swift */; };
 		1146B2E92F2343C3004767C9 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2E82F2343C3004767C9 /* AppCoordinator.swift */; };
 		1146B2EB2F2343FF004767C9 /* NutritionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2EA2F2343FF004767C9 /* NutritionManager.swift */; };
 		1146B2ED2F234408004767C9 /* GamificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2EC2F234408004767C9 /* GamificationManager.swift */; };
 		1146B2EF2F234414004767C9 /* DataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2EE2F234414004767C9 /* DataManager.swift */; };
 		1146B2F02F234452004767C9 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2B32F233BE6004767C9 /* HomeView.swift */; };
-		BE1030F02F40FEED0000B101 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1030F12F40FEED0000B102 /* WelcomeView.swift */; };
 		1146B2F12F234466004767C9 /* FoodLogViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2BA2F233CD5004767C9 /* FoodLogViewModel.swift */; };
 		1146B2F22F23446A004767C9 /* HomeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2BB2F233CD5004767C9 /* HomeViewModel.swift */; };
 		1146B2F32F23446E004767C9 /* AddFoodFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2B12F233BE6004767C9 /* AddFoodFormView.swift */; };
 		1146B2F42F234473004767C9 /* FoodLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2B22F233BE6004767C9 /* FoodLogView.swift */; };
 		1146B3002F247828004767C9 /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B2FF2F247828004767C9 /* ProfileViewModel.swift */; };
 		1146B3042F247FA7004767C9 /* CameraPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1146B3032F247FA7004767C9 /* CameraPickerView.swift */; };
+		AACC7A022F500000000000A2 /* RankPlaque.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACC7A012F500000000000A1 /* RankPlaque.swift */; };
+		AACC7B022F510000000000B2 /* BadgeEmblem.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACC7B012F510000000000B1 /* BadgeEmblem.swift */; };
+		AADD0D022FE1000000000001 /* ProfanityFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADD0D012FE1000000000001 /* ProfanityFilter.swift */; };
+		AADD0D042FE1000000000002 /* ReportDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADD0D032FE1000000000002 /* ReportDTO.swift */; };
+		AADD0D062FE1000000000003 /* ProfanityDenylist.txt in Resources */ = {isa = PBXBuildFile; fileRef = AADD0D052FE1000000000003 /* ProfanityDenylist.txt */; };
+		AADD0D062FE2000000000001 /* BlockedUsersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADD0D052FE2000000000001 /* BlockedUsersView.swift */; };
 		BE1029442FD8A2E700E9744F /* ClaimUsernameViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1029432FD8A2E700E9744F /* ClaimUsernameViewModel.swift */; };
 		BE1029462FD8A2F000E9744F /* ClaimUsernameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1029452FD8A2F000E9744F /* ClaimUsernameView.swift */; };
 		BE1029482FD8A32A00E9744F /* UsernameError.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1029472FD8A32A00E9744F /* UsernameError.swift */; };
@@ -71,11 +68,6 @@
 		BE102EE62FDC979900E9744F /* SharedInboxSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102EE52FDC979900E9744F /* SharedInboxSection.swift */; };
 		BE102EE82FDC97A200E9744F /* FriendPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102EE72FDC97A200E9744F /* FriendPickerSheet.swift */; };
 		BE102F5A2FDD018600E9744F /* SharedItemDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102F592FDD018600E9744F /* SharedItemDTO.swift */; };
-		AADD0D022FE1000000000001 /* ProfanityFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADD0D012FE1000000000001 /* ProfanityFilter.swift */; };
-		AADD0D042FE1000000000002 /* ReportDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADD0D032FE1000000000002 /* ReportDTO.swift */; };
-		FEEDBAC00000000000000002 /* FeedbackDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDBAC00000000000000001 /* FeedbackDTO.swift */; };
-		AADD0D062FE2000000000001 /* BlockedUsersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADD0D052FE2000000000001 /* BlockedUsersView.swift */; };
-		AADD0D062FE1000000000003 /* ProfanityDenylist.txt in Resources */ = {isa = PBXBuildFile; fileRef = AADD0D052FE1000000000003 /* ProfanityDenylist.txt */; };
 		BE102F5C2FDD019B00E9744F /* SaveQuickLogSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE102F5B2FDD019B00E9744F /* SaveQuickLogSheet.swift */; };
 		BE1030442FE49A7000E9744F /* GuildDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1030432FE49A7000E9744F /* GuildDTO.swift */; };
 		BE1030462FE49AAD00E9744F /* GuildView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1030452FE49AAD00E9744F /* GuildView.swift */; };
@@ -86,6 +78,7 @@
 		BE10306C2FE8A15500E9744F /* GuildMessageDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE10306B2FE8A15500E9744F /* GuildMessageDTO.swift */; };
 		BE10306E2FE8A17800E9744F /* GuildChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE10306D2FE8A17800E9744F /* GuildChatView.swift */; };
 		BE1030702FE8A18000E9744F /* GuildChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE10306F2FE8A18000E9744F /* GuildChatViewModel.swift */; };
+		BE1030F02F40FEED0000B101 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1030F12F40FEED0000B102 /* WelcomeView.swift */; };
 		BE47B6372F67739C007F48F5 /* FirebaseAI in Frameworks */ = {isa = PBXBuildFile; productRef = BE47B6362F67739C007F48F5 /* FirebaseAI */; };
 		BE47B6392F67739C007F48F5 /* FirebaseAILogic in Frameworks */ = {isa = PBXBuildFile; productRef = BE47B6382F67739C007F48F5 /* FirebaseAILogic */; };
 		BE47B63B2F67739C007F48F5 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = BE47B63A2F67739C007F48F5 /* FirebaseAnalytics */; };
@@ -116,8 +109,12 @@
 		BE47B6832F6D16A0007F48F5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = BE47B6812F6D16A0007F48F5 /* GoogleService-Info.plist */; };
 		BE47B6842F6D16A0007F48F5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = BE47B6812F6D16A0007F48F5 /* GoogleService-Info.plist */; };
 		BE77873E2F70E62E00666EE3 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE77873D2F70E62E00666EE3 /* ProfileView.swift */; };
-		AACC7B022F510000000000B2 /* BadgeEmblem.swift in Sources */ = {isa = PBXBuildFile; fileRef = AACC7B012F510000000000B1 /* BadgeEmblem.swift */; };
 		BE7787962F72699800666EE3 /* FirebaseAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7787952F72699800666EE3 /* FirebaseAuthService.swift */; };
+		BE7B0A022FE5000000000002 /* TopBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0A012FE5000000000001 /* TopBar.swift */; };
+		BE7B0B022FE5000000000004 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0B012FE5000000000003 /* SettingsView.swift */; };
+		BE7B0C022FE5000000000006 /* RankLadderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0C012FE5000000000005 /* RankLadderSheet.swift */; };
+		BE7B0C102FE5000000000014 /* DuelPrimerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0C0F2FE5000000000013 /* DuelPrimerSheet.swift */; };
+		BE7B0D022FE5000000000008 /* StandingsPieces.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0D012FE5000000000007 /* StandingsPieces.swift */; };
 		BED60B332FFA316A00F9E190 /* QTEDay.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B322FFA316A00F9E190 /* QTEDay.swift */; };
 		BED60B352FFA318800F9E190 /* QTEDayDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B342FFA318800F9E190 /* QTEDayDTO.swift */; };
 		BED60B372FFA318F00F9E190 /* DuelDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B362FFA318F00F9E190 /* DuelDTO.swift */; };
@@ -129,7 +126,6 @@
 		BED60B432FFA31D300F9E190 /* BattleViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B422FFA31D300F9E190 /* BattleViewModel.swift */; };
 		BED60B452FFA31DB00F9E190 /* DuelRecapSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B442FFA31DB00F9E190 /* DuelRecapSheet.swift */; };
 		BED60B472FFA31E300F9E190 /* ArenaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B462FFA31E300F9E190 /* ArenaView.swift */; };
-		BE7B0C102FE5000000000014 /* DuelPrimerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0C0F2FE5000000000013 /* DuelPrimerSheet.swift */; };
 		BED60B492FFA31EA00F9E190 /* ArenaViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B482FFA31EA00F9E190 /* ArenaViewModel.swift */; };
 		BED60B4B2FFA31F400F9E190 /* DuelSeenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B4A2FFA31F400F9E190 /* DuelSeenStore.swift */; };
 		BED60B4D2FFA31FB00F9E190 /* ChallengeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B4C2FFA31FB00F9E190 /* ChallengeSheet.swift */; };
@@ -169,7 +165,6 @@
 		BEF96ABC2F7CC7F600FB0F83 /* MoodEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96AA22F7CC7F600FB0F83 /* MoodEntry.swift */; };
 		BEF96ABD2F7CC7F600FB0F83 /* SavedRecipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96AA72F7CC7F600FB0F83 /* SavedRecipe.swift */; };
 		BEF96ABF2F7CC81E00FB0F83 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96ABE2F7CC81E00FB0F83 /* UserProfile.swift */; };
-		BEF96AC12F7CC83F00FB0F83 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96AC02F7CC83F00FB0F83 /* APIConfig.swift */; };
 		BEF96AC42F7CC86500FB0F83 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96AC22F7CC86500FB0F83 /* OnboardingView.swift */; };
 		BEF96AC72F7CC87700FB0F83 /* OnboardingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96AC62F7CC87700FB0F83 /* OnboardingViewModel.swift */; };
 		BEF96B532F88510B00FB0F83 /* BadgeProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF96B522F88510B00FB0F83 /* BadgeProgress.swift */; };
@@ -201,6 +196,10 @@
 		CC550AB22F600000000000D2 /* SavedMealDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC550AA22F600000000000D2 /* SavedMealDTO.swift */; };
 		CC550AB32F600000000000D3 /* SavedRecipeDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC550AA32F600000000000D3 /* SavedRecipeDTO.swift */; };
 		CC770AB12F500000000000E1 /* TimeOfDayTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC770AA12F500000000000E1 /* TimeOfDayTheme.swift */; };
+		D3A0AA710000000000000002 /* AvatarKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A0AA710000000000000001 /* AvatarKit.swift */; };
+		D3A0AA720000000000000002 /* TutorialKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A0AA720000000000000001 /* TutorialKit.swift */; };
+		D3B0AA710000000000000002 /* RankJourneyCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B0AA710000000000000001 /* RankJourneyCard.swift */; };
+		FEEDBAC00000000000000002 /* FeedbackDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDBAC00000000000000001 /* FeedbackDTO.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -221,10 +220,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		BE7B0D012FE5000000000007 /* StandingsPieces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StandingsPieces.swift; sourceTree = "<group>"; };
-		BE7B0A012FE5000000000001 /* TopBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopBar.swift; sourceTree = "<group>"; };
-		BE7B0B012FE5000000000003 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		BE7B0C012FE5000000000005 /* RankLadderSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankLadderSheet.swift; sourceTree = "<group>"; };
 		1111E0C12F24815D006EF76F /* --Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "--Info.plist"; sourceTree = "<group>"; };
 		1111E0C72F248958006EF76F /* BarcodeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeService.swift; sourceTree = "<group>"; };
 		1111E0C92F248975006EF76F /* BarcodeScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
@@ -233,7 +228,6 @@
 		1111E13D2F285ECD006EF76F /* DailyGoalsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyGoalsViewModel.swift; sourceTree = "<group>"; };
 		1111E13F2F285EF3006EF76F /* AllQuestsCompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllQuestsCompleteView.swift; sourceTree = "<group>"; };
 		1111E1432F285F10006EF76F /* UndoToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UndoToast.swift; sourceTree = "<group>"; };
-		AACC7A012F500000000000A1 /* RankPlaque.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankPlaque.swift; sourceTree = "<group>"; };
 		1111E1452F285F22006EF76F /* XPToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XPToast.swift; sourceTree = "<group>"; };
 		1111E1882F29B0EE006EF76F /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 		1111E18A2F29B117006EF76F /* AdvancedNutrientCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedNutrientCard.swift; sourceTree = "<group>"; };
@@ -250,13 +244,9 @@
 		1146B2492F1606E3004767C9 /* HealthBarUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HealthBarUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1146B25C2F1F36F0004767C9 /* HealthBar_Architecture.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = HealthBar_Architecture.md; sourceTree = "<group>"; };
 		1146B26B2F1F493D004767C9 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
-		D3A0AA710000000000000001 /* AvatarKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarKit.swift; sourceTree = "<group>"; };
-		D3A0AA720000000000000001 /* TutorialKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialKit.swift; sourceTree = "<group>"; };
-		D3B0AA710000000000000001 /* RankJourneyCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankJourneyCard.swift; sourceTree = "<group>"; };
 		1146B2B12F233BE6004767C9 /* AddFoodFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddFoodFormView.swift; sourceTree = "<group>"; };
 		1146B2B22F233BE6004767C9 /* FoodLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodLogView.swift; sourceTree = "<group>"; };
 		1146B2B32F233BE6004767C9 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
-		BE1030F12F40FEED0000B102 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		1146B2B92F233CD5004767C9 /* AddFoodViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddFoodViewModel.swift; sourceTree = "<group>"; };
 		1146B2BA2F233CD5004767C9 /* FoodLogViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodLogViewModel.swift; sourceTree = "<group>"; };
 		1146B2BB2F233CD5004767C9 /* HomeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewModel.swift; sourceTree = "<group>"; };
@@ -266,6 +256,12 @@
 		1146B2EE2F234414004767C9 /* DataManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataManager.swift; sourceTree = "<group>"; };
 		1146B2FF2F247828004767C9 /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
 		1146B3032F247FA7004767C9 /* CameraPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPickerView.swift; sourceTree = "<group>"; };
+		AACC7A012F500000000000A1 /* RankPlaque.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankPlaque.swift; sourceTree = "<group>"; };
+		AACC7B012F510000000000B1 /* BadgeEmblem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeEmblem.swift; sourceTree = "<group>"; };
+		AADD0D012FE1000000000001 /* ProfanityFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfanityFilter.swift; sourceTree = "<group>"; };
+		AADD0D032FE1000000000002 /* ReportDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportDTO.swift; sourceTree = "<group>"; };
+		AADD0D052FE1000000000003 /* ProfanityDenylist.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ProfanityDenylist.txt; sourceTree = "<group>"; };
+		AADD0D052FE2000000000001 /* BlockedUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedUsersView.swift; sourceTree = "<group>"; };
 		BE1029432FD8A2E700E9744F /* ClaimUsernameViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaimUsernameViewModel.swift; sourceTree = "<group>"; };
 		BE1029452FD8A2F000E9744F /* ClaimUsernameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaimUsernameView.swift; sourceTree = "<group>"; };
 		BE1029472FD8A32A00E9744F /* UsernameError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsernameError.swift; sourceTree = "<group>"; };
@@ -290,11 +286,6 @@
 		BE102EE52FDC979900E9744F /* SharedInboxSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedInboxSection.swift; sourceTree = "<group>"; };
 		BE102EE72FDC97A200E9744F /* FriendPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendPickerSheet.swift; sourceTree = "<group>"; };
 		BE102F592FDD018600E9744F /* SharedItemDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedItemDTO.swift; sourceTree = "<group>"; };
-		AADD0D012FE1000000000001 /* ProfanityFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfanityFilter.swift; sourceTree = "<group>"; };
-		AADD0D032FE1000000000002 /* ReportDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportDTO.swift; sourceTree = "<group>"; };
-		FEEDBAC00000000000000001 /* FeedbackDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackDTO.swift; sourceTree = "<group>"; };
-		AADD0D052FE2000000000001 /* BlockedUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedUsersView.swift; sourceTree = "<group>"; };
-		AADD0D052FE1000000000003 /* ProfanityDenylist.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ProfanityDenylist.txt; sourceTree = "<group>"; };
 		BE102F5B2FDD019B00E9744F /* SaveQuickLogSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveQuickLogSheet.swift; sourceTree = "<group>"; };
 		BE1030432FE49A7000E9744F /* GuildDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuildDTO.swift; sourceTree = "<group>"; };
 		BE1030452FE49AAD00E9744F /* GuildView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuildView.swift; sourceTree = "<group>"; };
@@ -305,10 +296,15 @@
 		BE10306B2FE8A15500E9744F /* GuildMessageDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuildMessageDTO.swift; sourceTree = "<group>"; };
 		BE10306D2FE8A17800E9744F /* GuildChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuildChatView.swift; sourceTree = "<group>"; };
 		BE10306F2FE8A18000E9744F /* GuildChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuildChatViewModel.swift; sourceTree = "<group>"; };
+		BE1030F12F40FEED0000B102 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		BE47B6812F6D16A0007F48F5 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		BE77873D2F70E62E00666EE3 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
-		AACC7B012F510000000000B1 /* BadgeEmblem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeEmblem.swift; sourceTree = "<group>"; };
 		BE7787952F72699800666EE3 /* FirebaseAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseAuthService.swift; sourceTree = "<group>"; };
+		BE7B0A012FE5000000000001 /* TopBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopBar.swift; sourceTree = "<group>"; };
+		BE7B0B012FE5000000000003 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		BE7B0C012FE5000000000005 /* RankLadderSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankLadderSheet.swift; sourceTree = "<group>"; };
+		BE7B0C0F2FE5000000000013 /* DuelPrimerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuelPrimerSheet.swift; sourceTree = "<group>"; };
+		BE7B0D012FE5000000000007 /* StandingsPieces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StandingsPieces.swift; sourceTree = "<group>"; };
 		BED60B322FFA316A00F9E190 /* QTEDay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QTEDay.swift; sourceTree = "<group>"; };
 		BED60B342FFA318800F9E190 /* QTEDayDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QTEDayDTO.swift; sourceTree = "<group>"; };
 		BED60B362FFA318F00F9E190 /* DuelDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuelDTO.swift; sourceTree = "<group>"; };
@@ -320,7 +316,6 @@
 		BED60B422FFA31D300F9E190 /* BattleViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattleViewModel.swift; sourceTree = "<group>"; };
 		BED60B442FFA31DB00F9E190 /* DuelRecapSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuelRecapSheet.swift; sourceTree = "<group>"; };
 		BED60B462FFA31E300F9E190 /* ArenaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArenaView.swift; sourceTree = "<group>"; };
-		BE7B0C0F2FE5000000000013 /* DuelPrimerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuelPrimerSheet.swift; sourceTree = "<group>"; };
 		BED60B482FFA31EA00F9E190 /* ArenaViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArenaViewModel.swift; sourceTree = "<group>"; };
 		BED60B4A2FFA31F400F9E190 /* DuelSeenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuelSeenStore.swift; sourceTree = "<group>"; };
 		BED60B4C2FFA31FB00F9E190 /* ChallengeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChallengeSheet.swift; sourceTree = "<group>"; };
@@ -360,7 +355,6 @@
 		BEF96AA82F7CC7F600FB0F83 /* StreakMilestone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreakMilestone.swift; sourceTree = "<group>"; };
 		BEF96AAA2F7CC7F600FB0F83 /* UserProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProgress.swift; sourceTree = "<group>"; };
 		BEF96ABE2F7CC81E00FB0F83 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
-		BEF96AC02F7CC83F00FB0F83 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
 		BEF96AC22F7CC86500FB0F83 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		BEF96AC62F7CC87700FB0F83 /* OnboardingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingViewModel.swift; sourceTree = "<group>"; };
 		BEF96B522F88510B00FB0F83 /* BadgeProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeProgress.swift; sourceTree = "<group>"; };
@@ -393,6 +387,10 @@
 		CC550AA22F600000000000D2 /* SavedMealDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedMealDTO.swift; sourceTree = "<group>"; };
 		CC550AA32F600000000000D3 /* SavedRecipeDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedRecipeDTO.swift; sourceTree = "<group>"; };
 		CC770AA12F500000000000E1 /* TimeOfDayTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeOfDayTheme.swift; sourceTree = "<group>"; };
+		D3A0AA710000000000000001 /* AvatarKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarKit.swift; sourceTree = "<group>"; };
+		D3A0AA720000000000000001 /* TutorialKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialKit.swift; sourceTree = "<group>"; };
+		D3B0AA710000000000000001 /* RankJourneyCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankJourneyCard.swift; sourceTree = "<group>"; };
+		FEEDBAC00000000000000001 /* FeedbackDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackDTO.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -639,7 +637,6 @@
 		1146B2672F1F3813004767C9 /* App */ = {
 			isa = PBXGroup;
 			children = (
-				BEF96AC02F7CC83F00FB0F83 /* APIConfig.swift */,
 				1111E1882F29B0EE006EF76F /* SettingsManager.swift */,
 				1146B2E82F2343C3004767C9 /* AppCoordinator.swift */,
 			);
@@ -1055,7 +1052,6 @@
 				1111E1962F32DFE5006EF76F /* MealTypePill.swift in Sources */,
 				1146B2F02F234452004767C9 /* HomeView.swift in Sources */,
 				BE1030F02F40FEED0000B101 /* WelcomeView.swift in Sources */,
-				BEF96AC12F7CC83F00FB0F83 /* APIConfig.swift in Sources */,
 				BEF969082F77A7F900FB0F83 /* AddFoodChoiceSheet.swift in Sources */,
 				1146B2F42F234473004767C9 /* FoodLogView.swift in Sources */,
 				BEF96B5D2F8851B200FB0F83 /* AccountView.swift in Sources */,
@@ -1288,7 +1284,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.vishnu.myapp;
 				PRODUCT_NAME = HealthBar1;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1343,7 +1339,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.vishnu.myapp;
 				PRODUCT_NAME = HealthBar1;
 				PROVISIONING_PROFILE_SPECIFIER = "";
