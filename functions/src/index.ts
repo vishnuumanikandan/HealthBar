@@ -104,9 +104,9 @@ const BASE64_GROUP_BYTES = 3;
 
 // MARK: - Anthropic constants
 
-const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_VERSION = '2023-06-01';
-const ANTHROPIC_TIMEOUT_MS = 60_000;
+export const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
+export const ANTHROPIC_VERSION = '2023-06-01';
+export const ANTHROPIC_TIMEOUT_MS = 60_000;
 const ANTHROPIC_USER_ROLE = 'user';
 const ANTHROPIC_TEXT_BLOCK = 'text';
 const ANTHROPIC_IMAGE_BLOCK = 'image';
@@ -117,7 +117,7 @@ const ANTHROPIC_BASE64_SOURCE = 'base64';
  * again. Frozen for this stage: infra migration and behavior change must not
  * ride the same PR.
  */
-const MODEL_SONNET = 'claude-sonnet-4-6';
+export const MODEL_SONNET = 'claude-sonnet-4-6';
 const MAX_TOKENS_RECOGNITION = 4096;
 const MAX_TOKENS_ONBOARDING_GOALS = 256;
 

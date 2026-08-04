@@ -1,0 +1,12 @@
+# AIMODEL-AB-1 — nothing here is ever committed.
+#
+# fixtures/ holds the user's own food photos. This repository is PUBLIC:
+# a committed food photo is a published photo. results/ holds report HTML and
+# raw per-call JSON, which embed model output and (in --dry-run) base64 image
+# payloads. Both stay local, always.
+fixtures/
+results/
+node_modules/
+
+# Install artifact of this self-contained tool; not part of the deliverable.
+package-lock.json

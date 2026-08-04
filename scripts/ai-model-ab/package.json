@@ -1,0 +1,22 @@
+{
+  "name": "healthbar-ai-model-ab",
+  "version": "0.0.0",
+  "private": true,
+  "description": "AIMODEL-AB-1 — offline {model} x {resolution} A/B harness for food recognition. Not part of any build; deploys nothing.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "ab": "tsx run.ts",
+    "ab:dry": "tsx run.ts --dry-run",
+    "typecheck": "tsc --noEmit --strict --module commonjs --moduleResolution node --target es2022 --lib es2023 --esModuleInterop --skipLibCheck run.ts"
+  },
+  "dependencies": {
+    "sharp": "^0.35.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
