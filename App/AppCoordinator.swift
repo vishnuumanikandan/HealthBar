@@ -229,23 +229,44 @@ final class AppCoordinator {
 
     // MARK: - Goal Management
 
-    /// Gets today's goal (creates default if missing)
+    /// Gets today's goal, creating it from the precedence rule if missing.
     /// - Returns: Today's DailyGoal
     func getCurrentGoal() async throws -> DailyGoal {
         if let goal = try await dataManager.getTodaysGoal() {
             return goal
         }
 
-        // Create default goal if none exists
+        // GOALFIX-1: no row for today yet — resolve targets through the precedence
+        // rule (carry-forward → defaults) instead of hard-coding constants here,
+        // which is what let this read path resurrect 2000/150/200/65/30 over a
+        // user's own edit. Persistence still runs through the existing
+        // `updateDailyGoal` path, so save timing and upload behavior are unchanged.
+        let resolved = try await dataManager.makeGoalForToday()
         try await dataManager.updateDailyGoal(
-            calories: 2000,
-            protein: 150.0,
-            carbs: 200.0,
-            fat: 65.0,
-            purity: 30
+            calories: resolved.calorieTarget,
+            protein: resolved.proteinTarget,
+            carbs: resolved.carbTarget,
+            fat: resolved.fatTarget,
+            purity: resolved.purityTarget,
+            fiberTarget: resolved.fiberTarget,
+            sugarTarget: resolved.sugarTarget,
+            sodiumTarget: resolved.sodiumTarget,
+            saturatedFatTarget: resolved.saturatedFatTarget,
+            cholesterolTarget: resolved.cholesterolTarget,
+            potassiumTarget: resolved.potassiumTarget
         )
 
         return try await dataManager.getTodaysGoal()!
+    }
+
+    /// GOALFIX-1: today's goal FOR DISPLAY — the persisted row when one exists,
+    /// otherwise the precedence-resolved (UNSAVED) row. Never creates, never saves;
+    /// callers that need a persisted row use `getCurrentGoal()` instead.
+    func getGoalForDisplay() async throws -> DailyGoal {
+        if let goal = try await dataManager.getTodaysGoal() {
+            return goal
+        }
+        return try await dataManager.makeGoalForToday()
     }
 
     /// Updates today's daily goal

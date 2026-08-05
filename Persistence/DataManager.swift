@@ -177,29 +177,24 @@ final class DataManager {
             // handles the first upload. Uploading 0 XP here would overwrite real data.
         }
 
-        // Create today's goal if it doesn't exist for this user
-        var newDefaultGoal: DailyGoal? = nil
+        // Create today's goal if it doesn't exist for this user.
+        // GOALFIX-1: targets come from the precedence rule (carry-forward → defaults),
+        // not from constants — otherwise every day's bootstrap resurrects 2000/150/200/65/30
+        // and silently discards the user's own edit. The helper stamps userId and
+        // returns an unsaved row; insertion and save timing below are unchanged.
+        var newlyCreatedGoal: DailyGoal? = nil
         let todaysGoal = try await getTodaysGoal()
         if todaysGoal == nil {
-            let defaultGoal = DailyGoal(
-                date: Date(),
-                calorieTarget: 2000,
-                proteinTarget: 150.0,
-                carbTarget: 200.0,
-                fatTarget: 65.0,
-                purityTarget: 30
-            )
-            // Stamp the current user's identifier
-            defaultGoal.userId = userId
-            modelContext.insert(defaultGoal)
-            newDefaultGoal = defaultGoal
+            let createdGoal = try await makeGoalForToday()
+            modelContext.insert(createdGoal)
+            newlyCreatedGoal = createdGoal
         }
 
         try modelContext.save()
 
-        // Firestore sync: upload the newly created default goal (if any).
+        // Firestore sync: upload the newly created goal (if any).
         // Skipped for guest users — no Firestore writes in guest mode.
-        if !isGuest, let goal = newDefaultGoal {
+        if !isGuest, let goal = newlyCreatedGoal {
             let dto = DailyGoalDTO(from: goal)
             FirestoreServiceImpl.shared.pendingDailyGoalIds.insert(dto.id)
             Task {
@@ -1371,6 +1366,91 @@ final class DataManager {
         return goals.first
     }
 
+    /// GOALFIX-1: builds today's `DailyGoal` from the frozen precedence rule.
+    ///
+    /// Returns a fully initialized, **UNSAVED** row (`userId` already stamped).
+    /// Callers stay responsible for `insert` / `save` / Firestore upload exactly as
+    /// before — this helper never persists and never uploads, so it adds no second
+    /// creation path and no new save timing.
+    ///
+    /// Precedence, highest first:
+    ///  1. **Carry-forward** — the most recent prior row for this user (latest `date`
+    ///     strictly before today's day bucket). This is what makes an explicit edit
+    ///     durable: yesterday's targets become today's instead of being reset. It is
+    ///     recursive by design — it does not distinguish an explicit edit from a
+    ///     previously carried row — and it has no expiry, so a row from weeks ago
+    ///     still wins.
+    ///  2. **Profile-derived** — satisfied UPSTREAM, not recomputed here.
+    ///     `updateDailyGoalTargets` (the chokepoint `AppCoordinator.completeOnboarding`
+    ///     calls) writes profile-derived targets into a TODAY row as an explicit
+    ///     event, so tier 1 carries them forward from the next day on. The GOALS-1
+    ///     derivation itself is private to `OnboardingViewModel` and must not be
+    ///     reimplemented in this layer.
+    ///     `TODO-goalfix-profile-refetch`: the one state tier 1 cannot cover is
+    ///     "completed profile, zero goal rows" (e.g. a reinstall where the profile
+    ///     syncs down before the goals do). Recovering it needs the GOALS-1 formula
+    ///     reachable outside the view model — its own prompt.
+    ///  3. **Defaults** — fresh account / guest with no history. The block below is
+    ///     the ONLY site in the app that names these five numbers.
+    func makeGoalForToday() async throws -> DailyGoal {
+        let userId = currentUserId ?? ""
+        // Day bucketing reuses Date+Helpers — no new day math.
+        let startOfToday = Date().startOfDay
+
+        // MARK: Tier 1 — carry the most recent prior row forward
+        if !userId.isEmpty {
+            var descriptor = FetchDescriptor<DailyGoal>(
+                predicate: #Predicate { goal in
+                    goal.userId == userId && goal.date < startOfToday
+                },
+                sortBy: [SortDescriptor(\.date, order: .reverse)]
+            )
+            // 2, not 1: the second row exists only to detect a same-day duplicate.
+            descriptor.fetchLimit = 2
+            let priorGoals = try modelContext.fetch(descriptor)
+
+            if let mostRecent = priorGoals.first {
+                // Multiple rows in one day bucket should be impossible. Take the
+                // greatest timestamp (already first, sorted descending), warn once,
+                // and do not attempt to dedupe here.
+                if priorGoals.count > 1, priorGoals[1].date.isSameDay(as: mostRecent.date) {
+                    print("⚠️ GOALFIX-1: multiple DailyGoal rows share day \(mostRecent.date.startOfDay) — carrying the latest timestamp forward")
+                }
+
+                let carried = DailyGoal(
+                    date: Date(),
+                    calorieTarget: mostRecent.calorieTarget,
+                    proteinTarget: mostRecent.proteinTarget,
+                    carbTarget: mostRecent.carbTarget,
+                    fatTarget: mostRecent.fatTarget,
+                    purityTarget: mostRecent.purityTarget,
+                    // Advanced nutrition targets are user edits too — carrying only
+                    // the five headline fields would silently drop them.
+                    fiberTarget: mostRecent.fiberTarget,
+                    sugarTarget: mostRecent.sugarTarget,
+                    sodiumTarget: mostRecent.sodiumTarget,
+                    saturatedFatTarget: mostRecent.saturatedFatTarget,
+                    cholesterolTarget: mostRecent.cholesterolTarget,
+                    potassiumTarget: mostRecent.potassiumTarget
+                )
+                carried.userId = userId
+                return carried
+            }
+        }
+
+        // MARK: Tier 3 — hard-coded defaults (last resort; see tier 2 above)
+        let fallback = DailyGoal(
+            date: Date(),
+            calorieTarget: 2000,
+            proteinTarget: 150.0,
+            carbTarget: 200.0,
+            fatTarget: 65.0,
+            purityTarget: 30
+        )
+        fallback.userId = userId
+        return fallback
+    }
+
     /// Updates the daily goal for today, scoped to the current user.
     func updateDailyGoal(
         calories: Int,
@@ -2404,7 +2484,8 @@ final class DataManager {
     /// Gets or creates today's goal, then overwrites the four main macro targets.
     /// Other goal fields (purity, advanced nutrition) are left unchanged.
     func updateDailyGoalTargets(calories: Int, protein: Int, carbs: Int, fat: Int) async throws {
-        guard let userId = currentUserId, !userId.isEmpty else { return }
+        // Auth guard only — the creation branch stamps userId via makeGoalForToday().
+        guard currentUserId?.isEmpty == false else { return }
 
         if let existing = try await getTodaysGoal() {
             existing.calorieTarget = calories
@@ -2422,16 +2503,16 @@ final class DataManager {
                 }
             }
         } else {
-            // No goal exists yet — create one with sensible purity default
-            let goal = DailyGoal(
-                date: Date(),
-                calorieTarget: calories,
-                proteinTarget: Double(protein),
-                carbTarget: Double(carbs),
-                fatTarget: Double(fat),
-                purityTarget: 30
-            )
-            goal.userId = userId
+            // No goal exists yet — GOALFIX-1: build today's row from the precedence
+            // rule, then overwrite only the four targets this call supplies. Purity
+            // and the advanced nutrition goals therefore carry forward rather than
+            // resetting to a constant, matching the has-a-row branch above (which
+            // leaves them untouched). The helper stamps userId.
+            let goal = try await makeGoalForToday()
+            goal.calorieTarget = calories
+            goal.proteinTarget = Double(protein)
+            goal.carbTarget = Double(carbs)
+            goal.fatTarget = Double(fat)
             modelContext.insert(goal)
             try modelContext.save()
 
