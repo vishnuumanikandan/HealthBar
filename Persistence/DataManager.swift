@@ -1730,14 +1730,29 @@ final class DataManager {
 
     // MARK: - Recent Foods Methods
 
+    /// Rolling window for the Recent Foods row, in calendar days INCLUDING today
+    /// (2 ⇒ today + yesterday). Day-bucketed, so the row refreshes itself daily
+    /// by construction rather than accumulating forever (RECENTS-1).
+    static let recentFoodsWindowDays = 2
+
+    /// Maximum number of unique foods the Recent Foods row returns (RECENTS-1).
+    static let recentFoodsLimit = 20
+
     /// Fetches recent unique foods by fingerprint, scoped to the current user.
     ///
-    /// Groups entries by FoodFingerprint and returns the most recent instance of each unique food.
-    func getRecentUniqueFoods(limit: Int = 15, daysBack: Int = 30) async throws -> [FoodEntry] {
+    /// Groups entries by FoodFingerprint and returns the most recent instance of each unique food,
+    /// restricted to entries logged inside the `recentFoodsWindowDays` rolling window and capped
+    /// at `recentFoodsLimit`. The window and cap are fixed here — this is the one site that decides
+    /// them, so callers cannot widen the window past what the row is meant to show.
+    func getRecentUniqueFoods() async throws -> [FoodEntry] {
         guard let userId = currentUserId, !userId.isEmpty else { return [] }
 
         let calendar = Calendar.current
-        let cutoffDate = calendar.date(byAdding: .day, value: -daysBack, to: Date())!
+        // Bucket to the start of the day so a food logged at 23:00 yesterday survives
+        // until midnight tonight, not for exactly 24h.
+        let cutoffDate = calendar
+            .date(byAdding: .day, value: -(Self.recentFoodsWindowDays - 1), to: Date())!
+            .startOfDay
 
         let descriptor = FetchDescriptor<FoodEntry>(
             predicate: #Predicate { entry in
@@ -1759,7 +1774,7 @@ final class DataManager {
                 seenFingerprints.insert(fingerprint)
                 uniqueEntries.append(entry)
 
-                if uniqueEntries.count >= limit {
+                if uniqueEntries.count >= Self.recentFoodsLimit {
                     break
                 }
             }

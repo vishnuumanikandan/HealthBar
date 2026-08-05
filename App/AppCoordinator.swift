@@ -704,12 +704,13 @@ final class AppCoordinator {
     ///
     /// Returns one entry per unique FoodFingerprint, sorted by most recent.
     ///
-    /// - Parameters:
-    ///   - limit: Maximum number of foods to return (default 15)
-    ///   - daysBack: Number of days to look back (default 30)
+    /// The rolling window and cap are owned by `DataManager`
+    /// (`recentFoodsWindowDays` / `recentFoodsLimit`) — no parameters, so there is
+    /// exactly one site deciding what "recent" means (RECENTS-1).
+    ///
     /// - Returns: Array of FoodEntry, one per unique food
-    func getRecentUniqueFoods(limit: Int = 15, daysBack: Int = 30) async throws -> [FoodEntry] {
-        return try await dataManager.getRecentUniqueFoods(limit: limit, daysBack: daysBack)
+    func getRecentUniqueFoods() async throws -> [FoodEntry] {
+        return try await dataManager.getRecentUniqueFoods()
     }
 
     /// Gets all favorited foods for quick-log feature
