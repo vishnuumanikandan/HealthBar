@@ -17,11 +17,15 @@ final class DailyGoalsViewModel {
 
     // MARK: - Form State
 
-    var calorieTarget: Int = 2000
-    var proteinTarget: Double = 150
-    var carbTarget: Double = 200
-    var fatTarget: Double = 65
-    var purityTarget: Int = 50
+    // GOALFIX-1: seeded empty, never with target constants. `loadCurrentGoals`
+    // populates every field from the precedence rule before the form renders (the
+    // view shows a loading state until then), so a constant seeded here could only
+    // ever be a wrong value the user might save over their real goals.
+    var calorieTarget: Int = 0
+    var proteinTarget: Double = 0
+    var carbTarget: Double = 0
+    var fatTarget: Double = 0
+    var purityTarget: Int = 0
 
     // MARK: - UI State
 
@@ -32,11 +36,11 @@ final class DailyGoalsViewModel {
 
     // MARK: - String Bindings for Text Fields
 
-    var calorieTargetString: String = "2000"
-    var proteinTargetString: String = "150"
-    var carbTargetString: String = "200"
-    var fatTargetString: String = "65"
-    var purityTargetString: String = "50"
+    var calorieTargetString: String = ""
+    var proteinTargetString: String = ""
+    var carbTargetString: String = ""
+    var fatTargetString: String = ""
+    var purityTargetString: String = ""
 
     // Advanced Nutrition Goal Strings (optional)
     var fiberTargetString: String = ""
@@ -77,7 +81,11 @@ final class DailyGoalsViewModel {
         errorMessage = nil
 
         do {
-            let goal = try await coordinator.getCurrentGoal()
+            // GOALFIX-1: prefill resolves through getTodaysGoal() + the precedence
+            // helper. Opening this form is a read, so it must not create a row —
+            // and it must show the user's real targets (carried forward from their
+            // last edit), never the generic defaults.
+            let goal = try await coordinator.getGoalForDisplay()
             calorieTarget = goal.calorieTarget
             proteinTarget = goal.proteinTarget
             carbTarget = goal.carbTarget
@@ -119,12 +127,19 @@ final class DailyGoalsViewModel {
         errorMessage = nil
 
         do {
-            // Parse values from strings
-            let calories = Int(calorieTargetString) ?? 2000
-            let protein = Double(proteinTargetString) ?? 150
-            let carbs = Double(carbTargetString) ?? 200
-            let fat = Double(fatTargetString) ?? 65
-            let purity = Int(purityTargetString) ?? 50
+            // Parse values from strings. `isFormValid` above has already proved every
+            // field parses, so there is nothing to fall back TO — GOALFIX-1 drops the
+            // old `?? 2000`-style fallbacks rather than leave target constants sitting
+            // in the UI layer where they could be written over the user's real goals.
+            guard let calories = Int(calorieTargetString),
+                  let protein = Double(proteinTargetString),
+                  let carbs = Double(carbTargetString),
+                  let fat = Double(fatTargetString),
+                  let purity = Int(purityTargetString) else {
+                errorMessage = "Please enter valid values for all fields"
+                isSaving = false
+                return false
+            }
 
             // Parse advanced nutrition goals (only if entered)
             let fiberTarget = fiberTargetString.isEmpty ? nil : Double(fiberTargetString)
