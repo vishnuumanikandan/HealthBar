@@ -1396,7 +1396,7 @@ final class FoodLogViewModel {
     /// Loads recent unique foods for quick-log
     func loadRecentFoods() async {
         do {
-            recentFoods = try await coordinator.getRecentUniqueFoods(limit: 15, daysBack: 30)
+            recentFoods = try await coordinator.getRecentUniqueFoods()
         } catch {
             print("Failed to load recent foods: \(error)")
             recentFoods = []
