@@ -50,6 +50,17 @@ struct ContentView: View {
     /// (Tools moved off the tab bar into a Profile entry when Battle took the center slot.)
     @State private var selectedTab: Int = 0
 
+    /// HOMECTA-1: one-shot cross-tab request for the Food Log tab to present the AI
+    /// describe-meal sheet. Lives HERE, beside `selectedTab`, because this is the object that
+    /// owns tab selection — deliberately NOT on a DataManager, whose per-tab instances make it
+    /// invalid for cross-tab signalling (standing D3a invariant).
+    ///
+    /// Protocol: the requester (Home's Log Food CTA) sets this flag FIRST and the tab selection
+    /// second — the reverse is racy, since switching tabs first can fire the destination's
+    /// appearance before the flag exists, consuming nothing with no re-trigger. `FoodLogView`
+    /// consumes it (onChange + an initial check on appear) and clears it in the same update.
+    @State private var pendingDescribePresentation: Bool = false
+
     /// Settings for theme-aware tab backgrounds.
     @State private var settings = SettingsManager.shared
     private var tc: ThemeColors { settings.activeColors }
@@ -173,6 +184,7 @@ struct ContentView: View {
             HomeView(
                 coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
                 selectedTab: $selectedTab,
+                pendingDescribePresentation: $pendingDescribePresentation,
                 authService: FirebaseAuthService.shared,
                 onCreateAccount: { showSignUpFromGuest = true }
             )
@@ -183,7 +195,8 @@ struct ContentView: View {
             // Food Log Tab
             FoodLogView(
                 coordinator: AppCoordinator(modelContext: modelContext, authService: FirebaseAuthService.shared),
-                onCreateAccount: { showSignUpFromGuest = true }
+                onCreateAccount: { showSignUpFromGuest = true },
+                pendingDescribePresentation: $pendingDescribePresentation
             )
             .background(tc.primaryBackground.ignoresSafeArea())
             .toolbar(.hidden, for: .tabBar)

@@ -544,6 +544,10 @@ struct HomeView: View {
     @State private var leaderboardViewModel: LeaderboardViewModel
 
     @Binding var selectedTab: Int
+    /// HOMECTA-1: one-shot request for the Food Log tab to present the AI describe-meal sheet.
+    /// Owned by ContentView (beside `selectedTab`); Home only sets it. No routing logic lives
+    /// here beyond the two assignments in `logFoodAction()`.
+    @Binding var pendingDescribePresentation: Bool
     /// R3a: drives the push to FriendsView off Home's NavigationStack.
     @State private var showFriends: Bool = false
     @State private var showingPurityScoreInfo: Bool = false
@@ -630,6 +634,7 @@ struct HomeView: View {
     init(
         coordinator: AppCoordinator,
         selectedTab: Binding<Int>,
+        pendingDescribePresentation: Binding<Bool> = .constant(false),
         authService: any AuthService = FirebaseAuthService.shared,
         onCreateAccount: @escaping () -> Void = {}
     ) {
@@ -639,6 +644,7 @@ struct HomeView: View {
         self.authService = authService
         self.onCreateAccount = onCreateAccount
         self._selectedTab = selectedTab
+        self._pendingDescribePresentation = pendingDescribePresentation
     }
 
     // MARK: - Body
@@ -1463,17 +1469,27 @@ struct HomeView: View {
 
     // MARK: Flat — actions + quests + meals + duels
 
-    /// Mockup `.actions` (D5): primary "Log food" + ghost "Scan" via AppButton (R2 styling).
+    /// HOMECTA-1: the single Home CTA's tap handler, shared by both theme branches.
+    ///
+    /// Ordering is FROZEN and load-bearing: set the flag FIRST, the tab selection SECOND. The
+    /// reverse is racy — switching tabs first can fire `FoodLogView`'s appearance before the
+    /// flag is set, so the appear-time check consumes nothing and there is no re-trigger.
+    ///
+    /// Deliberately unconditional on auth state: guests route and request too, and the describe
+    /// sheet shows its existing guest card (AIPROXY-1b). No second gate belongs on Home.
+    private func logFoodAction() {
+        pendingDescribePresentation = true
+        selectedTab = 1
+    }
+
+    /// Mockup `.actions` (D5). HOMECTA-1: one full-width "Log food" CTA — the ghost "Scan"
+    /// button (and its Quick Scan sheet presenter) were removed and the row collapsed to a
+    /// single button. `AppButton`'s label already carries `.frame(maxWidth: .infinity)`, so
+    /// dropping the HStack sibling is a pure width change: height, font, icon, radius, fill
+    /// and pressed state are untouched. Barcode scanning stays reachable via the add-food flow.
     private var actionsRow: some View {
-        HStack(spacing: 11) {
-            AppButton(title: "Log food", style: .primary,
-                      action: { selectedTab = 1 }, icon: "arrow.up.right")
-            AppButton(title: "Scan", style: .secondary,
-                      action: { viewModel.showQuickScan = true }, icon: "viewfinder")
-        }
-        .sheet(isPresented: $viewModel.showQuickScan) {
-            QuickScanView(viewModel: viewModel, selectedTab: $selectedTab)
-        }
+        AppButton(title: "Log food", style: .primary,
+                  action: { logFoodAction() }, icon: "arrow.up.right")
     }
 
     /// Mockup `.quest` rows under a sec-head. Scroll target for the Quests jump.
@@ -1988,44 +2004,26 @@ struct HomeView: View {
 
     // MARK: - Action Buttons
 
+    /// HOMECTA-1: one full-width "Log Food" CTA — the fixed-width "Scan" button (and its Quick
+    /// Scan sheet presenter) were removed and the HStack collapsed to a single button. The card
+    /// is shape-backed and therefore already fills the width proposed to it, so this is a pure
+    /// width change: height (54), icon, font, radius and fill are untouched.
     private var actionButtons: some View {
-        HStack(spacing: 8) {
-            // Log Food button
-            Button {
-                selectedTab = 1
-            } label: {
-                AdaptiveCard(borderColor: tc.buttonBorder, fillGradient: DesignSystem.Colors.threeBand(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundColor(.white)
-                        Text("Log Food")
-                            .font(AppFont.bold(16))
-                            .foregroundColor(.white)
-                    }
+        Button {
+            logFoodAction()
+        } label: {
+            AdaptiveCard(borderColor: tc.buttonBorder, fillGradient: DesignSystem.Colors.threeBand(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)) {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(.white)
+                    Text("Log Food")
+                        .font(AppFont.bold(16))
+                        .foregroundColor(.white)
                 }
-                .frame(height: 54)
             }
-
-            // Scan button
-            Button {
-                viewModel.showQuickScan = true
-            } label: {
-                AdaptiveCard(borderColor: tc.buttonBorder, fillGradient: DesignSystem.Colors.threeBand(light: tc.buttonLight, mid: tc.buttonMid, dark: tc.buttonDark)) {
-                    VStack(spacing: 4) {
-                        Image(systemName: "barcode.viewfinder")
-                            .font(.system(size: 22))
-                            .foregroundColor(.white)
-                        Text("Scan")
-                            .font(AppFont.regular(11))
-                            .foregroundColor(.white)
-                    }
-                }
-                .frame(width: 80, height: 54)
-            }
-        }
-        .sheet(isPresented: $viewModel.showQuickScan) {
-            QuickScanView(viewModel: viewModel, selectedTab: $selectedTab)
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
         }
     }
 
