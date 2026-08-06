@@ -27,11 +27,13 @@
   (UI/HomeView.swift `cleanContent`) — i.e. directly below the daily rings/summary,
   above the jump cards. Neighbours are drawn as gray blocks in §2.
 
-  REV 3 — light sky blue water, pure white foam, the wave STOPS at full (the box
-  fills flat to the brim), and the splash moved off the water onto the BUTTON:
-  the disc is struck like a stone dropped in a pond. See §4 for the honest cost
-  of the caustic texture — it is the one element here that cannot be built from
-  gradient primitives, and §1 for what the sky-blue move cost in hue separation.
+  REV 4 — the caustic ribbon network is GONE, replaced by a minimal three-glint
+  sheen, and nothing in the element animates a paint property any more. Those
+  were the same problem: 68 live `feTurbulence` filters were re-rasterizing every
+  frame and starving the main thread, and the ripple was animating `border-width`.
+  Everything now animates transform and opacity only. This also RETIRES the
+  rev-2/3 shader-vs-asset question (§4) — but it thins the §1 argument, since the
+  dense white texture was carrying part of the water/accent separation.
 -->
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -70,7 +72,7 @@
   /* PROPOSED water family — dark column */
   --water:#6FC9F2;         /* light sky blue */
   --water-deep:#2E86B8;
-  --water-foam:#FFFFFF;    /* foam / caustic ribbons — pure white */
+  --water-foam:#FFFFFF;    /* foam / surface glints — pure white */
 }
 
 /* ── Erewhon LIGHT (pinned) ──────────────────────────────── */
@@ -89,7 +91,7 @@
   /* PROPOSED water family — light column */
   --water:#2189C4;         /* sky blue, deepened — see the contrast note in §1 */
   --water-deep:#10618F;
-  --water-foam:#FFFFFF;    /* foam / caustic ribbons — pure white */
+  --water-foam:#FFFFFF;    /* foam / surface glints — pure white */
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -158,34 +160,38 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
 .wread .t{font-size:11px;color:var(--muted);margin-left:1px}
 .wread .u{font-size:11px;color:var(--faint);margin-left:5px}
 
-/* ── WATER BODY: gradient base + two caustic layers ──────────
-   The caustic is the flat-vector pool network from the reference: a light ribbon
-   web over mid-blue, with darker patches beneath. Built as band-passed fractal
-   noise (see the filter defs at the end of <body>), NOT as a gradient — see §4
-   for what that costs.                                                        */
+/* ── WATER BODY: gradient base + a minimal surface sheen ─────
+   REV 4 replaced the caustic ribbon network with three soft glints — the least
+   texture that still reads as light on water rather than paint in a box.
+
+   This was BOTH the simplification and the performance fix. The caustic was
+   band-passed fractal noise, and `feTurbulence` is a per-pixel CPU filter: the
+   page ran 68 of them with their frequency animated, forcing a full re-rasterize
+   every frame. Nothing else could stay smooth through that. The sheen below is
+   three gradients on one composited layer — effectively free once painted.
+
+   Percentage sizes and positions, so one declaration reads correctly in a ~180pt
+   trough and in a 32pt vessel with no per-size variant.                        */
 .wbody{
   position:absolute;inset:0;
   background:linear-gradient(180deg,var(--water) 0%,var(--water-deep) 135%);
 }
-.caustic{
-  position:absolute;left:-60%;top:-25%;width:220%;height:150%;
-  pointer-events:none;overflow:visible;
+.wsheen{
+  position:absolute;inset:0 -8%;pointer-events:none;
+  background:
+    /* two long glints — the primary "this is water" cue */
+    radial-gradient(68% 13% at 33% 25%, color-mix(in srgb,var(--water-foam) 58%,transparent) 0%, transparent 72%),
+    radial-gradient(50% 10% at 67% 60%, color-mix(in srgb,var(--water-foam) 32%,transparent) 0%, transparent 74%),
+    /* one soft shadow low down, so the body has depth instead of reading flat */
+    radial-gradient(82% 17% at 50% 94%, color-mix(in srgb,var(--water-deep) 55%,transparent) 0%, transparent 78%);
+  animation:glide 16s ease-in-out infinite alternate;       /* DECORATIVE */
 }
-/* User units == CSS px (no viewBox), so the caustic keeps ONE physical scale
-   whether it is drawn in the wide horizontal trough or the 32pt minimal vessel. */
-/* The base gradient must stay the dominant colour: the ribbons are an accent ON
-   water, not a replacement for it. Opacities are tuned so the light network reads
-   as thin highlights rather than swamping the body. */
-.caustic.deep{
-  color:var(--water-deep);opacity:.5;
-  animation:driftA 21s ease-in-out infinite alternate;      /* DECORATIVE */
-}
-.caustic.lite{
-  color:var(--water-foam);opacity:.78;
-  animation:driftB 15s ease-in-out infinite alternate;      /* DECORATIVE */
-}
-@keyframes driftA{from{transform:translate3d(-7%,1.5%,0)}to{transform:translate3d(7%,-1.5%,0)}}
-@keyframes driftB{from{transform:translate3d(6%,-1%,0)}  to{transform:translate3d(-6%,1%,0)}}
+/* transform + opacity are the only two properties the compositor can animate
+   without repainting, and every CONTINUOUS animation here is limited to those two.
+   Two bounded exceptions remain and are deliberate: the goal glow (box-shadow) and
+   the Reduce-Motion pulse (filter: brightness). Both are ONE-SHOT, on ONE element,
+   fired by a tap — not per-frame work competing with a scroll. */
+@keyframes glide{from{transform:translate3d(-3.5%,0,0)}to{transform:translate3d(3.5%,0,0)}}
 
 /* ── ANIMATED WAVY SURFACE ───────────────────────────────────
    The waterline is carved by an opaque `--sunk` "sky" whose BOTTOM edge is a sine
@@ -274,12 +280,12 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
   background:radial-gradient(120% 120% at 34% 24%, var(--water) 0%, var(--water-deep) 92%);
   box-shadow:0 3px 12px color-mix(in srgb,var(--water) 38%,transparent),
              inset 0 1px 0 color-mix(in srgb,var(--water-foam) 55%,transparent);
-  transition:transform .1s cubic-bezier(.3,1.4,.5,1), box-shadow .15s ease;
+  transition:box-shadow .15s ease;   /* NOT transform — `strike` owns that */
   -webkit-tap-highlight-color:transparent;
 }
 .plus:hover{box-shadow:0 4px 16px color-mix(in srgb,var(--water) 55%,transparent),
                       inset 0 1px 0 color-mix(in srgb,var(--water-foam) 70%,transparent)}
-.plus:active{transform:scale(.88)}
+.plus:active{transform:scale(.9)}
 .plus svg{width:46%;height:46%;fill:var(--bg);display:block}
 .plus.lg{width:42px;--rr:31px}   /* --rr = how far the crown is thrown */
 .plus.sm{width:32px;--rr:25px}
@@ -312,7 +318,7 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
 .plus .fx{position:absolute;inset:0;pointer-events:none;display:block}
 .plus .ring{
   position:absolute;left:50%;top:50%;width:100%;height:100%;margin:-50% 0 0 -50%;
-  border-radius:50%;border:2px solid var(--water-foam);opacity:0;
+  border-radius:50%;border:1.5px solid var(--water-foam);opacity:0;
 }
 .plus .sd{                                        /* one droplet of the crown */
   position:absolute;left:50%;top:50%;
@@ -341,11 +347,13 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
 }
 /* the disc takes the hit, dips, then rebounds past rest — the "give" of water */
 @keyframes strike{
-  0%{transform:scale(1)} 22%{transform:scale(.86)} 55%{transform:scale(1.07)} 100%{transform:scale(1)}
+  0%{transform:scale(.9)} 26%{transform:scale(.88)} 58%{transform:scale(1.06)} 100%{transform:scale(1)}
 }
+/* scale + opacity ONLY. Rev 3 animated border-width here, which is a paint
+   property — it forced a repaint every ripple frame and was the blocky feel. */
 @keyframes ringOut{
-  0%  {opacity:.85;transform:scale(.3);  border-width:2.5px}
-  100%{opacity:0;  transform:scale(2.45);border-width:.5px}
+  0%  {opacity:.85;transform:scale(.3)}
+  100%{opacity:0;  transform:scale(2.45)}
 }
 /* rotate() aims the droplet, translateY() throws it that way; it rises fast,
    then drifts out and fades — a crown, not a starburst */
@@ -364,7 +372,7 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
 /* ── REDUCE MOTION ───────────────────────────────────────── */
 /* Decorative motion OFF. Level change survives (it is state feedback).
    Splash degrades to a single brightness pulse — no droplets, no ripple.  */
-body.rm .caustic,
+body.rm .wsheen,
 body.rm .wavetop,
 body.rm .hmen,
 body.rm .goalglow{animation:none!important}
@@ -372,7 +380,7 @@ body.rm .plus .ring,body.rm .plus .sd{display:none}
 body.rm .plus.hit{animation:rmpulse 180ms ease-out}   /* no scale, no throw — light only */
 @keyframes rmpulse{0%{filter:brightness(1.6)}100%{filter:brightness(1)}}
 @media (prefers-reduced-motion:reduce){
-  .caustic,.wavetop,.hmen{animation:none!important}
+  .wsheen,.wavetop,.hmen{animation:none!important}
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -467,11 +475,14 @@ body.rm .plus.hit{animation:rmpulse 180ms ease-out}   /* no scale, no throw — 
   <p class="note" style="margin-bottom:0"><b>Rev 3 narrowed this, and it should be said plainly.</b> Moving the
   water from cyan to <b>light sky blue</b> pulled it from ~192° to ~199°, so the gap to the accent is now
   <b>~22°, not ~30°</b>. Hue alone is doing less work than it was. What replaces it is stronger: the water is now
-  far <i>lighter</i> than the accent (69% vs 60% lightness in dark, and it is the only element on Home carrying a
-  <b>white caustic texture</b>). Nothing else in Erewhon has white ribbons on it. The separation is now carried by
-  lightness and texture rather than hue — which is more robust for colour-blind users, not less, but it does mean
-  <b>the texture is no longer purely decorative</b>. If ruling item 7 drops the caustic, this paragraph stops being
-  true and the water becomes a light blue bar 22° from the accent blue. The two rulings are coupled.</p>
+  far <i>lighter</i> than the accent (69% vs 60% lightness in dark), and it is the only element on Home that is
+  <b>textured, wavy-edged and pip-counted</b> at all. Nothing else in Erewhon looks remotely like it.</p>
+  <p class="note" style="margin-bottom:0"><span class="rule">rev 4 weakened this</span> The dense white caustic
+  was doing real separation work, and simplifying it to three soft glints gives some of that back. What now
+  carries the distinction is the <b>animated wavy waterline</b> and the <b>circular droplet button</b> — both
+  unique on the screen, neither colour-dependent, so the colour-blind case is still covered. But hue alone is
+  down to ~22°, and if a future pass also flattens the wave, the water would become a light blue bar sitting
+  under a blue calorie ring. <b>Flagging it as a floor: the wavy surface is now load-bearing, not decoration.</b></p>
   <p class="note" style="margin-bottom:0"><b>Alternative if the ruling is "no new colour":</b> the element can run
   entirely on <code>--accent</code> + <code>--sunk</code>. It costs the glance-distinction above and makes the
   water read as a second progress bar; the caustic, wave and splash all still work. Say the word and I'll add that arm.</p>
@@ -484,10 +495,10 @@ body.rm .plus.hit{animation:rmpulse 180ms ease-out}   /* no scale, no throw — 
     <div class="use">Light sky blue. Fill body (top stop), filled cup pips, the droplet button, the overfull chip.</div></div></div>
   <div class="sw"><span class="chip" style="background:#2E86B8"></span><div class="meta">
     <div class="nm">water-deep</div><div class="hx">#2E86B8 · h202 s60 l45</div>
-    <div class="use">Bottom stop of the fill gradient and of the button; the darker caustic patches.</div></div></div>
+    <div class="use">Bottom stop of the fill gradient and of the button; the soft shadow band in the sheen.</div></div></div>
   <div class="sw"><span class="chip" style="background:#FFFFFF"></span><div class="meta">
     <div class="nm">water-foam</div><div class="hx">#FFFFFF · pure white</div>
-    <div class="use">The caustic ribbons, meniscus, splash crown + ripples, overfull brim rim.
+    <div class="use">The surface glints, meniscus, splash crown + ripples, overfull brim rim.
     <b>Specular only</b> — never text, and never on a light surface outside the water.</div></div></div>
 </div>
 
@@ -499,7 +510,7 @@ body.rm .plus.hit{animation:rmpulse 180ms ease-out}   /* no scale, no throw — 
     <code>#F3F4F6</code> — see the light-theme note below. Same hue family, more depth.</div></div></div>
   <div class="sw"><span class="chip" style="background:#10618F"></span><div class="meta">
     <div class="nm">water-deep</div><div class="hx">#10618F · h202 s80 l31</div>
-    <div class="use">Bottom stop of the fill gradient; darker caustic patches.</div></div></div>
+    <div class="use">Bottom stop of the fill gradient; the soft shadow band in the sheen.</div></div></div>
   <div class="sw"><span class="chip" style="background:#FFFFFF"></span><div class="meta">
     <div class="nm">water-foam</div><div class="hx">#FFFFFF · pure white</div>
     <div class="use">Identical in both columns — foam is foam. It only ever sits ON water, never on the page, which
@@ -617,20 +628,13 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
         goal — cups 9, 10, 11… get the light impact again, so overfull never feels like a repeated achievement.</td>
   </tr>
   <tr>
-    <td><b>Caustic drift</b><br><span style="color:var(--page-faint)">the light ribbon network</span></td>
+    <td><b>Surface sheen</b><br><span style="color:var(--page-faint)">three soft glints on the body</span></td>
     <td style="color:var(--page-faint)">decorative</td>
-    <td>15 s + 21 s, counter-drifting, ping-pong</td>
-    <td>±6–7% translate, ease-in-out</td>
-    <td>Two layers at different periods and directions so the texture never visibly repeats. Ping-pong rather than
-        a wrapping loop because the noise field is not tileable — a wrapping translate would jump.</td>
-  </tr>
-  <tr>
-    <td><b>Caustic boil</b><br><span style="color:var(--page-faint)">ribbons re-forming in place</span></td>
-    <td style="color:var(--page-faint)">decorative</td>
-    <td>24–30 s, infinite</td>
-    <td>Noise frequency breathes ~±20%</td>
-    <td>The slow shimmer that stops the texture reading as a printed pattern being slid around. Subtle by design;
-        it is the first thing to cut if the texture proves expensive.</td>
+    <td>16 s, infinite, ping-pong</td>
+    <td>±3.5% translate, ease-in-out</td>
+    <td>The entire texture, and the cheapest thing on the page: three gradients on one composited layer drifting
+        as a unit. Ping-pong rather than a wrapping loop since there is nothing to tile. Replaced the rev-2/3
+        caustic network — see the box below for why that is a straight win rather than a compromise.</td>
   </tr>
   <tr>
     <td><b>Wavy surface</b></td>
@@ -662,24 +666,20 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
   </tr>
 </table>
 
-<div class="docbox warn">
-  <div class="rule">⚠ What the caustic texture actually costs — read before ruling</div>
-  <p class="note">Everything else on this page is built from primitives that exist everywhere: rectangles,
-  gradients, capsules, opacity. <b>The caustic is not.</b> It is band-passed fractal noise — a noise field
-  thresholded to a narrow luminance band, which is what turns clouds into that ribbon web. There is no
-  gradient arrangement that produces it.</p>
-  <p class="note">That leaves two honest routes, and they price very differently:</p>
-  <ul style="margin-left:18px">
-    <li><b>Generate it live</b> (a noise shader). Gives infinite non-repeating water and true boil. Costs a shader
-        and a per-frame draw on a scrolling screen.</li>
-    <li><b>Ship it as a looping asset</b> — a seamless caustic texture scrolled behind a mask. Far cheaper and
-        completely predictable, at the cost of a visible loop period and an asset to art-direct.</li>
-  </ul>
-  <p class="note" style="margin-bottom:0">A third option is worth naming because it may be the right answer:
-  <b>keep the gradient body and the wavy animated surface, drop the caustic.</b> The wave and the splash carry most
-  of the "this is water" reading on their own; the texture is what makes it <i>beautiful</i>, not what makes it
-  <i>legible</i>. That is ruling item 7 in §6 — and it is the one item on this page with a real engineering price
-  attached, so it should not be waved through.</p>
+<div class="docbox">
+  <div class="rule">✓ Rev 4 retired the texture cost question</div>
+  <p class="note" style="margin-top:0">Revs 2 and 3 carried a real open problem here: the caustic ribbon network
+  was band-passed fractal noise, which no arrangement of gradients can produce, so shipping it meant either a
+  noise shader or a hand-authored looping texture asset. That was the only item on this page with an engineering
+  price attached, and it was <b>ruling item 7</b>.</p>
+  <p class="note"><b>Simplifying the texture removed the question entirely — and it was also the performance
+  fix.</b> The two turned out to be the same problem. <code>feTurbulence</code> is a per-pixel CPU filter; the page
+  was running 68 of them with their frequency animated, which forces a full re-rasterize every single frame.
+  That is what made the button splash feel blocky: the animation was fine, but the main thread never had a frame
+  to spare. The sheen that replaced it is three <code>radial-gradient</code>s on one composited layer.</p>
+  <p class="note" style="margin-bottom:0">So the texture now costs <b>nothing beyond what a plain gradient fill
+  already costs</b> — no shader, no asset, no art direction, nothing to keep in sync. Ruling item 7 is closed
+  unless you want the dense caustic back, in which case the shader-vs-asset choice returns with it.</p>
 </div>
 
 <div class="docbox">
@@ -690,10 +690,11 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
   survives</b> — it is state feedback, not decoration. The splash degrades to a single <b>180 ms brightness
   pulse</b> on the button: no crown, no ripples, no dip — nothing that moves or scales — but the tap is still
   unmistakably acknowledged, and the haptic is unaffected.</p>
-  <p class="note" style="margin-bottom:0">Note that the caustic <i>boil</i> is an SVG filter animation, not a CSS
-  one, so switching off CSS animation does not reach it. Reduce Motion has to pause the filter clock explicitly or
-  the texture keeps churning while everything else has stopped — a gap worth carrying into the implementation
-  prompt, because it is exactly the kind of thing that survives a casual "we turned off the animations" check.</p>
+  <p class="note" style="margin-bottom:0">Rev 3 needed an extra step here: the caustic boil was an SVG filter
+  animation rather than a CSS one, so switching off CSS animation did not reach it and the texture kept churning
+  while everything else had stopped. With the texture now pure CSS there is no such gap left — but it is worth
+  carrying the <i>lesson</i> into the implementation prompt, because "we turned off the animations" is exactly the
+  kind of claim that passes a casual check while something keeps running underneath it.</p>
 </div>
 
 
@@ -770,11 +771,10 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
     <li><b>5 · Undo.</b> Still not drawn. Long-press to decrement, a conditional −1, or explicitly none?</li>
     <li><b>6 · Splash budget.</b> Drawn at ≤410 ms against the ≤600 ms target. Keep it snappy, or spend the
         remaining ~190 ms on a slower, more liquid arc?</li>
-    <li><b>7 · The caustic texture.</b> <span class="rule">has a real price</span> Live shader, looping asset, or
-        drop the texture and keep the gradient + wave? See the cost box in §4 — this is the only item here that
-        changes the engineering scope rather than the layout. <b>Now coupled to item 1:</b> since rev 3 moved the
-        water to sky blue, the gap to the accent is only ~22° and the white texture is doing real work separating
-        them. Dropping the texture is no longer a purely visual saving.</li>
+    <li><b>7 · The texture.</b> <span class="rule">closed in rev 4</span> The dense caustic network is gone,
+        replaced by a three-glint sheen that costs nothing beyond a gradient fill — no shader, no asset. Nothing
+        to rule on unless you want the busy version back, which would reopen the shader-vs-asset question. Left
+        here so the history is visible rather than silently dropped.</li>
     <li><b>8 · Light-theme water depth.</b> The light column is a deeper sky blue (<code>#2189C4</code>) because
         the dark column&rsquo;s pale blue measures 1.5:1 against the near-white empty track — the fill/empty
         distinction would be lost. Accept the deeper light value, or take the pale blue in both and accept that
@@ -789,93 +789,7 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
 </p>
 
 
-<!-- ══════════════════════════════════════════════════════════
-     CAUSTIC FILTER DEFS
-     Band-passed fractal noise. feTurbulence makes clouds; the narrow alpha band in
-     feComponentTransfer keeps only a thin slice of luminance, which is what turns
-     clouds into a ribbon NETWORK. feComposite operator="in" against SourceGraphic
-     paints the result with the element's own currentColor, so the texture themes
-     itself from the CSS variables instead of hardcoding a blue.
-     Three seeds per role so adjacent vessels do not show an identical pattern.
-     ══════════════════════════════════════════════════════════ -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
 
-  <filter id="cxL1" x="-5%" y="-5%" width="110%" height="110%">
-    <feTurbulence type="fractalNoise" baseFrequency="0.050 0.072" numOctaves="2" seed="11" result="t">
-      <animate attributeName="baseFrequency" dur="26s" repeatCount="indefinite"
-               values="0.050 0.072; 0.059 0.063; 0.050 0.072"/>
-    </feTurbulence>
-    <feColorMatrix in="t" type="matrix" result="a"
-      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0"/>
-    <feComponentTransfer in="a" result="band">
-      <feFuncA type="table" tableValues="0 0 0 0 0 1 0 0 0 0 0"/>
-    </feComponentTransfer>
-    <feComponentTransfer in="band" result="hard">
-      <feFuncA type="linear" slope="3" intercept="-1.25"/>
-    </feComponentTransfer>
-    <feComposite in="SourceGraphic" in2="hard" operator="in"/>
-  </filter>
-
-  <filter id="cxL2" x="-5%" y="-5%" width="110%" height="110%">
-    <feTurbulence type="fractalNoise" baseFrequency="0.045 0.066" numOctaves="2" seed="29" result="t">
-      <animate attributeName="baseFrequency" dur="30s" repeatCount="indefinite"
-               values="0.045 0.066; 0.053 0.058; 0.045 0.066"/>
-    </feTurbulence>
-    <feColorMatrix in="t" type="matrix" result="a"
-      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0"/>
-    <feComponentTransfer in="a" result="band">
-      <feFuncA type="table" tableValues="0 0 0 0 0 1 0 0 0 0 0"/>
-    </feComponentTransfer>
-    <feComponentTransfer in="band" result="hard">
-      <feFuncA type="linear" slope="3" intercept="-1.25"/>
-    </feComponentTransfer>
-    <feComposite in="SourceGraphic" in2="hard" operator="in"/>
-  </filter>
-
-  <filter id="cxL3" x="-5%" y="-5%" width="110%" height="110%">
-    <feTurbulence type="fractalNoise" baseFrequency="0.055 0.079" numOctaves="2" seed="47" result="t">
-      <animate attributeName="baseFrequency" dur="28s" repeatCount="indefinite"
-               values="0.055 0.079; 0.064 0.069; 0.055 0.079"/>
-    </feTurbulence>
-    <feColorMatrix in="t" type="matrix" result="a"
-      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0"/>
-    <feComponentTransfer in="a" result="band">
-      <feFuncA type="table" tableValues="0 0 0 0 0 1 0 0 0 0 0"/>
-    </feComponentTransfer>
-    <feComponentTransfer in="band" result="hard">
-      <feFuncA type="linear" slope="3" intercept="-1.25"/>
-    </feComponentTransfer>
-    <feComposite in="SourceGraphic" in2="hard" operator="in"/>
-  </filter>
-
-  <!-- deeper, softer, lower-frequency patches that sit UNDER the ribbons -->
-  <filter id="cxD1" x="-5%" y="-5%" width="110%" height="110%">
-    <feTurbulence type="fractalNoise" baseFrequency="0.021 0.032" numOctaves="2" seed="5" result="t">
-      <animate attributeName="baseFrequency" dur="34s" repeatCount="indefinite"
-               values="0.021 0.032; 0.026 0.027; 0.021 0.032"/>
-    </feTurbulence>
-    <feColorMatrix in="t" type="matrix" result="a"
-      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0"/>
-    <feComponentTransfer in="a" result="band">
-      <feFuncA type="table" tableValues="0 0 0.85 1 0.35 0 0"/>
-    </feComponentTransfer>
-    <feComposite in="SourceGraphic" in2="band" operator="in"/>
-  </filter>
-
-  <filter id="cxD2" x="-5%" y="-5%" width="110%" height="110%">
-    <feTurbulence type="fractalNoise" baseFrequency="0.025 0.037" numOctaves="2" seed="23" result="t">
-      <animate attributeName="baseFrequency" dur="38s" repeatCount="indefinite"
-               values="0.025 0.037; 0.030 0.032; 0.025 0.037"/>
-    </feTurbulence>
-    <feColorMatrix in="t" type="matrix" result="a"
-      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0"/>
-    <feComponentTransfer in="a" result="band">
-      <feFuncA type="table" tableValues="0 0 0.85 1 0.35 0 0"/>
-    </feComponentTransfer>
-    <feComposite in="SourceGraphic" in2="band" operator="in"/>
-  </filter>
-
-</defs></svg>
 
 
 <script>
@@ -892,19 +806,10 @@ const STATES = [
   {n:9, cap:'Overfull · 9 / 8'}
 ];
 
-/* ── water body: gradient + two caustic layers ───────────────
-   No viewBox on the <svg>: user units stay equal to CSS px, so the caustic keeps
-   one physical scale in the wide trough AND in the 32pt minimal vessel. */
-let causticSeq = 0;
-const LITE = ['cxL1','cxL2','cxL3'], DEEP = ['cxD1','cxD2'];
-const body = () => {
-  const l = LITE[causticSeq % LITE.length], d = DEEP[causticSeq % DEEP.length];
-  causticSeq++;
-  return `<div class="wbody">
-    <svg class="caustic deep"><rect width="100%" height="100%" fill="currentColor" filter="url(#${d})"/></svg>
-    <svg class="caustic lite"><rect width="100%" height="100%" fill="currentColor" filter="url(#${l})"/></svg>
-  </div>`;
-};
+/* ── water body: gradient + a three-glint sheen ──────────────
+   No filter, no seeds, no per-tile variation to manage: the sheen is the same
+   three gradients everywhere and costs one composited layer. */
+const body = () => `<div class="wbody"><div class="wsheen"></div></div>`;
 
 /* ── the wavy surface ────────────────────────────────────────
    4 whole sine periods across a 200%-wide path, translated by exactly 50% (= 2
@@ -1127,15 +1032,13 @@ document.getElementById('resetAll').addEventListener('click', ()=>{
   ctx.querySelectorAll('.wblock').forEach(b=>{ b.dataset.n = 5; render(b); });
 });
 
-/* The caustic BOIL is SMIL (<animate> on baseFrequency), not a CSS animation, so
-   `animation:none` cannot reach it — Reduce Motion has to pause the filter document
-   explicitly or the texture keeps churning while everything else has stopped. */
-const fxRoot = document.querySelector('svg[aria-hidden="true"]');
+/* Rev 3 needed an explicit pauseAnimations() here, because the caustic boil was
+   SMIL and `animation:none` cannot reach SMIL. The texture is pure CSS as of rev 4,
+   so there is no SMIL left on the page and the class alone is sufficient. */
 function setReduceMotion(on){
   document.body.classList.toggle('rm', on);
   rmBtn.classList.toggle('on', on);
   rmBtn.textContent = 'Reduce Motion: ' + (on ? 'ON' : 'off');
-  if (fxRoot) on ? fxRoot.pauseAnimations() : fxRoot.unpauseAnimations();
 }
 const rmBtn = document.getElementById('rmToggle');
 rmBtn.addEventListener('click', ()=> setReduceMotion(!document.body.classList.contains('rm')));
