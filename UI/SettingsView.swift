@@ -36,6 +36,30 @@ struct SettingsView: View {
     @State private var showingFeedback = false
     @State private var showFeedbackConfirmation = false
 
+    // MARK: - SECRET-1 (constants + state)
+
+    /// Consecutive taps on the version row that toggle the hidden section.
+    private static let secretMenuTapCount = 7
+    /// A gap longer than this between taps abandons the run and starts over.
+    private static let secretMenuTapResetSeconds: TimeInterval = 2
+
+    /// Taps landed so far in the current run (never persisted — a relaunch starts at zero).
+    @State private var secretTapRun = 0
+    /// Pending "the run went cold" reset; cancelled and replaced by each new tap.
+    @State private var secretTapResetTask: Task<Void, Never>?
+
+    /// Whether the hidden section is showing. Device-scoped and never synced, the same
+    /// shape as `textSizePreference` — once revealed it stays revealed across launches,
+    /// and repeating the taps hides it again.
+    @AppStorage("secretMenuRevealed") private var secretMenuRevealed = false
+
+    /// The version row's subtitle, reading the shipped marketing version exactly the way
+    /// `DataManager.submitFeedback` stamps it.
+    private static var appVersionSubtitle: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        return "Version \(version)"
+    }
+
     init(
         coordinator: AppCoordinator,
         authService: any AuthService,
@@ -105,14 +129,15 @@ struct SettingsView: View {
                     )
                 }
 
-                // About button (placeholder)
+                // About — the app-version row. SECRET-1 hangs the reveal gesture here:
+                // `secretMenuTapCount` taps in a row toggle the hidden section below.
+                // TODO-about-screen: this row still has no destination; the tap handler
+                // is the reveal counter, not navigation.
                 settingButton(
                     icon: "info.circle",
                     title: "About",
-                    subtitle: "App version and info",
-                    action: {
-                        // Placeholder - will navigate to about screen later
-                    }
+                    subtitle: Self.appVersionSubtitle,
+                    action: { registerSecretTap() }
                 )
 
                 // Sign Out — for guests shows a warning before deleting local data
@@ -132,6 +157,12 @@ struct SettingsView: View {
                         }
                     }
                 )
+
+                // SECRET-1: the hidden section, last so revealing it never reflows the
+                // rows above. Toggled by the version row's tap run.
+                if secretMenuRevealed {
+                    secretSection
+                }
             }
             .padding(DesignSystem.Spacing.lg)
         }
@@ -206,6 +237,47 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("You're using guest mode. Signing out will delete all local data. Create a free account first to save your progress.")
+        }
+    }
+
+    // MARK: - SECRET-1 (section + reveal gesture)
+
+    /// The hidden section. Deliberately unlabelled — finding it is the joke.
+    private var secretSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            Text("???")
+                .font(AppFont.bold(16))
+                .foregroundColor(tc.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, DesignSystem.Spacing.md)
+
+            PoopCounterCard(userId: authService.currentUserEmail ?? "guest")
+        }
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    /// Counts taps on the version row. The `secretMenuTapCount`-th consecutive tap
+    /// toggles the hidden section — revealing it, or hiding it again if it is already
+    /// showing — and the run restarts. A pause longer than `secretMenuTapResetSeconds`
+    /// abandons the run, so stray taps never accumulate into an accidental reveal.
+    private func registerSecretTap() {
+        secretTapResetTask?.cancel()
+        secretTapRun += 1
+
+        guard secretTapRun >= Self.secretMenuTapCount else {
+            // Task.sleep, not Timer (project convention).
+            secretTapResetTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(Self.secretMenuTapResetSeconds))
+                guard !Task.isCancelled else { return }
+                secretTapRun = 0
+            }
+            return
+        }
+
+        secretTapRun = 0
+        secretTapResetTask = nil
+        withAnimation(DesignSystem.Erewhon.ease(0.25)) {
+            secretMenuRevealed.toggle()
         }
     }
 
@@ -376,5 +448,113 @@ private struct FeedbackComposeView: View {
                 isSubmitting = false
             }
         }
+    }
+}
+
+// MARK: - Poop Counter (SECRET-1)
+
+/// The hidden section's one feature: a tally that resets every month and earns nothing.
+///
+/// A small local view in this file (the `FeedbackComposeView` precedent) — no view model,
+/// no manager, no persistence layer, no new abstraction. It earns NOTHING on purpose:
+/// there is no `GamificationManager` call here, no XP, no badge, no streak, no
+/// notification. Nothing it stores is read by anything else.
+private struct PoopCounterCard: View {
+
+    /// Scopes the stored count, mirroring the `userId` scoping every local model uses.
+    /// `"guest"` is local scoping only — nothing leaves the device in either case.
+    let userId: String
+
+    @State private var settings = SettingsManager.shared
+    private var tc: ThemeColors { settings.activeColors }
+
+    /// This month's count — loaded on appear, rewritten by each increment.
+    @State private var count = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+            HStack(spacing: DesignSystem.Spacing.md) {
+                Text("💩")
+                    .font(AppFont.regular(28))
+
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                    Text("Poop Counter")
+                        .font(AppFont.bold(16))
+                        .foregroundColor(tc.textPrimary)
+
+                    Text(count == 1 ? "1 so far this month" : "\(count) so far this month")
+                        .font(AppFont.regular(12))
+                        .foregroundColor(tc.textSecondary)
+                }
+
+                Spacer()
+            }
+
+            // AppButton already carries the press haptic (.sensoryFeedback, DesignSystem)
+            // — adding a second one here would buzz twice per tap.
+            AppButton(
+                title: "Log One",
+                style: .primary,
+                action: { increment() }
+            )
+        }
+        .padding(DesignSystem.Spacing.md)
+        .adaptiveCard(
+            borderColor: tc.primary.opacity(0.3),
+            fillColor: tc.cardBackground
+        )
+        .accessibilityElement(children: .contain)
+        .onAppear { count = Self.storedCount(userId: userId) }
+    }
+
+    /// Bumps this month's count and persists it. Recomputing the key from `Date()` on
+    /// every write is what makes the rollover free: on the 1st of a new month the key is
+    /// new, so it reads 0 and this writes 1.
+    private func increment() {
+        let key = Self.monthKey(userId: userId)
+        let next = UserDefaults.standard.integer(forKey: key) + 1
+        UserDefaults.standard.set(next, forKey: key)
+        count = next
+    }
+
+    // MARK: Storage
+    //
+    // local-only by design — TODO-poop-leaderboard would need a projection, not this store
+
+    /// This month's stored count. A key that has never been written reads as 0, which is
+    /// exactly the wanted behaviour for a month that hasn't started yet.
+    private static func storedCount(userId: String) -> Int {
+        UserDefaults.standard.integer(forKey: monthKey(userId: userId))
+    }
+
+    /// This user's key for the month containing right now.
+    private static func monthKey(userId: String) -> String {
+        poopCountKey(userId: userId, date: Date(), calendar: localGregorianCalendar)
+    }
+
+    /// Explicitly Gregorian, in the user's own time zone. Built fresh per access so a
+    /// travelling user's time-zone change is picked up (a cached `static let` would
+    /// freeze the zone at first launch).
+    private static var localGregorianCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone.current
+        return calendar
+    }
+
+    /// The UserDefaults key holding one user's count for one month:
+    /// `poopCount.<userId>.<yyyyMM>`. Months roll over naturally by key — a new month
+    /// simply reads a key that doesn't exist yet and starts at zero. Old months are left
+    /// in place; the bytes are trivial and there is nothing to clean up.
+    ///
+    /// Manual zero-padding via an explicit Gregorian calendar, mirroring `utcDayKey` in
+    /// FirestoreServiceImpl. `DateFormatter` is deliberately NOT used: it is locale- and
+    /// calendar-sensitive, so a Buddhist-calendar device would write year 2569 and an
+    /// Arabic-Indic locale would write non-ASCII digits — either silently stranding the
+    /// count under a key nothing else reads. Unlike the `aiUsage` day keys this one
+    /// matches no server key, so it uses the user's own zone: "this month" is the user's
+    /// month, not UTC's.
+    private static func poopCountKey(userId: String, date: Date, calendar: Calendar) -> String {
+        let c = calendar.dateComponents([.year, .month], from: date)
+        return "poopCount.\(userId).\(String(format: "%04d%02d", c.year ?? 0, c.month ?? 0))"
     }
 }
