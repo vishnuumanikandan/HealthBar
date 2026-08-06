@@ -31,6 +31,12 @@ struct FoodLogView: View {
     /// Threaded through to the describe sheet's guest card (AIPROXY-1b).
     private let onCreateAccount: () -> Void
 
+    /// HOMECTA-1: one-shot cross-tab request (owned by ContentView, beside `selectedTab`) for
+    /// this tab to present the AI describe-meal sheet. Consumed in `consumeDescribeRequest()`.
+    /// Defaulted to a constant binding so the previews below — and any future non-tab mount —
+    /// simply never receive a request.
+    @Binding private var pendingDescribePresentation: Bool
+
     private var tc: ThemeColors { settings.activeColors }
 
     // Fix #8: track which sections are collapsed
@@ -50,10 +56,12 @@ struct FoodLogView: View {
 
     init(
         coordinator: AppCoordinator,
-        onCreateAccount: @escaping () -> Void = {}
+        onCreateAccount: @escaping () -> Void = {},
+        pendingDescribePresentation: Binding<Bool> = .constant(false)
     ) {
         self._viewModel = State(initialValue: FoodLogViewModel(coordinator: coordinator))
         self.onCreateAccount = onCreateAccount
+        self._pendingDescribePresentation = pendingDescribePresentation
     }
 
     // MARK: - Body
@@ -209,7 +217,38 @@ struct FoodLogView: View {
                     Task { await viewModel.loadRecentFoods() }
                 }
             }
+            // HOMECTA-1: consume Home's describe request. BOTH hooks are required —
+            // `onChange` covers the case where this tab is already mounted (returning from Home
+            // to an already-visited Food Log, where `onAppear` never fires again), and the
+            // appear-time check covers the first visit, where the tab was not yet in the
+            // hierarchy when the flag flipped and no change was observed.
+            .onChange(of: pendingDescribePresentation) { _, isPending in
+                if isPending { consumeDescribeRequest() }
+            }
+            .onAppear {
+                consumeDescribeRequest()
+            }
         }
+    }
+
+    // MARK: - Home CTA Bridge (HOMECTA-1)
+
+    /// Consumes a pending describe-meal request from Home's Log Food CTA.
+    ///
+    /// One-shot by construction: the flag is cleared in the SAME synchronous update that
+    /// presents the sheet — before any `await`, never on sheet dismissal and never on a delay.
+    /// That is what makes dismiss → revisit-tab not re-present.
+    ///
+    /// Idempotent: a request arriving while the sheet is already up is a no-op (the flag still
+    /// clears). Re-entering `openDescribeMeal()` would reset the session — clearing the typed
+    /// description and cancelling any in-flight recognition — so repeated Home taps must not
+    /// reach it.
+    private func consumeDescribeRequest() {
+        guard pendingDescribePresentation else { return }
+        if !viewModel.showingDescribeMeal {
+            viewModel.openDescribeMeal()
+        }
+        pendingDescribePresentation = false
     }
 
     // MARK: - Loading View
