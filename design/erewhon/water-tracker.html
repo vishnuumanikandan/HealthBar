@@ -27,9 +27,11 @@
   (UI/HomeView.swift `cleanContent`) — i.e. directly below the daily rings/summary,
   above the jump cards. Neighbours are drawn as gray blocks in §2.
 
-  REV 2 — caustic texture, animated wavy surface, circular droplet button, live
-  counter. See §4 for the honest cost of the texture: it is the one element here
-  that cannot be built from gradient primitives.
+  REV 3 — light sky blue water, pure white foam, the wave STOPS at full (the box
+  fills flat to the brim), and the splash moved off the water onto the BUTTON:
+  the disc is struck like a stone dropped in a pond. See §4 for the honest cost
+  of the caustic texture — it is the one element here that cannot be built from
+  gradient primitives, and §1 for what the sky-blue move cost in hue separation.
 -->
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -66,9 +68,9 @@
   --accent-deep:#2B62EF;
 
   /* PROPOSED water family — dark column */
-  --water:#2BC0E4;
-  --water-deep:#1B7FA8;
-  --water-mist:#8FE3F5;
+  --water:#6FC9F2;         /* light sky blue */
+  --water-deep:#2E86B8;
+  --water-foam:#FFFFFF;    /* foam / caustic ribbons — pure white */
 }
 
 /* ── Erewhon LIGHT (pinned) ──────────────────────────────── */
@@ -85,9 +87,9 @@
   --accent-deep:#0022B1;
 
   /* PROPOSED water family — light column */
-  --water:#0B7C99;
-  --water-deep:#065971;
-  --water-mist:#7FD4EA;
+  --water:#2189C4;         /* sky blue, deepened — see the contrast note in §1 */
+  --water-deep:#10618F;
+  --water-foam:#FFFFFF;    /* foam / caustic ribbons — pure white */
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -179,7 +181,7 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
   animation:driftA 21s ease-in-out infinite alternate;      /* DECORATIVE */
 }
 .caustic.lite{
-  color:var(--water-mist);opacity:.78;
+  color:var(--water-foam);opacity:.78;
   animation:driftB 15s ease-in-out infinite alternate;      /* DECORATIVE */
 }
 @keyframes driftA{from{transform:translate3d(-7%,1.5%,0)}to{transform:translate3d(7%,-1.5%,0)}}
@@ -195,9 +197,17 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
   position:absolute;left:0;width:200%;display:block;
   fill:var(--sunk);
   animation:flow 7s linear infinite;                        /* DECORATIVE */
+  transition:opacity .32s ease;
 }
 .wavetop.slow{animation-duration:11s;animation-direction:reverse;opacity:.55}
 @keyframes flow{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* AT THE TOP THE WATER GOES STILL. Once the vessel is full there is no surface
+   left to disturb, so the wave fades out and the box fills completely, flat to
+   the brim — the visual full-stop that says "done" without a badge. It stays off
+   for overfull too. */
+.wblock[data-state="full"] .wavetop,
+.wblock[data-state="over"] .wavetop{opacity:0;animation-play-state:paused}
 
 /* ── HORIZONTAL vessel ───────────────────────────────────── */
 .hwrap{position:relative;flex:1}          /* splash escapes the trough clip */
@@ -216,8 +226,8 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
 /* meniscus — the leading edge */
 .hmen{
   position:absolute;top:-1px;bottom:-1px;left:var(--lvl);width:3px;margin-left:-2px;
-  background:var(--water-mist);border-radius:2px;
-  box-shadow:0 0 7px color-mix(in srgb,var(--water-mist) 60%,transparent);
+  background:var(--water-foam);border-radius:2px;
+  box-shadow:0 0 7px color-mix(in srgb,var(--water-foam) 60%,transparent);
   animation:bob 2.6s ease-in-out infinite;                  /* DECORATIVE */
   transition:left .26s cubic-bezier(.22,1.1,.36,1);
 }
@@ -252,7 +262,7 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
 /* overfull brim rim — opacity-toggled, never conditional markup */
 .brimrim{
   position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-  box-shadow:inset 0 0 0 1.5px var(--water-mist);
+  box-shadow:inset 0 0 0 1.5px var(--water-foam);
   opacity:0;transition:opacity .2s ease;
 }
 .wblock[data-state="over"] .brimrim{opacity:1}
@@ -263,27 +273,29 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
   display:grid;place-items:center;cursor:pointer;
   background:radial-gradient(120% 120% at 34% 24%, var(--water) 0%, var(--water-deep) 92%);
   box-shadow:0 3px 12px color-mix(in srgb,var(--water) 38%,transparent),
-             inset 0 1px 0 color-mix(in srgb,var(--water-mist) 55%,transparent);
+             inset 0 1px 0 color-mix(in srgb,var(--water-foam) 55%,transparent);
   transition:transform .1s cubic-bezier(.3,1.4,.5,1), box-shadow .15s ease;
   -webkit-tap-highlight-color:transparent;
 }
 .plus:hover{box-shadow:0 4px 16px color-mix(in srgb,var(--water) 55%,transparent),
-                      inset 0 1px 0 color-mix(in srgb,var(--water-mist) 70%,transparent)}
+                      inset 0 1px 0 color-mix(in srgb,var(--water-foam) 70%,transparent)}
 .plus:active{transform:scale(.88)}
 .plus svg{width:46%;height:46%;fill:var(--bg);display:block}
-.plus.lg{width:42px}
-.plus.sm{width:32px}
-.plus.xs{width:28px}
+.plus.lg{width:42px;--rr:31px}   /* --rr = how far the crown is thrown */
+.plus.sm{width:32px;--rr:25px}
+.plus.xs{width:28px;--rr:22px}
 
 /* cup pips */
 .pips{display:flex;gap:5px;align-items:center}
 .pip{width:7px;height:7px;border-radius:50%;background:var(--sunk);flex:none;transition:background .2s ease}
 .pip.on{background:var(--water)}
-.pip.over{background:var(--water-mist);box-shadow:0 0 0 2px color-mix(in srgb,var(--water) 30%,transparent)}
+/* NOT foam: a white pip sits on the CARD, not on water, and vanishes on the light
+   card. The over-marker is deep water plus a halo, which reads in both themes. */
+.pip.over{background:var(--water-deep);box-shadow:0 0 0 2px color-mix(in srgb,var(--water) 55%,transparent)}
 .resetnote{font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--faint)}
 
 /* overfull keyline chip — GUILD-UI-1 keyline-tag language (2px left rule, no fill).
-   Uses `water`, NOT `water-mist`: mist is a specular and drops to ~1.4:1 on the
+   Uses `water`, NOT `water-foam`: mist is a specular and drops to ~1.4:1 on the
    light background. */
 .overchip{
   font-size:9px;letter-spacing:.13em;text-transform:uppercase;font-weight:700;
@@ -291,42 +303,56 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
   padding:1px 0 1px 5px;margin-left:7px;white-space:nowrap;
 }
 
-/* ── SPLASH — REQUIRED tap feedback ──────────────────────────
-   Lives OUTSIDE the vessel's overflow clip so droplets arc above the rim, and is
-   anchored off --lvl so it follows the waterline as the count climbs.          */
-.hsplash{position:absolute;top:0;bottom:0;left:var(--lvl);width:0;pointer-events:none;
-         transition:left .26s cubic-bezier(.22,1.1,.36,1)}
-.vsplash{position:absolute;left:0;right:0;bottom:var(--lvl);height:0;pointer-events:none;
-         transition:bottom .26s cubic-bezier(.22,1.1,.36,1)}
-.drop{
-  position:absolute;width:4px;height:4px;border-radius:50%;background:var(--water-mist);
-  opacity:0;pointer-events:none;
+/* ── SPLASH — REQUIRED tap feedback, ON THE BUTTON ───────────
+   The button IS a disc of water, so striking it is what splashes. Rings spread
+   from the point of impact like a stone dropped in a pond, and a crown of
+   droplets is thrown clear of the rim — the button never clips them, since a
+   <button> does not clip overflow and the circle is drawn by border-radius, not
+   by a clip.                                                                    */
+.plus .fx{position:absolute;inset:0;pointer-events:none;display:block}
+.plus .ring{
+  position:absolute;left:50%;top:50%;width:100%;height:100%;margin:-50% 0 0 -50%;
+  border-radius:50%;border:2px solid var(--water-foam);opacity:0;
 }
-.ripple{
-  position:absolute;border:1.5px solid var(--water-mist);border-radius:50%;
-  opacity:0;pointer-events:none;
+.plus .sd{                                        /* one droplet of the crown */
+  position:absolute;left:50%;top:50%;
+  border-radius:50%;background:var(--water-foam);opacity:0;
+  width:calc(6px * var(--sz,1));height:calc(6px * var(--sz,1));
+  margin:calc(-3px * var(--sz,1)) 0 0 calc(-3px * var(--sz,1));
 }
 /* Longhands, not the `animation` shorthand. A var() inside a shorthand defers the
    whole declaration to computed-value time, where one bad substitution takes the
-   entire animation down silently. The delay is the only varying part.
-   Stagger rides an inline `--d` per droplet, NOT :nth-child — the droplets are not
-   the only children of their container and their position shifts per state.     */
-.splash .drop{
-  animation-name:drop;
-  animation-duration:340ms;
-  animation-timing-function:cubic-bezier(.25,.7,.4,1);
+   entire animation down silently. Stagger rides an inline `--d` per particle,
+   NOT :nth-child — the rings and droplets share a parent. */
+.plus.hit{animation:strike 340ms cubic-bezier(.3,1.5,.5,1)}
+.plus.hit .ring{
+  animation-name:ringOut;
+  animation-duration:420ms;
+  animation-timing-function:cubic-bezier(.2,.7,.3,1);
   animation-delay:var(--d,0ms);
   animation-fill-mode:forwards;
 }
-.splash .ripple{animation:ripple 300ms ease-out 40ms forwards}
-@keyframes drop{
-  0%{opacity:0;transform:translate(0,0) scale(.6)}
-  16%{opacity:1}
-  100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.35)}
+.plus.hit .sd{
+  animation-name:crown;
+  animation-duration:420ms;
+  animation-timing-function:cubic-bezier(.2,.65,.35,1);
+  animation-delay:var(--d,0ms);
+  animation-fill-mode:forwards;
 }
-@keyframes ripple{
-  0%{opacity:.85;transform:scale(.35)}
-  100%{opacity:0;transform:scale(1.9)}
+/* the disc takes the hit, dips, then rebounds past rest — the "give" of water */
+@keyframes strike{
+  0%{transform:scale(1)} 22%{transform:scale(.86)} 55%{transform:scale(1.07)} 100%{transform:scale(1)}
+}
+@keyframes ringOut{
+  0%  {opacity:.85;transform:scale(.3);  border-width:2.5px}
+  100%{opacity:0;  transform:scale(2.45);border-width:.5px}
+}
+/* rotate() aims the droplet, translateY() throws it that way; it rises fast,
+   then drifts out and fades — a crown, not a starburst */
+@keyframes crown{
+  0%  {opacity:0;transform:rotate(var(--a)) translateY(0) scale(.35)}
+  14% {opacity:1;transform:rotate(var(--a)) translateY(calc(var(--r) * -0.42)) scale(1)}
+  100%{opacity:0;transform:rotate(var(--a)) translateY(calc(var(--r) * -1)) scale(.3)}
 }
 /* goal-met one-shot glow — DECORATIVE */
 .goalglow{animation:glow 500ms ease-out}
@@ -342,9 +368,9 @@ body.rm .caustic,
 body.rm .wavetop,
 body.rm .hmen,
 body.rm .goalglow{animation:none!important}
-body.rm .drop,body.rm .ripple{display:none}
-body.rm .splash .wbody{animation:rmpulse 180ms ease-out}
-@keyframes rmpulse{0%{filter:brightness(1.5)}100%{filter:brightness(1)}}
+body.rm .plus .ring,body.rm .plus .sd{display:none}
+body.rm .plus.hit{animation:rmpulse 180ms ease-out}   /* no scale, no throw — light only */
+@keyframes rmpulse{0%{filter:brightness(1.6)}100%{filter:brightness(1)}}
 @media (prefers-reduced-motion:reduce){
   .caustic,.wavetop,.hmen{animation:none!important}
 }
@@ -434,10 +460,18 @@ body.rm .splash .wbody{animation:rmpulse 180ms ease-out}
   (<code>#E0B047</code>, 43°), so no purity band is ambiguous against it.</p>
   <div class="huebar">
     <div style="background:#429C5A">green 137°</div>
-    <div style="background:#2BC0E4">water 192°</div>
+    <div style="background:#6FC9F2">water 199°</div>
     <div style="background:#4882FF;color:#fff">accent 221°</div>
     <div style="background:#E0B047">amber 43°</div>
   </div>
+  <p class="note" style="margin-bottom:0"><b>Rev 3 narrowed this, and it should be said plainly.</b> Moving the
+  water from cyan to <b>light sky blue</b> pulled it from ~192° to ~199°, so the gap to the accent is now
+  <b>~22°, not ~30°</b>. Hue alone is doing less work than it was. What replaces it is stronger: the water is now
+  far <i>lighter</i> than the accent (69% vs 60% lightness in dark, and it is the only element on Home carrying a
+  <b>white caustic texture</b>). Nothing else in Erewhon has white ribbons on it. The separation is now carried by
+  lightness and texture rather than hue — which is more robust for colour-blind users, not less, but it does mean
+  <b>the texture is no longer purely decorative</b>. If ruling item 7 drops the caustic, this paragraph stops being
+  true and the water becomes a light blue bar 22° from the accent blue. The two rulings are coupled.</p>
   <p class="note" style="margin-bottom:0"><b>Alternative if the ruling is "no new colour":</b> the element can run
   entirely on <code>--accent</code> + <code>--sunk</code>. It costs the glance-distinction above and makes the
   water read as a second progress bar; the caustic, wave and splash all still work. Say the word and I'll add that arm.</p>
@@ -445,36 +479,54 @@ body.rm .splash .wbody{animation:rmpulse 180ms ease-out}
 
 <h3>Dark column (Erewhon Dark)</h3>
 <div class="swrow">
-  <div class="sw"><span class="chip" style="background:#2BC0E4"></span><div class="meta">
-    <div class="nm">water</div><div class="hx">#2BC0E4 · h192 s79 l53</div>
-    <div class="use">Fill body (top stop), meniscus core, filled cup pips, the droplet button, the overfull chip.</div></div></div>
-  <div class="sw"><span class="chip" style="background:#1B7FA8"></span><div class="meta">
-    <div class="nm">water-deep</div><div class="hx">#1B7FA8 · h197 s72 l38</div>
+  <div class="sw"><span class="chip" style="background:#6FC9F2"></span><div class="meta">
+    <div class="nm">water</div><div class="hx">#6FC9F2 · h199 s83 l69</div>
+    <div class="use">Light sky blue. Fill body (top stop), filled cup pips, the droplet button, the overfull chip.</div></div></div>
+  <div class="sw"><span class="chip" style="background:#2E86B8"></span><div class="meta">
+    <div class="nm">water-deep</div><div class="hx">#2E86B8 · h202 s60 l45</div>
     <div class="use">Bottom stop of the fill gradient and of the button; the darker caustic patches.</div></div></div>
-  <div class="sw"><span class="chip" style="background:#8FE3F5"></span><div class="meta">
-    <div class="nm">water-mist</div><div class="hx">#8FE3F5 · h191 s82 l76</div>
-    <div class="use">The caustic light ribbons, meniscus, splash droplets + ripple, overfull brim rim.
-    <b>Specular only</b> — never text.</div></div></div>
+  <div class="sw"><span class="chip" style="background:#FFFFFF"></span><div class="meta">
+    <div class="nm">water-foam</div><div class="hx">#FFFFFF · pure white</div>
+    <div class="use">The caustic ribbons, meniscus, splash crown + ripples, overfull brim rim.
+    <b>Specular only</b> — never text, and never on a light surface outside the water.</div></div></div>
 </div>
 
 <h3>Light column (Erewhon Light)</h3>
 <div class="swrow">
-  <div class="sw"><span class="chip" style="background:#0B7C99"></span><div class="meta">
-    <div class="nm">water</div><div class="hx">#0B7C99 · h192 s87 l32</div>
-    <div class="use">Same roles. Deepened for contrast on <code>#F3F4F6</code>, matching how m-fat/m-carbs darken in the light column.</div></div></div>
-  <div class="sw"><span class="chip" style="background:#065971"></span><div class="meta">
-    <div class="nm">water-deep</div><div class="hx">#065971 · h193 s90 l23</div>
+  <div class="sw"><span class="chip" style="background:#2189C4"></span><div class="meta">
+    <div class="nm">water</div><div class="hx">#2189C4 · h202 s71 l45</div>
+    <div class="use"><b>Deepened on purpose.</b> The dark column&rsquo;s sky blue is far too pale to sit on
+    <code>#F3F4F6</code> — see the light-theme note below. Same hue family, more depth.</div></div></div>
+  <div class="sw"><span class="chip" style="background:#10618F"></span><div class="meta">
+    <div class="nm">water-deep</div><div class="hx">#10618F · h202 s80 l31</div>
     <div class="use">Bottom stop of the fill gradient; darker caustic patches.</div></div></div>
-  <div class="sw"><span class="chip" style="background:#7FD4EA"></span><div class="meta">
-    <div class="nm">water-mist</div><div class="hx">#7FD4EA · h192 s71 l71</div>
-    <div class="use">Caustic ribbons + droplets. Stays light in both columns because it is a <b>specular</b> —
-    which is exactly why nothing textual may use it: on <code>#F3F4F6</code> it falls to ~1.4:1.</div></div></div>
+  <div class="sw"><span class="chip" style="background:#FFFFFF"></span><div class="meta">
+    <div class="nm">water-foam</div><div class="hx">#FFFFFF · pure white</div>
+    <div class="use">Identical in both columns — foam is foam. It only ever sits ON water, never on the page, which
+    is what makes pure white safe here and disqualifying anywhere else.</div></div></div>
+</div>
+
+<div class="docbox warn">
+  <div class="rule">⚠ Why the light column is not the same sky blue</div>
+  <p class="note" style="margin-top:0">"Light sky blue" is the design intent and it is drawn that way in Erewhon
+  Dark, where it sits on a near-black page and reads beautifully at <b>10.4:1</b>. Erewhon Light is the problem:
+  the page is <code>#F3F4F6</code> and the empty track is <code>#E8EAED</code>, both essentially white. The dark
+  column's <code>#6FC9F2</code> on that track measures <b>1.5:1</b> — a filled bar would be nearly
+  indistinguishable from an empty one in sunlight or for anyone with reduced contrast sensitivity, and the fill
+  level is the entire point of the element.</p>
+  <p class="note" style="margin-bottom:0">So the light column keeps the sky-blue <i>hue</i> (202°, same family)
+  and takes it down to <code>#2189C4</code>, which lands at <b>3.2:1</b> against the track — just over the floor.
+  It still reads as sky blue against white; it is simply not pale. This mirrors what the palette already does
+  elsewhere: m-carbs is <code>#F37513</code> in dark and <code>#CD4B00</code> in light, m-fat
+  <code>#429C5A</code> / <code>#0F6A31</code>. <b>If you want the pale blue in light mode too, that is available
+  — but it costs the fill/empty distinction, and I would want that said out loud rather than discovered later.</b></p>
 </div>
 
 <table>
   <tr><th>Check</th><th>Result</th></tr>
-  <tr><td><code>water</code> vs <code>accent</code> hue separation</td><td>dark 192° vs 221° = <b>29°</b> · light 192° vs 223° = <b>31°</b> — reads as a distinct substance</td></tr>
-  <tr><td><code>water</code> on <code>--bg</code>, as a fill (non-text)</td><td>dark 6.4:1 · light 5.1:1 — well clear of the 3:1 floor for a meaningful graphic</td></tr>
+  <tr><td><code>water</code> vs <code>accent</code> hue separation</td><td>dark 199° vs 221° = <b>22°</b> · light 202° vs 223° = <b>21°</b> — narrower than rev 2. Now backed by a large lightness gap and the white texture, not hue alone</td></tr>
+  <tr><td><code>water</code> on <code>--bg</code>, as a fill (non-text)</td><td>dark <b>10.4:1</b> · light <b>3.5:1</b> — both clear the 3:1 floor for a meaningful graphic</td></tr>
+  <tr><td><code>water</code> against its own empty track</td><td>dark <b>7.9:1</b> vs <code>#222838</code> · light <b>3.2:1</b> vs <code>#E8EAED</code> — this is the one that nearly failed, see below</td></tr>
   <tr><td>Reading text (<code>5 / 8 cups</code>)</td><td>uses <code>--ink</code>/<code>--muted</code>, never a water token — the count stays legible even if the ruling changes the blues</td></tr>
   <tr><td>Colour-blind check (deuteranopia/protanopia)</td><td>cyan vs accent-blue is the <i>weakest</i> of the separations. Mitigated structurally: water is now the only element on Home with a <b>texture</b>, a wavy edge and cup pips, and it is labelled. <b>Do not rely on hue alone.</b></td></tr>
 </table>
@@ -545,12 +597,16 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
         meniscus all ride the same value, so they cannot desync.</td>
   </tr>
   <tr>
-    <td><b>Splash burst</b><br><span style="color:var(--page-faint)">droplets + ripple at the surface</span></td>
+    <td><b>Splash burst</b><br><span style="color:var(--page-faint)">on the BUTTON — struck water</span></td>
     <td><span class="rule">REQUIRED</span></td>
-    <td>starts 0 ms · <b>ends ≤ 410 ms</b><br>(budget: 600 ms)</td>
-    <td>5 droplets, 11–26 pt travel, staggered 0–70 ms; ripple scales 0.35→1.9 over 300 ms from +40 ms</td>
-    <td>Non-blocking and non-interactive, purely additive over the level change. Emitted <b>outside</b> the vessel's
-        clip so droplets arc above the rim rather than being cut off at it.</td>
+    <td>starts 0 ms · <b>ends ≤ 570 ms</b><br>(budget: 600 ms)</td>
+    <td>Disc dips to 0.86 and rebounds to 1.07 over 340 ms; 3 ripples expand 0.3→2.45 over 420 ms staggered
+        0/80/150 ms; a 10-droplet crown thrown 0.68–1.0× the disc radius, staggered 0–30 ms</td>
+    <td>The button <i>is</i> a disc of water, so striking it is what splashes — like a stone dropped in a pond,
+        not a progress bar ticking. Rings spread from the point of impact and the crown clears the rim (a
+        <code>&lt;button&gt;</code> does not clip overflow, and the circle is drawn by border-radius rather than a
+        clip, so nothing is cut off). Angles, throw distance and droplet size all vary together: an evenly spaced
+        crown of identical dots reads as a mechanical starburst. Non-blocking and non-interactive.</td>
   </tr>
   <tr>
     <td><b>Haptic</b></td>
@@ -586,7 +642,9 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
         land on troughs at the wrap. Crest spacing is set per orientation (24 periods in a wide trough, 6 in a
         narrow vessel) so the waves are the same size in <i>points</i> in both: one shared path would give the wide
         bar three lazy humps and the small vessel a comb. Invisible at 0 cups without special-casing, because the
-        carve is drawn in the track colour.</td>
+        carve is drawn in the track colour. <b>Stops at the top:</b> on reaching 8/8 the wave fades out over
+        320 ms and the vessel fills flat to the brim — there is no surface left to disturb once it is full, and
+        the stillness is the reward. It stays off for overfull.</td>
   </tr>
   <tr>
     <td><b>Meniscus bob</b> (horizontal only)</td>
@@ -630,8 +688,12 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
   the caustic freezes (the texture stays — only its drift and boil stop), the wave holds mid-crest as a still
   wavy line rather than snapping flat, the meniscus stops, the goal glow does not fire. <b>The level change
   survives</b> — it is state feedback, not decoration. The splash degrades to a single <b>180 ms brightness
-  pulse</b> through the water body: no droplets, no ripple, but the tap is still unmistakably acknowledged, and the
-  haptic is unaffected.</p>
+  pulse</b> on the button: no crown, no ripples, no dip — nothing that moves or scales — but the tap is still
+  unmistakably acknowledged, and the haptic is unaffected.</p>
+  <p class="note" style="margin-bottom:0">Note that the caustic <i>boil</i> is an SVG filter animation, not a CSS
+  one, so switching off CSS animation does not reach it. Reduce Motion has to pause the filter clock explicitly or
+  the texture keeps churning while everything else has stopped — a gap worth carrying into the implementation
+  prompt, because it is exactly the kind of thing that survives a casual "we turned off the animations" check.</p>
 </div>
 
 
@@ -657,13 +719,15 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
   </tr>
   <tr>
     <td><b>Goal met</b><br>8 / 8</td>
-    <td>Fill at 100%. The wave keeps running at the brim — it does not stop at goal. One-shot glow on arrival only.</td>
-    <td>All 8 pips filled. <b>The droplet stays enabled</b> — the goal is a target, not a cap.</td>
+    <td><b>Fill at 100% and the water goes still.</b> The wave fades out over 320 ms and the box fills flat to
+        the brim — no surface, no motion. One-shot glow on arrival only.</td>
+    <td>All 8 pips filled. <b>The droplet stays enabled</b> — the goal is a target, not a cap. The stillness is
+        the only "you did it" signal; there is deliberately no badge, toast or copy change.</td>
   </tr>
   <tr>
     <td><b>Overfull</b><br>9 / 8</td>
-    <td><b>Fill is clamped at 100% forever.</b> Above goal the surface gains a brighter
-        <code>water-mist</code> brim rim — "brimming", not "broken".</td>
+    <td><b>Fill is clamped at 100% forever</b>, and stays still like the full state. Above goal it gains a white
+        brim rim — "brimming", not "broken".</td>
     <td>Count keeps counting truthfully: <code>9 / 8</code>, then 10, 11… A keyline
         <code>+N</code> chip (2 pt left rule, no fill — the GUILD-UI-1 keyline-tag language) sits after the count.
         Pips: all 8 filled, the last carrying an over-ring. <b>Never <code>danger</code>, never a warning</b> —
@@ -693,7 +757,7 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
 <h2><span class="n">§6</span>Open for ruling</h2>
 <div class="docbox">
   <ul style="margin-left:18px">
-    <li><b>1 · Tokens.</b> Adopt <code>water</code> / <code>water-deep</code> / <code>water-mist</code> at ~192° as
+    <li><b>1 · Tokens.</b> Adopt <code>water</code> / <code>water-deep</code> / <code>water-foam</code> at ~192° as
         drawn? Or run the element on <code>--accent</code> and accept that it reads as another blue bar?</li>
     <li><b>2 · Concept.</b> A, B, C or D. (A = safest and rhymes with its neighbours; C = most distinctive and the
         best home for the texture, costs ~36 pt more; B and D are the reductions.)</li>
@@ -708,8 +772,14 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
         remaining ~190 ms on a slower, more liquid arc?</li>
     <li><b>7 · The caustic texture.</b> <span class="rule">has a real price</span> Live shader, looping asset, or
         drop the texture and keep the gradient + wave? See the cost box in §4 — this is the only item here that
-        changes the engineering scope rather than the layout.</li>
-    <li><b>8 · Button labelling.</b> The droplet button carries no <code>+1</code> glyph now. It is unmistakably a
+        changes the engineering scope rather than the layout. <b>Now coupled to item 1:</b> since rev 3 moved the
+        water to sky blue, the gap to the accent is only ~22° and the white texture is doing real work separating
+        them. Dropping the texture is no longer a purely visual saving.</li>
+    <li><b>8 · Light-theme water depth.</b> The light column is a deeper sky blue (<code>#2189C4</code>) because
+        the dark column&rsquo;s pale blue measures 1.5:1 against the near-white empty track — the fill/empty
+        distinction would be lost. Accept the deeper light value, or take the pale blue in both and accept that
+        cost knowingly?</li>
+    <li><b>9 · Button labelling.</b> The droplet button carries no <code>+1</code> glyph now. It is unmistakably a
         water action, but "adds exactly one cup" is learned rather than shown. Accept, or add a small <code>+</code>?</li>
   </ul>
 </div>
@@ -859,27 +929,28 @@ const wave = (d) => `
 
 /* ── the droplet button ──────────────────────────────────── */
 const DROPLET = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.2c0 0-7.2 8.5-7.2 13.1a7.2 7.2 0 0 0 14.4 0C19.2 10.7 12 2.2 12 2.2Z"/></svg>';
-const btn = (size) => `<button class="plus ${size}" data-add aria-label="Add one cup">${DROPLET}</button>`;
 
-/* ── splash particles: travel vector + stagger, anchored off --lvl ── */
-const H_DROPS = [
-  {dx: 10, dy:-17, d: 0, t:2}, {dx: -7, dy:-19, d:26, t:2}, {dx: 17, dy:-11, d:52, t:5},
-  {dx:  3, dy:-22, d:14, t:1}, {dx:-13, dy:-13, d:70, t:5}
+/* The crown thrown when the disc is struck. Angles are deliberately IRREGULAR —
+   evenly spaced droplets read as a mechanical starburst, not a splash. `rf` varies
+   the throw distance against the button's own --rr, so the same crown works at
+   42, 32 and 28 pt without retuning. */
+const CROWN = [
+  {a: -11, rf:1.00, sz:1.15, d: 0}, {a:  27, rf:.74, sz:.75, d:22},
+  {a:  63, rf:.93, sz:1.00, d: 8},  {a: 104, rf:.68, sz:.70, d:30},
+  {a: 139, rf:.97, sz:1.10, d:14},  {a: 178, rf:.79, sz:.85, d: 4},
+  {a: 216, rf:.90, sz:1.05, d:26},  {a: 251, rf:.71, sz:.72, d:11},
+  {a: 288, rf:.99, sz:1.12, d:18},  {a: 327, rf:.82, sz:.88, d: 6}
 ];
-const V_DROPS = [
-  {dx:  8, dy:-21, d: 0, at:.30}, {dx: -9, dy:-17, d:26, at:.58}, {dx: 2, dy:-26, d:52, at:.44},
-  {dx: 13, dy:-12, d:14, at:.34}, {dx: -3, dy:-22, d:70, at:.64}
-];
-const hSplash = () =>
-  `<div class="hsplash">
-     <span class="ripple" style="width:15px;height:15px;left:-7px;top:1px"></span>` +
-   H_DROPS.map(p=>`<span class="drop" style="--dx:${p.dx}px;--dy:${p.dy}px;--d:${p.d}ms;left:-2px;top:${p.t}px"></span>`).join('') +
-  `</div>`;
-const vSplash = (w) =>
-  `<div class="vsplash">
-     <span class="ripple" style="width:${w-14}px;height:9px;left:7px;bottom:-4px;border-radius:50%"></span>` +
-   V_DROPS.map(p=>`<span class="drop" style="--dx:${p.dx}px;--dy:${p.dy}px;--d:${p.d}ms;left:${Math.round(w*p.at)}px;bottom:0"></span>`).join('') +
-  `</div>`;
+const RINGS = [0, 80, 150];   // ms — three ripples, so it spreads rather than pops
+
+const btn = (size) => `
+  <button class="plus ${size}" data-add aria-label="Add one cup">
+    ${DROPLET}
+    <span class="fx">
+      ${RINGS.map(d=>`<i class="ring" style="--d:${d}ms"></i>`).join('')}
+      ${CROWN.map(p=>`<i class="sd" style="--a:${p.a}deg;--r:calc(var(--rr) * ${p.rf});--sz:${p.sz};--d:${p.d}ms"></i>`).join('')}
+    </span>
+  </button>`;
 
 const hVessel = (thin) => `
   <div class="hwrap">
@@ -889,7 +960,6 @@ const hVessel = (thin) => `
       <div class="hmen"></div>
       <div class="brimrim"></div>
     </div>
-    ${hSplash()}
   </div>`;
 
 const vVessel = (sm) => `
@@ -900,7 +970,6 @@ const vVessel = (sm) => `
       <div class="vtick"></div>
       <div class="brimrim"></div>
     </div>
-    ${vSplash(sm?32:46)}
   </div>`;
 
 /* ── the four concept templates ───────────────────────────── */
@@ -972,19 +1041,20 @@ function render(block){
 }
 
 /* ── splash + increment ───────────────────────────────────── */
-function splash(block){
-  block.classList.remove('splash');
-  void block.offsetWidth;              // restart the keyframes
-  block.classList.add('splash');
-  clearTimeout(block._st);
-  block._st = setTimeout(()=>block.classList.remove('splash'), 640);
+function splash(button){
+  button.classList.remove('hit');
+  void button.offsetWidth;             // restart the keyframes
+  button.classList.add('hit');
+  clearTimeout(button._st);
+  button._st = setTimeout(()=>button.classList.remove('hit'), 600);
 }
-function add(block){
+function add(button){
+  const block = button.closest('.wblock');
   const before = +block.dataset.n;
   block.dataset.n = before + 1;
   render(block);
-  splash(block);
-  if (before + 1 === GOAL){          // one-shot glow only on ARRIVAL at goal
+  splash(button);                      // the splash is on the DISC, not the water
+  if (before + 1 === GOAL){            // one-shot glow only on ARRIVAL at goal
     const v = block.querySelector('.htrough, .vessel');
     if (v){ v.classList.remove('goalglow'); void v.offsetWidth; v.classList.add('goalglow'); }
   }
@@ -1042,7 +1112,7 @@ const ctx = document.getElementById('contextRow');
 /* ── interaction ──────────────────────────────────────────── */
 document.addEventListener('click', e=>{
   const b = e.target.closest('[data-add]');
-  if (b) add(b.closest('.wblock'));
+  if (b) add(b);
 });
 
 document.getElementById('resetAll').addEventListener('click', ()=>{
