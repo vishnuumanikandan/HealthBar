@@ -7,8 +7,8 @@
 
 import SwiftUI
 
-/// Bottom sheet presenting 3 options for adding food:
-/// Scan Food (AI), Food Database, or Scan Barcode.
+/// Bottom sheet presenting 4 options for adding food:
+/// Scan Food (AI), Food Database, Scan Barcode, or Log Manually.
 ///
 /// Presented when the user taps any + button in a meal section.
 /// The `pendingMealType` on the viewModel is pre-set before showing this sheet.
@@ -80,6 +80,20 @@ struct AddFoodChoiceSheet: View {
                         )
                     }
                     .buttonStyle(PlainButtonStyle())
+
+                    // Log Manually — reuses the My Foods "Add New Food" flow:
+                    // AddFoodFormView logs the entry to `formMealType` and, because
+                    // `pendingSaveToMyFoods` is set, also persists it to My Foods.
+                    choiceRow(
+                        sfSymbol: "square.and.pencil",
+                        title: "Log Manually",
+                        subtitle: "Enter the nutrition yourself",
+                        betaBadge: false
+                    ) {
+                        dismiss()
+                        viewModel.pendingSaveToMyFoods = true
+                        viewModel.openAddFoodFormAfterDelay()
+                    }
                 }
                 .padding(.horizontal, DesignSystem.Spacing.lg)
 
@@ -87,7 +101,7 @@ struct AddFoodChoiceSheet: View {
             }
             .background(tc.cardBackground.ignoresSafeArea())
         }
-        .presentationDetents([.height(340)])
+        .presentationDetents([.height(428)])
         .presentationDragIndicator(.hidden)
         .presentationCornerRadius(DesignSystem.CornerRadius.xl)
     }
