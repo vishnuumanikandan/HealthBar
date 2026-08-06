@@ -12,9 +12,9 @@
   WATER-1-MOCKUP — Home water-tracking surface.
 
   GROUND TRUTH FOR LAYOUT + MOTION ONLY. This file is a DESIGN GATE, not a spec:
-  nothing here is implemented until the user rules on §1 (tokens) and §3 (which of
-  the four concepts ships). The WATER-1 implementation prompt is drafted AFTER that
-  ruling, and its Decisions outrank this file on behavior.
+  nothing here is implemented until the user rules on §1 (tokens), §3 (which of the
+  four concepts ships) and §6. The WATER-1 implementation prompt is drafted AFTER
+  that ruling, and its Decisions outrank this file on behavior.
 
   Neutral hexes below are transcribed from Resources/TimeOfDayTheme.swift
   (ThemeColors.erewhonDark / .erewhonLight — R1 renamed "Clean Dark/Light" to
@@ -27,9 +27,9 @@
   (UI/HomeView.swift `cleanContent`) — i.e. directly below the daily rings/summary,
   above the jump cards. Neighbours are drawn as gray blocks in §2.
 
-  NO IMPLEMENTATION GUIDANCE IS GIVEN OR IMPLIED. Motion is annotated in design
-  terms (duration, curve, amplitude, blocking/non-blocking, decorative/required)
-  so it can be specced later against whatever the build actually uses.
+  REV 2 — caustic texture, animated wavy surface, circular droplet button, live
+  counter. See §4 for the honest cost of the texture: it is the one element here
+  that cannot be built from gradient primitives.
 -->
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -107,11 +107,12 @@ h2{
 }
 h2 .n{color:var(--page-faint);margin-right:10px}
 h3{font-size:12px;letter-spacing:.15em;text-transform:uppercase;color:var(--page-muted);font-weight:700;margin:24px 0 10px}
+h3 .lite{color:var(--page-faint);font-weight:400;text-transform:none;letter-spacing:0}
 p.note{font-size:12.5px;color:var(--page-muted);max-width:88ch;margin:8px 0}
-p.note b,li b{color:var(--page-ink);font-weight:600}
+p.note b,li b,td b{color:var(--page-ink);font-weight:600}
 p.note code,li code,td code{
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
-  color:var(--water-mist,#8FE3F5);background:rgba(143,227,245,.08);padding:1px 5px;border-radius:4px;
+  color:#8FE3F5;background:rgba(143,227,245,.08);padding:1px 5px;border-radius:4px;
 }
 ul{margin:8px 0 8px 20px;font-size:12.5px;color:var(--page-muted)}
 li{margin:5px 0}
@@ -122,7 +123,6 @@ table{border-collapse:collapse;font-size:12px;width:100%;margin-top:12px}
 td,th{border:1px solid var(--page-line);padding:7px 10px;text-align:left;vertical-align:top}
 th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;text-transform:uppercase}
 
-/* strip = one theme's row of state tiles */
 .strip{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;margin-top:10px}
 .tile{border-radius:14px;padding:14px 13px 12px;width:262px;border:1px solid var(--line);background:var(--bg)}
 .tile .cap{font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--faint);margin-top:11px;text-align:center}
@@ -132,9 +132,7 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
 }
 .themetag::after{content:'';flex:1;height:1px;background:var(--page-line)}
 
-/* ─────────────────────────────────────────────────────────────
-   §1 SWATCHES
-   ───────────────────────────────────────────────────────────── */
+/* §1 swatches */
 .swrow{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
 .sw{width:168px;border:1px solid var(--page-line);border-radius:11px;overflow:hidden;background:var(--page-card)}
 .sw .chip{height:56px;display:block}
@@ -145,109 +143,161 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
 .huebar{display:flex;height:34px;border-radius:8px;overflow:hidden;margin-top:12px;border:1px solid var(--page-line)}
 .huebar div{flex:1;display:flex;align-items:center;justify-content:center;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:#04121a}
 
-/* ─────────────────────────────────────────────────────────────
-   THE WATER ELEMENT — shared parts
-   ───────────────────────────────────────────────────────────── */
+
+/* ═════════════════════════════════════════════════════════════
+   THE WATER ELEMENT
+   ═════════════════════════════════════════════════════════════ */
 .wblock{--lvl:62.5%}
 
 .whead{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
 .wlabel{font-family:var(--font-display);font-size:13px;letter-spacing:.05em;color:var(--ink)}
-.wread{display:flex;align-items:baseline;gap:0}
+.wread{display:flex;align-items:baseline}
 .wread .v{font-family:var(--font-display);font-size:17px;color:var(--ink);line-height:1}
 .wread .t{font-size:11px;color:var(--muted);margin-left:1px}
 .wread .u{font-size:11px;color:var(--faint);margin-left:5px}
 
-/* the +1 control */
-.plus{
-  border:1px solid var(--water);color:var(--water);background:transparent;
-  font-family:var(--font);font-weight:700;cursor:pointer;user-select:none;
-  display:inline-flex;align-items:center;justify-content:center;gap:4px;
-  transition:background .12s ease, transform .09s ease;
+/* ── WATER BODY: gradient base + two caustic layers ──────────
+   The caustic is the flat-vector pool network from the reference: a light ribbon
+   web over mid-blue, with darker patches beneath. Built as band-passed fractal
+   noise (see the filter defs at the end of <body>), NOT as a gradient — see §4
+   for what that costs.                                                        */
+.wbody{
+  position:absolute;inset:0;
+  background:linear-gradient(180deg,var(--water) 0%,var(--water-deep) 135%);
 }
-.plus:active{transform:scale(.94)}
-.plus:hover{background:color-mix(in srgb, var(--water) 13%, transparent)}
-.plus.lg{height:34px;padding:0 15px;border-radius:9px;font-size:12.5px;letter-spacing:.04em}
-.plus.sm{height:26px;width:26px;border-radius:8px;font-size:15px;padding:0}
-.plus.wide{height:32px;width:100%;border-radius:9px;font-size:12px;letter-spacing:.1em;text-transform:uppercase}
-.plus[disabled]{opacity:.35;pointer-events:none}
+.caustic{
+  position:absolute;left:-60%;top:-25%;width:220%;height:150%;
+  pointer-events:none;overflow:visible;
+}
+/* User units == CSS px (no viewBox), so the caustic keeps ONE physical scale
+   whether it is drawn in the wide horizontal trough or the 32pt minimal vessel. */
+/* The base gradient must stay the dominant colour: the ribbons are an accent ON
+   water, not a replacement for it. Opacities are tuned so the light network reads
+   as thin highlights rather than swamping the body. */
+.caustic.deep{
+  color:var(--water-deep);opacity:.5;
+  animation:driftA 21s ease-in-out infinite alternate;      /* DECORATIVE */
+}
+.caustic.lite{
+  color:var(--water-mist);opacity:.78;
+  animation:driftB 15s ease-in-out infinite alternate;      /* DECORATIVE */
+}
+@keyframes driftA{from{transform:translate3d(-7%,1.5%,0)}to{transform:translate3d(7%,-1.5%,0)}}
+@keyframes driftB{from{transform:translate3d(6%,-1%,0)}  to{transform:translate3d(-6%,1%,0)}}
+
+/* ── ANIMATED WAVY SURFACE ───────────────────────────────────
+   The waterline is carved by an opaque `--sunk` "sky" whose BOTTOM edge is a sine
+   path. Because the sky is exactly the track colour, the carve is invisible
+   wherever there is no water — which makes the empty state self-handling.
+   The path holds 4 whole periods across 200% width and translates by exactly
+   50%, so the loop is seamless with no jump.                                   */
+.wavetop{
+  position:absolute;left:0;width:200%;display:block;
+  fill:var(--sunk);
+  animation:flow 7s linear infinite;                        /* DECORATIVE */
+}
+.wavetop.slow{animation-duration:11s;animation-direction:reverse;opacity:.55}
+@keyframes flow{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* ── HORIZONTAL vessel ───────────────────────────────────── */
+.hwrap{position:relative;flex:1}          /* splash escapes the trough clip */
+.htrough{
+  position:relative;height:18px;border-radius:9px;background:var(--sunk);
+  overflow:hidden;isolation:isolate;
+}
+.htrough.thin{height:10px;border-radius:5px}
+.hfill{
+  position:absolute;inset:0 auto 0 0;width:var(--lvl);border-radius:inherit;
+  overflow:hidden;
+  transition:width .26s cubic-bezier(.22,1.1,.36,1);
+}
+.htrough .wavetop{top:-1px;height:9px}
+.htrough.thin .wavetop{top:-1px;height:6px}
+/* meniscus — the leading edge */
+.hmen{
+  position:absolute;top:-1px;bottom:-1px;left:var(--lvl);width:3px;margin-left:-2px;
+  background:var(--water-mist);border-radius:2px;
+  box-shadow:0 0 7px color-mix(in srgb,var(--water-mist) 60%,transparent);
+  animation:bob 2.6s ease-in-out infinite;                  /* DECORATIVE */
+  transition:left .26s cubic-bezier(.22,1.1,.36,1);
+}
+.wblock[data-state="0"] .hmen{opacity:0}
+@keyframes bob{0%,100%{transform:translateX(0)}50%{transform:translateX(1.6px)}}
+
+/* ── VERTICAL vessel ─────────────────────────────────────── */
+.vwrap{position:relative;flex:none}       /* splash escapes the vessel clip */
+.vessel{
+  position:relative;width:46px;height:78px;border-radius:11px;
+  background:var(--sunk);border:1px solid var(--line);overflow:hidden;isolation:isolate;
+}
+.vessel.sm{width:32px;height:46px;border-radius:8px}
+.vfill{
+  position:absolute;left:0;right:0;bottom:0;height:var(--lvl);
+  overflow:hidden;
+  transition:height .26s cubic-bezier(.22,1.1,.36,1);
+}
+/* the sky: everything above the waterline, wavy underside */
+.vsky{
+  position:absolute;left:0;right:0;top:0;bottom:var(--lvl);
+  background:var(--sunk);
+  transition:bottom .26s cubic-bezier(.22,1.1,.36,1);
+}
+.vsky .wavetop{bottom:-7px;height:10px}
+.vsky .wavetop.slow{bottom:-5px;height:8px}
+.vessel.sm .wavetop{height:8px;bottom:-6px}
+.vessel.sm .wavetop.slow{height:6px;bottom:-4px}
+/* goal tick on the vessel wall */
+.vtick{position:absolute;right:0;width:7px;height:1px;background:var(--faint);opacity:.55;bottom:100%}
+
+/* overfull brim rim — opacity-toggled, never conditional markup */
+.brimrim{
+  position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  box-shadow:inset 0 0 0 1.5px var(--water-mist);
+  opacity:0;transition:opacity .2s ease;
+}
+.wblock[data-state="over"] .brimrim{opacity:1}
+
+/* ── THE BUTTON: perfect circle, knocked-out droplet ─────── */
+.plus{
+  position:relative;flex:none;aspect-ratio:1;border-radius:50%;border:0;padding:0;
+  display:grid;place-items:center;cursor:pointer;
+  background:radial-gradient(120% 120% at 34% 24%, var(--water) 0%, var(--water-deep) 92%);
+  box-shadow:0 3px 12px color-mix(in srgb,var(--water) 38%,transparent),
+             inset 0 1px 0 color-mix(in srgb,var(--water-mist) 55%,transparent);
+  transition:transform .1s cubic-bezier(.3,1.4,.5,1), box-shadow .15s ease;
+  -webkit-tap-highlight-color:transparent;
+}
+.plus:hover{box-shadow:0 4px 16px color-mix(in srgb,var(--water) 55%,transparent),
+                      inset 0 1px 0 color-mix(in srgb,var(--water-mist) 70%,transparent)}
+.plus:active{transform:scale(.88)}
+.plus svg{width:46%;height:46%;fill:var(--bg);display:block}
+.plus.lg{width:42px}
+.plus.sm{width:32px}
+.plus.xs{width:28px}
 
 /* cup pips */
 .pips{display:flex;gap:5px;align-items:center}
-.pip{width:7px;height:7px;border-radius:50%;background:var(--sunk);flex:none}
+.pip{width:7px;height:7px;border-radius:50%;background:var(--sunk);flex:none;transition:background .2s ease}
 .pip.on{background:var(--water)}
 .pip.over{background:var(--water-mist);box-shadow:0 0 0 2px color-mix(in srgb,var(--water) 30%,transparent)}
 .resetnote{font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--faint)}
 
 /* overfull keyline chip — GUILD-UI-1 keyline-tag language (2px left rule, no fill).
-   Uses `water`, NOT `water-mist`: mist is a specular highlight and drops to ~1.4:1 on
-   the light background. `water` clears contrast in both columns. */
+   Uses `water`, NOT `water-mist`: mist is a specular and drops to ~1.4:1 on the
+   light background. */
 .overchip{
   font-size:9px;letter-spacing:.13em;text-transform:uppercase;font-weight:700;
   color:var(--water);border-left:2px solid var(--water);
   padding:1px 0 1px 5px;margin-left:7px;white-space:nowrap;
 }
 
-/* ── HORIZONTAL vessel ───────────────────────────────────── */
-.htrough{
-  position:relative;height:14px;border-radius:7px;background:var(--sunk);
-  overflow:hidden;isolation:isolate;
-}
-.htrough.thin{height:8px;border-radius:4px}
-.hfill{
-  position:absolute;inset:0 auto 0 0;width:var(--lvl);border-radius:inherit;
-  background:linear-gradient(180deg,var(--water) 0%,var(--water-deep) 118%);
-  transition:width .22s cubic-bezier(.22,1.1,.36,1);
-}
-/* specular sheen travelling along the body — DECORATIVE */
-.hfill::before{
-  content:'';position:absolute;inset:0;border-radius:inherit;
-  background:linear-gradient(100deg,transparent 0%,rgba(255,255,255,.30) 42%,transparent 72%);
-  background-size:220% 100%;animation:sheen 3.4s ease-in-out infinite;
-}
-/* meniscus — the surface, at the leading edge — DECORATIVE bob */
-.hmen{
-  position:absolute;top:-1px;bottom:-1px;left:var(--lvl);width:3px;margin-left:-2px;
-  background:var(--water-mist);border-radius:2px;
-  box-shadow:0 0 7px color-mix(in srgb,var(--water-mist) 60%,transparent);
-  animation:bob 2.6s ease-in-out infinite;
-  transition:left .22s cubic-bezier(.22,1.1,.36,1);
-}
-.wblock[data-state="0"] .hmen{display:none}
-@keyframes sheen{0%{background-position:150% 0}55%{background-position:-70% 0}100%{background-position:-70% 0}}
-@keyframes bob{0%,100%{transform:translateX(0)}50%{transform:translateX(1.6px)}}
-
-/* ── VERTICAL vessel ─────────────────────────────────────── */
-.vessel{
-  position:relative;width:46px;height:78px;border-radius:11px;
-  background:var(--sunk);border:1px solid var(--line);overflow:hidden;flex:none;isolation:isolate;
-}
-.vessel.sm{width:32px;height:46px;border-radius:8px}
-.vfill{
-  position:absolute;left:0;right:0;bottom:0;height:var(--lvl);
-  background:linear-gradient(180deg,var(--water) 0%,var(--water-deep) 130%);
-  transition:height .22s cubic-bezier(.22,1.1,.36,1);
-}
-/* surface window: straddles the fill top; the rotating blobs inside make the wave */
-.vsurf{
-  position:absolute;left:0;right:0;height:11px;bottom:calc(var(--lvl) - 5px);
-  overflow:hidden;transition:bottom .22s cubic-bezier(.22,1.1,.36,1);
-}
-/* Wave crests: oversized near-circular blobs rotating behind the surface window.
-   Geometry is tuned so the static curve (sagitta) and the rotation wobble both land
-   near the ±3 pt annotated in §4 — a wide blob keeps the waterline gentle, and a
-   border-radius close to 50% keeps the wobble small. */
-.vsurf i{
-  position:absolute;left:-100%;width:300%;aspect-ratio:1;bottom:3px;
-  border-radius:47%;background:var(--water);
-  animation:rot 6.2s linear infinite;                 /* DECORATIVE */
-}
-.vsurf i.b{bottom:4.5px;background:var(--water-mist);opacity:.5;animation-duration:9.4s;animation-direction:reverse}
-.wblock[data-state="0"] .vsurf{display:none}
-@keyframes rot{to{transform:rotate(360deg)}}
-/* fill-line ticks on the vessel wall (goal marker) */
-.vtick{position:absolute;right:0;width:7px;height:1px;background:var(--faint);opacity:.55}
-
-/* ── SPLASH — REQUIRED tap feedback ──────────────────────── */
+/* ── SPLASH — REQUIRED tap feedback ──────────────────────────
+   Lives OUTSIDE the vessel's overflow clip so droplets arc above the rim, and is
+   anchored off --lvl so it follows the waterline as the count climbs.          */
+.hsplash{position:absolute;top:0;bottom:0;left:var(--lvl);width:0;pointer-events:none;
+         transition:left .26s cubic-bezier(.22,1.1,.36,1)}
+.vsplash{position:absolute;left:0;right:0;bottom:var(--lvl);height:0;pointer-events:none;
+         transition:bottom .26s cubic-bezier(.22,1.1,.36,1)}
 .drop{
   position:absolute;width:4px;height:4px;border-radius:50%;background:var(--water-mist);
   opacity:0;pointer-events:none;
@@ -256,16 +306,14 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
   position:absolute;border:1.5px solid var(--water-mist);border-radius:50%;
   opacity:0;pointer-events:none;
 }
-/* Stagger rides an inline `--d` per droplet, NOT :nth-child — the droplets are not the
-   only children of the vessel (fill, meniscus/surface, tick, brim and ripple are siblings),
-   and the brim only exists in the overfull state, so positional selectors would stagger the
-   wrong elements and stagger differently per state. */
-/* Longhands, not the `animation` shorthand. A var() inside a shorthand defers the whole
-   declaration to computed-value time, where one bad substitution takes the entire
-   animation down silently. The delay is the only varying part, so it gets its own longhand. */
+/* Longhands, not the `animation` shorthand. A var() inside a shorthand defers the
+   whole declaration to computed-value time, where one bad substitution takes the
+   entire animation down silently. The delay is the only varying part.
+   Stagger rides an inline `--d` per droplet, NOT :nth-child — the droplets are not
+   the only children of their container and their position shifts per state.     */
 .splash .drop{
   animation-name:drop;
-  animation-duration:320ms;
+  animation-duration:340ms;
   animation-timing-function:cubic-bezier(.25,.7,.4,1);
   animation-delay:var(--d,0ms);
   animation-fill-mode:forwards;
@@ -273,7 +321,7 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
 .splash .ripple{animation:ripple 300ms ease-out 40ms forwards}
 @keyframes drop{
   0%{opacity:0;transform:translate(0,0) scale(.6)}
-  18%{opacity:1}
+  16%{opacity:1}
   100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.35)}
 }
 @keyframes ripple{
@@ -288,17 +336,17 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
 }
 
 /* ── REDUCE MOTION ───────────────────────────────────────── */
-/* Decorative motion OFF. Level change stays (it is the state feedback).
-   Splash degrades to a single opacity pulse — no droplets, no ripple.      */
-body.rm .hfill::before,
+/* Decorative motion OFF. Level change survives (it is state feedback).
+   Splash degrades to a single brightness pulse — no droplets, no ripple.  */
+body.rm .caustic,
+body.rm .wavetop,
 body.rm .hmen,
-body.rm .vsurf i,
 body.rm .goalglow{animation:none!important}
 body.rm .drop,body.rm .ripple{display:none}
-body.rm .splash .hfill,body.rm .splash .vfill{animation:rmpulse 180ms ease-out}
-@keyframes rmpulse{0%{filter:brightness(1.45)}100%{filter:brightness(1)}}
+body.rm .splash .wbody{animation:rmpulse 180ms ease-out}
+@keyframes rmpulse{0%{filter:brightness(1.5)}100%{filter:brightness(1)}}
 @media (prefers-reduced-motion:reduce){
-  .hfill::before,.hmen,.vsurf i{animation:none!important}
+  .caustic,.wavetop,.hmen{animation:none!important}
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -319,10 +367,7 @@ body.rm .splash .hfill,body.rm .splash .vfill{animation:rmpulse 180ms ease-out}
   border:1px solid color-mix(in srgb,var(--water) 45%,transparent);border-radius:12px;
   padding:11px 12px 12px;background:color-mix(in srgb,var(--water) 5%,transparent);
 }
-.livetag{
-  position:relative;font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;
-  color:var(--water);font-weight:700;margin-bottom:7px;
-}
+.livetag{font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--water);font-weight:700;margin-bottom:8px}
 
 /* toolbar */
 .bar{
@@ -343,18 +388,17 @@ body.rm .splash .hfill,body.rm .splash .vfill{animation:rmpulse 180ms ease-out}
 <body class="">
 
 <div class="bar">
-  <span class="t">Demo controls</span>
-  <button class="btn" id="splashAll">▶ Replay splash</button>
+  <span class="t">Demo</span>
+  <button class="btn" id="resetAll">↺ Reset to labelled states</button>
   <button class="btn" id="rmToggle">Reduce Motion: off</button>
-  <span class="t" style="margin-left:auto">Tap any <b style="color:#2BC0E4">+1</b> below to feel the splash timing</span>
+  <span class="t" style="margin-left:auto">The droplet buttons are LIVE — each tap splashes and raises the count</span>
 </div>
 
 <div style="margin-top:26px">
   <h1>Water tracker — Home surface</h1>
   <p class="sub">
     Design gate for WATER-1. Four concepts (two orientations × two sizes), four states each, both
-    Erewhon themes. Nothing ships until §1 tokens and §3 concept are ruled. Layout + motion only —
-    no implementation guidance.
+    Erewhon themes. Nothing ships until §1 tokens and §3 concept are ruled. Layout + motion only.
   </p>
 </div>
 
@@ -362,11 +406,13 @@ body.rm .splash .hfill,body.rm .splash .vfill{animation:rmpulse 180ms ease-out}
   <p class="note" style="margin-top:0"><b>How to read this page.</b> Neutral hexes are transcribed from
   <code>ThemeColors.erewhonDark</code> / <code>.erewhonLight</code> and are <b>not</b> up for debate — where a hex
   here disagrees with the token, the token wins. The <code>--water-*</code> family in §1 is the only new colour
-  proposed, and it is the thing being ruled on. Every tile below reads its colours from those variables; there
-  are no loose hexes in the element markup.</p>
-  <p class="note"><b>Placement.</b> Flat (Erewhon) Home arm, between <code>calorieHero</code> and
-  <code>jumpCards</code> — directly below the daily rings/summary. Neighbours are drawn as dashed gray blocks
-  in §2. The pixel arm is out of scope for this gate.</p>
+  proposed. Every tile reads its colours from those variables; there are no loose hexes in the element markup.</p>
+  <p class="note"><b>The tiles are live.</b> Each state label is a <i>starting</i> state — tapping the droplet
+  raises that tile's count for real, so the fill, the wavy surface, the pips and the overfull chip all move
+  together. <b>↺ Reset</b> in the toolbar puts every tile back to its labelled state.</p>
+  <p class="note" style="margin-bottom:0"><b>Placement.</b> Flat (Erewhon) Home arm, between
+  <code>calorieHero</code> and <code>jumpCards</code> — directly below the daily rings/summary. Neighbours are
+  drawn as dashed gray blocks in §2. The pixel arm is out of scope for this gate.</p>
 </div>
 
 
@@ -394,20 +440,21 @@ body.rm .splash .hfill,body.rm .splash .vfill{animation:rmpulse 180ms ease-out}
   </div>
   <p class="note" style="margin-bottom:0"><b>Alternative if the ruling is "no new colour":</b> the element can run
   entirely on <code>--accent</code> + <code>--sunk</code>. It costs the glance-distinction above and makes the
-  water read as a second progress bar; the wave/meniscus still work. Say the word and I'll add that arm.</p>
+  water read as a second progress bar; the caustic, wave and splash all still work. Say the word and I'll add that arm.</p>
 </div>
 
 <h3>Dark column (Erewhon Dark)</h3>
 <div class="swrow">
   <div class="sw"><span class="chip" style="background:#2BC0E4"></span><div class="meta">
     <div class="nm">water</div><div class="hx">#2BC0E4 · h192 s79 l53</div>
-    <div class="use">Fill body (top stop), meniscus core, filled cup pips, the +1 control's keyline and label.</div></div></div>
+    <div class="use">Fill body (top stop), meniscus core, filled cup pips, the droplet button, the overfull chip.</div></div></div>
   <div class="sw"><span class="chip" style="background:#1B7FA8"></span><div class="meta">
     <div class="nm">water-deep</div><div class="hx">#1B7FA8 · h197 s72 l38</div>
-    <div class="use">Bottom stop of the fill gradient. Sells depth; never used alone.</div></div></div>
+    <div class="use">Bottom stop of the fill gradient and of the button; the darker caustic patches.</div></div></div>
   <div class="sw"><span class="chip" style="background:#8FE3F5"></span><div class="meta">
     <div class="nm">water-mist</div><div class="hx">#8FE3F5 · h191 s82 l76</div>
-    <div class="use">Surface highlight, wave crest, splash droplets + ripple, the overfull brim rim. <b>Specular only</b> — never text (see the light column).</div></div></div>
+    <div class="use">The caustic light ribbons, meniscus, splash droplets + ripple, overfull brim rim.
+    <b>Specular only</b> — never text.</div></div></div>
 </div>
 
 <h3>Light column (Erewhon Light)</h3>
@@ -417,10 +464,11 @@ body.rm .splash .hfill,body.rm .splash .vfill{animation:rmpulse 180ms ease-out}
     <div class="use">Same roles. Deepened for contrast on <code>#F3F4F6</code>, matching how m-fat/m-carbs darken in the light column.</div></div></div>
   <div class="sw"><span class="chip" style="background:#065971"></span><div class="meta">
     <div class="nm">water-deep</div><div class="hx">#065971 · h193 s90 l23</div>
-    <div class="use">Bottom stop of the fill gradient.</div></div></div>
+    <div class="use">Bottom stop of the fill gradient; darker caustic patches.</div></div></div>
   <div class="sw"><span class="chip" style="background:#7FD4EA"></span><div class="meta">
     <div class="nm">water-mist</div><div class="hx">#7FD4EA · h192 s71 l71</div>
-    <div class="use">Highlight/droplets. Stays light in both columns because it is a <b>specular</b> — which is exactly why nothing textual may use it: on <code>#F3F4F6</code> it falls to ~1.4:1.</div></div></div>
+    <div class="use">Caustic ribbons + droplets. Stays light in both columns because it is a <b>specular</b> —
+    which is exactly why nothing textual may use it: on <code>#F3F4F6</code> it falls to ~1.4:1.</div></div></div>
 </div>
 
 <table>
@@ -428,7 +476,7 @@ body.rm .splash .hfill,body.rm .splash .vfill{animation:rmpulse 180ms ease-out}
   <tr><td><code>water</code> vs <code>accent</code> hue separation</td><td>dark 192° vs 221° = <b>29°</b> · light 192° vs 223° = <b>31°</b> — reads as a distinct substance</td></tr>
   <tr><td><code>water</code> on <code>--bg</code>, as a fill (non-text)</td><td>dark 6.4:1 · light 5.1:1 — well clear of the 3:1 floor for a meaningful graphic</td></tr>
   <tr><td>Reading text (<code>5 / 8 cups</code>)</td><td>uses <code>--ink</code>/<code>--muted</code>, never a water token — the count stays legible even if the ruling changes the blues</td></tr>
-  <tr><td>Colour-blind check (deuteranopia/protanopia)</td><td>cyan vs accent-blue is the <i>weakest</i> of the separations. Mitigated structurally: water is the only element with cup pips and a meniscus, and it is labelled. <b>Do not rely on hue alone</b> — this is why the pips are in the primary variants.</td></tr>
+  <tr><td>Colour-blind check (deuteranopia/protanopia)</td><td>cyan vs accent-blue is the <i>weakest</i> of the separations. Mitigated structurally: water is now the only element on Home with a <b>texture</b>, a wavy edge and cup pips, and it is labelled. <b>Do not rely on hue alone.</b></td></tr>
 </table>
 
 
@@ -437,105 +485,17 @@ body.rm .splash .hfill,body.rm .splash .vfill{animation:rmpulse 180ms ease-out}
      ══════════════════════════════════════════════════════════ -->
 <h2><span class="n">§2</span>In context — Home, both orientations</h2>
 <p class="note">Dashed gray blocks are the real neighbours, sketched. Only the water element is drawn for real.
-Both frames are Erewhon Dark at the 5/8 partial state.</p>
+Both frames are Erewhon Dark, starting at 5/8 — tap the droplets.</p>
 
-<div class="strip" style="align-items:flex-start">
-
-  <!-- Horizontal primary in context -->
-  <div>
-    <div class="phone theme-dark">
-      <div class="ph-head"><div class="day">Wednesday, Aug 5</div><div class="ttl">Home</div></div>
-      <div class="ghost" style="height:26px;margin-top:14px">resource row</div>
-      <div class="ghost" style="height:104px;margin-top:16px">calorie hero · rings + summary</div>
-
-      <div class="live" style="margin-top:18px">
-        <div class="livetag">▼ water lands here</div>
-        <div class="wblock" data-state="5" style="--lvl:62.5%">
-          <div class="whead">
-            <span class="wlabel">WATER</span>
-            <span class="wread"><span class="v">5</span><span class="t"> / 8</span><span class="u">cups</span></span>
-          </div>
-          <div style="display:flex;align-items:center;gap:11px;margin-top:9px">
-            <div class="htrough" style="flex:1">
-              <div class="hfill"></div><div class="hmen"></div>
-              <span class="ripple" style="width:13px;height:13px;left:calc(62.5% - 6px);top:0"></span>
-              <span class="drop" style="--dx:9px;--dy:-15px;--d:0ms;left:62.5%;top:2px"></span>
-              <span class="drop" style="--dx:-6px;--dy:-17px;--d:26ms;left:62.5%;top:2px"></span>
-              <span class="drop" style="--dx:15px;--dy:-9px;--d:52ms;left:62.5%;top:4px"></span>
-              <span class="drop" style="--dx:3px;--dy:-19px;--d:14ms;left:62.5%;top:1px"></span>
-              <span class="drop" style="--dx:-11px;--dy:-11px;--d:66ms;left:62.5%;top:4px"></span>
-            </div>
-            <button class="plus sm" data-splash>+</button>
-          </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:9px">
-            <div class="pips">
-              <i class="pip on"></i><i class="pip on"></i><i class="pip on"></i><i class="pip on"></i>
-              <i class="pip on"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i>
-            </div>
-            <span class="resetnote">Resets 12:00 AM</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="ghost" style="height:56px;margin-top:18px">jump cards</div>
-      <div class="ghost" style="height:44px;margin-top:16px">purity</div>
-    </div>
-    <div style="font-size:11px;color:var(--page-muted);text-align:center;margin-top:9px">
-      <b style="color:var(--page-ink)">Concept A</b> — horizontal, primary · adds <b>~72&nbsp;pt</b>
-    </div>
-  </div>
-
-  <!-- Vertical primary in context -->
-  <div>
-    <div class="phone theme-dark">
-      <div class="ph-head"><div class="day">Wednesday, Aug 5</div><div class="ttl">Home</div></div>
-      <div class="ghost" style="height:26px;margin-top:14px">resource row</div>
-      <div class="ghost" style="height:104px;margin-top:16px">calorie hero · rings + summary</div>
-
-      <div class="live" style="margin-top:18px">
-        <div class="livetag">▼ water lands here</div>
-        <div class="wblock" data-state="5" style="--lvl:62.5%">
-          <div style="display:flex;gap:14px;align-items:center">
-            <div class="vessel">
-              <div class="vfill"></div>
-              <div class="vsurf"><i></i><i class="b"></i></div>
-              <div class="vtick" style="bottom:100%"></div>
-              <span class="ripple" style="width:30px;height:9px;left:8px;bottom:calc(62.5% - 4px);border-radius:50%"></span>
-              <span class="drop" style="--dx:7px;--dy:-19px;--d:0ms;left:14px;bottom:62.5%"></span>
-              <span class="drop" style="--dx:-8px;--dy:-15px;--d:26ms;left:25px;bottom:62.5%"></span>
-              <span class="drop" style="--dx:2px;--dy:-23px;--d:52ms;left:20px;bottom:62.5%"></span>
-              <span class="drop" style="--dx:12px;--dy:-11px;--d:14ms;left:17px;bottom:62.5%"></span>
-              <span class="drop" style="--dx:-3px;--dy:-20px;--d:66ms;left:28px;bottom:62.5%"></span>
-            </div>
-            <div style="flex:1">
-              <div class="wlabel">WATER</div>
-              <div class="wread" style="margin-top:3px">
-                <span class="v" style="font-size:26px">5</span><span class="t"> / 8</span><span class="u">cups</span>
-              </div>
-              <button class="plus lg" data-splash style="margin-top:9px">+1 cup</button>
-              <div class="resetnote" style="margin-top:8px">Resets 12:00 AM</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="ghost" style="height:56px;margin-top:18px">jump cards</div>
-      <div class="ghost" style="height:44px;margin-top:16px">purity</div>
-    </div>
-    <div style="font-size:11px;color:var(--page-muted);text-align:center;margin-top:9px">
-      <b style="color:var(--page-ink)">Concept C</b> — vertical, primary · adds <b>~112&nbsp;pt</b>
-    </div>
-  </div>
-</div>
+<div class="strip" id="contextRow" style="align-items:flex-start"></div>
 
 <div class="docbox">
-  <p class="note" style="margin-top:0"><b>The compactness argument, stated plainly.</b> Concept A costs ~72 pt and
+  <p class="note" style="margin-top:0"><b>The compactness argument, stated plainly.</b> Concept A costs ~76 pt and
   keeps the horizontal rhythm every neighbouring block already uses (purity, macros and the XP track are all
-  left-to-right capsule fills). Concept C costs ~112 pt — <b>~40 pt more</b> — and interrupts that rhythm with the
+  left-to-right capsule fills). Concept C costs ~112 pt — <b>~36 pt more</b> — and interrupts that rhythm with the
   only vertical form on the screen. That interruption is the entire argument <i>for</i> it: it is the most
-  water-like and the most memorable, and the wave is legible in a way a leading-edge meniscus never quite is.
-  On a screen being de-cluttered, A is the safer read and C is the more delightful one. B and D below are the
-  minimal reductions of each.</p>
+  water-like and the most memorable, and with the caustic texture the vertical vessel is where the reference image
+  actually reads. On a screen being de-cluttered, A is the safer choice and C is the more delightful one.</p>
 </div>
 
 
@@ -543,98 +503,97 @@ Both frames are Erewhon Dark at the 5/8 partial state.</p>
      §3  THE FOUR CONCEPTS
      ══════════════════════════════════════════════════════════ -->
 <h2><span class="n">§3</span>Concepts × states × themes</h2>
-<p class="note">Four states per strip: <b>empty (0/8)</b> · <b>partial (5/8)</b> · <b>goal met (8/8)</b> ·
-<b>overfull (9/8)</b>. Every tile is live — press its <b>+1</b> to see the splash.</p>
+<p class="note">Four starting states per strip: <b>empty (0/8)</b> · <b>partial (5/8)</b> · <b>goal met (8/8)</b> ·
+<b>overfull (9/8)</b>. Every tile is live.</p>
 
-<!-- ── CONCEPT A ─────────────────────────────────────────── -->
-<h3>Concept A — horizontal, primary <span style="color:var(--page-faint);font-weight:400;text-transform:none;letter-spacing:0">· label row + 14pt trough + 8 cup pips + reset note · ~72 pt</span></h3>
+<h3>Concept A — horizontal, primary <span class="lite">· label row + 18pt trough + 8 cup pips + reset note · ~76 pt</span></h3>
+<div class="themetag">Erewhon Dark</div>  <div class="strip" id="stripA-dark"></div>
+<div class="themetag">Erewhon Light</div> <div class="strip" id="stripA-light"></div>
 
-<div class="themetag">Erewhon Dark</div>
-<div class="strip" id="stripA-dark"></div>
-<div class="themetag">Erewhon Light</div>
-<div class="strip" id="stripA-light"></div>
+<h3>Concept B — horizontal, minimal <span class="lite">· one row, 10pt trough, no pips, no reset note · ~34 pt</span></h3>
+<div class="themetag">Erewhon Dark</div>  <div class="strip" id="stripB-dark"></div>
+<div class="themetag">Erewhon Light</div> <div class="strip" id="stripB-light"></div>
 
-<!-- ── CONCEPT B ─────────────────────────────────────────── -->
-<h3>Concept B — horizontal, minimal <span style="color:var(--page-faint);font-weight:400;text-transform:none;letter-spacing:0">· one row, 8pt trough, no pips, no reset note · ~30 pt</span></h3>
+<h3>Concept C — vertical, primary <span class="lite">· 46×78 vessel + stat column + 42pt droplet button · ~112 pt</span></h3>
+<div class="themetag">Erewhon Dark</div>  <div class="strip" id="stripC-dark"></div>
+<div class="themetag">Erewhon Light</div> <div class="strip" id="stripC-light"></div>
 
-<div class="themetag">Erewhon Dark</div>
-<div class="strip" id="stripB-dark"></div>
-<div class="themetag">Erewhon Light</div>
-<div class="strip" id="stripB-light"></div>
-
-<!-- ── CONCEPT C ─────────────────────────────────────────── -->
-<h3>Concept C — vertical, primary <span style="color:var(--page-faint);font-weight:400;text-transform:none;letter-spacing:0">· 46×78 vessel + stat column + wide button · ~112 pt</span></h3>
-
-<div class="themetag">Erewhon Dark</div>
-<div class="strip" id="stripC-dark"></div>
-<div class="themetag">Erewhon Light</div>
-<div class="strip" id="stripC-light"></div>
-
-<!-- ── CONCEPT D ─────────────────────────────────────────── -->
-<h3>Concept D — vertical, minimal <span style="color:var(--page-faint);font-weight:400;text-transform:none;letter-spacing:0">· 32×46 vessel, inline count, icon button · ~58 pt</span></h3>
-
-<div class="themetag">Erewhon Dark</div>
-<div class="strip" id="stripD-dark"></div>
-<div class="themetag">Erewhon Light</div>
-<div class="strip" id="stripD-light"></div>
+<h3>Concept D — vertical, minimal <span class="lite">· 32×46 vessel, inline count, 28pt button · ~58 pt</span></h3>
+<div class="themetag">Erewhon Dark</div>  <div class="strip" id="stripD-dark"></div>
+<div class="themetag">Erewhon Light</div> <div class="strip" id="stripD-light"></div>
 
 
 <!-- ══════════════════════════════════════════════════════════
      §4  MOTION
      ══════════════════════════════════════════════════════════ -->
 <h2><span class="n">§4</span>Motion — decorative vs required</h2>
-<p class="note">The CSS above is an <b>approximation</b> of the intended feel, not a specification of technique.
-What is being ruled on is the <b>column marked Required</b>, the durations, and the Reduce-Motion degradation.</p>
+<p class="note">The CSS here is an <b>approximation</b> of the intended feel, not a specification of technique.
+What is being ruled on is the <b>Required</b> column, the durations, and the Reduce-Motion degradation.</p>
 
 <table>
   <tr>
-    <th style="width:20%">Motion</th><th style="width:9%">Required?</th><th style="width:15%">Timing</th>
+    <th style="width:19%">Motion</th><th style="width:9%">Required?</th><th style="width:15%">Timing</th>
     <th style="width:20%">Amplitude / curve</th><th>Notes</th>
   </tr>
   <tr>
-    <td><b>Level change</b><br><span style="color:var(--page-faint)">fill grows to the new cup count</span></td>
+    <td><b>Level change</b><br><span style="color:var(--page-faint)">fill rises to the new cup count</span></td>
     <td><span class="rule">REQUIRED</span></td>
-    <td>220 ms</td>
+    <td>260 ms</td>
     <td>Spring, slight overshoot then settle</td>
     <td>This <i>is</i> the state feedback — the one motion that must survive every setting. Never blocks input;
-        a second tap mid-animation retargets rather than queueing.</td>
+        a second tap mid-animation retargets rather than queueing. The waterline, the splash origin and the
+        meniscus all ride the same value, so they cannot desync.</td>
   </tr>
   <tr>
     <td><b>Splash burst</b><br><span style="color:var(--page-faint)">droplets + ripple at the surface</span></td>
     <td><span class="rule">REQUIRED</span></td>
-    <td>starts 0 ms · <b>ends ≤ 400 ms</b><br>(budget: 600 ms)</td>
-    <td>5 droplets, 9–23 pt travel, staggered 0–66 ms; ripple scales 0.35→1.9 over 300 ms from +40 ms</td>
-    <td>Non-blocking and non-interactive — purely additive over the level change. Comes in comfortably under the
-        600 ms target, which leaves headroom if the ruling wants it slower.</td>
+    <td>starts 0 ms · <b>ends ≤ 410 ms</b><br>(budget: 600 ms)</td>
+    <td>5 droplets, 11–26 pt travel, staggered 0–70 ms; ripple scales 0.35→1.9 over 300 ms from +40 ms</td>
+    <td>Non-blocking and non-interactive, purely additive over the level change. Emitted <b>outside</b> the vessel's
+        clip so droplets arc above the rim rather than being cut off at it.</td>
   </tr>
   <tr>
     <td><b>Haptic</b></td>
     <td><span class="rule">REQUIRED</span></td>
     <td>fires at 0 ms, with the tap</td>
     <td>Light impact</td>
-    <td>On the tap that <i>reaches</i> the goal (→ 8/8), a success haptic instead. No haptic beyond the goal —
-        cups 9, 10, 11… get the light impact again, so overfull never feels like a repeated achievement.</td>
+    <td>On the tap that <i>reaches</i> the goal (→ 8/8), a success haptic instead. No haptic escalation beyond the
+        goal — cups 9, 10, 11… get the light impact again, so overfull never feels like a repeated achievement.</td>
   </tr>
   <tr>
-    <td><b>Surface wave</b> (vertical)<br><span style="color:var(--page-faint)">crest undulating at the waterline</span></td>
+    <td><b>Caustic drift</b><br><span style="color:var(--page-faint)">the light ribbon network</span></td>
     <td style="color:var(--page-faint)">decorative</td>
-    <td>6.2 s + 9.4 s, infinite, counter-rotating</td>
-    <td>±≈3 pt vertical, linear</td>
-    <td>Two layers at different periods so it never visibly loops. Hidden entirely at 0 cups (no water, no surface).</td>
+    <td>15 s + 21 s, counter-drifting, ping-pong</td>
+    <td>±6–7% translate, ease-in-out</td>
+    <td>Two layers at different periods and directions so the texture never visibly repeats. Ping-pong rather than
+        a wrapping loop because the noise field is not tileable — a wrapping translate would jump.</td>
   </tr>
   <tr>
-    <td><b>Meniscus bob</b> (horizontal)<br><span style="color:var(--page-faint)">the leading-edge surface</span></td>
+    <td><b>Caustic boil</b><br><span style="color:var(--page-faint)">ribbons re-forming in place</span></td>
+    <td style="color:var(--page-faint)">decorative</td>
+    <td>24–30 s, infinite</td>
+    <td>Noise frequency breathes ~±20%</td>
+    <td>The slow shimmer that stops the texture reading as a printed pattern being slid around. Subtle by design;
+        it is the first thing to cut if the texture proves expensive.</td>
+  </tr>
+  <tr>
+    <td><b>Wavy surface</b></td>
+    <td style="color:var(--page-faint)">decorative</td>
+    <td>7 s + 11 s, counter-running, seamless</td>
+    <td>≈4 pt crest-to-trough, linear</td>
+    <td>Two sine layers translating in opposite directions. Each layer is twice the vessel's width and shifts by
+        exactly half itself, so the loop has no seam — which requires an <b>even</b> period count, or crests would
+        land on troughs at the wrap. Crest spacing is set per orientation (24 periods in a wide trough, 6 in a
+        narrow vessel) so the waves are the same size in <i>points</i> in both: one shared path would give the wide
+        bar three lazy humps and the small vessel a comb. Invisible at 0 cups without special-casing, because the
+        carve is drawn in the track colour.</td>
+  </tr>
+  <tr>
+    <td><b>Meniscus bob</b> (horizontal only)</td>
     <td style="color:var(--page-faint)">decorative</td>
     <td>2.6 s, infinite</td>
     <td>±1.6 pt horizontal, ease-in-out</td>
-    <td>The horizontal analogue of the wave. Hidden at 0 cups.</td>
-  </tr>
-  <tr>
-    <td><b>Specular sheen</b></td>
-    <td style="color:var(--page-faint)">decorative</td>
-    <td>3.4 s, infinite</td>
-    <td>Soft highlight sweeping the fill body, ease-in-out</td>
-    <td>The "is it water or is it a progress bar" tiebreaker. Cheapest thing on the page to cut if it reads busy.</td>
+    <td>The leading edge of a horizontal fill. Fades out at 0 cups.</td>
   </tr>
   <tr>
     <td><b>Goal-met glow</b></td>
@@ -645,13 +604,34 @@ What is being ruled on is the <b>column marked Required</b>, the durations, and 
   </tr>
 </table>
 
+<div class="docbox warn">
+  <div class="rule">⚠ What the caustic texture actually costs — read before ruling</div>
+  <p class="note">Everything else on this page is built from primitives that exist everywhere: rectangles,
+  gradients, capsules, opacity. <b>The caustic is not.</b> It is band-passed fractal noise — a noise field
+  thresholded to a narrow luminance band, which is what turns clouds into that ribbon web. There is no
+  gradient arrangement that produces it.</p>
+  <p class="note">That leaves two honest routes, and they price very differently:</p>
+  <ul style="margin-left:18px">
+    <li><b>Generate it live</b> (a noise shader). Gives infinite non-repeating water and true boil. Costs a shader
+        and a per-frame draw on a scrolling screen.</li>
+    <li><b>Ship it as a looping asset</b> — a seamless caustic texture scrolled behind a mask. Far cheaper and
+        completely predictable, at the cost of a visible loop period and an asset to art-direct.</li>
+  </ul>
+  <p class="note" style="margin-bottom:0">A third option is worth naming because it may be the right answer:
+  <b>keep the gradient body and the wavy animated surface, drop the caustic.</b> The wave and the splash carry most
+  of the "this is water" reading on their own; the texture is what makes it <i>beautiful</i>, not what makes it
+  <i>legible</i>. That is ruling item 7 in §6 — and it is the one item on this page with a real engineering price
+  attached, so it should not be waved through.</p>
+</div>
+
 <div class="docbox">
   <div class="rule">Reduce Motion</div>
   <p class="note">Toggle it in the toolbar to see the degraded behaviour on every tile. All decorative motion stops:
-  the wave freezes mid-crest (a still waterline, not a flat one), the sheen and bob stop, the goal glow does not
-  fire. <b>The level change survives</b> — it is state feedback, not decoration. The splash degrades to a single
-  <b>180 ms brightness pulse</b> at the surface: no droplets, no ripple, but the tap is still unmistakably
-  acknowledged, and the haptic is unaffected.</p>
+  the caustic freezes (the texture stays — only its drift and boil stop), the wave holds mid-crest as a still
+  wavy line rather than snapping flat, the meniscus stops, the goal glow does not fire. <b>The level change
+  survives</b> — it is state feedback, not decoration. The splash degrades to a single <b>180 ms brightness
+  pulse</b> through the water body: no droplets, no ripple, but the tap is still unmistakably acknowledged, and the
+  haptic is unaffected.</p>
 </div>
 
 
@@ -661,32 +641,34 @@ What is being ruled on is the <b>column marked Required</b>, the durations, and 
 <h2><span class="n">§5</span>State rules</h2>
 
 <table>
-  <tr><th style="width:16%">State</th><th style="width:30%">Vessel</th><th>Reading + affordances</th></tr>
+  <tr><th style="width:16%">State</th><th style="width:32%">Vessel</th><th>Reading + affordances</th></tr>
   <tr>
     <td><b>Empty</b><br>0 / 8</td>
-    <td>Bare track/vessel at <code>--sunk</code>. No fill, <b>no meniscus, no wave</b> — there is no surface without
-        water, and an animating empty vessel is a lie.</td>
+    <td>Bare track/vessel at <code>--sunk</code>. No fill, no texture, <b>no wave</b> — there is no surface without
+        water, and an animating empty vessel is a lie. This falls out for free: the wave carve is drawn in the
+        track colour, so with no water there is nothing to carve.</td>
     <td>Count reads <code>0 / 8</code> in <code>--ink</code> (not dimmed — it is a real value, not a placeholder).
-        All 8 pips unfilled. <b>No empty-state copy</b>; the label and the +1 are the whole affordance.</td>
+        All 8 pips unfilled. <b>No empty-state copy</b>; the label and the droplet are the whole affordance.</td>
   </tr>
   <tr>
     <td><b>Partial</b><br>5 / 8</td>
-    <td>Fill to 62.5%, full motion set.</td>
+    <td>Fill to 62.5%, full texture and wave.</td>
     <td>The default. Pips 1–5 filled.</td>
   </tr>
   <tr>
     <td><b>Goal met</b><br>8 / 8</td>
-    <td>Fill at 100%. Wave still runs (it does not stop at goal). One-shot glow on arrival only.</td>
-    <td>All 8 pips filled. <b>+1 stays enabled</b> — the goal is a target, not a cap.</td>
+    <td>Fill at 100%. The wave keeps running at the brim — it does not stop at goal. One-shot glow on arrival only.</td>
+    <td>All 8 pips filled. <b>The droplet stays enabled</b> — the goal is a target, not a cap.</td>
   </tr>
   <tr>
     <td><b>Overfull</b><br>9 / 8</td>
     <td><b>Fill is clamped at 100% forever.</b> Above goal the surface gains a brighter
-        <code>water-mist</code> rim — "brimming", not "broken".</td>
+        <code>water-mist</code> brim rim — "brimming", not "broken".</td>
     <td>Count keeps counting truthfully: <code>9 / 8</code>, then 10, 11… A keyline
-        <code>+1</code> chip (2 pt left rule, no fill — the GUILD-UI-1 keyline-tag language) sits after the count.
+        <code>+N</code> chip (2 pt left rule, no fill — the GUILD-UI-1 keyline-tag language) sits after the count.
         Pips: all 8 filled, the last carrying an over-ring. <b>Never <code>danger</code>, never a warning</b> —
-        9 cups of water is not an error, and this element must never scold.</td>
+        9 cups of water is not an error, and this element must never scold. Tap past 9 on any tile to watch the
+        chip keep counting while the water does not.</td>
   </tr>
 </table>
 
@@ -698,10 +680,10 @@ What is being ruled on is the <b>column marked Required</b>, the durations, and 
   and it is a real cost worth weighing in the ruling.</p>
   <p class="note" style="margin-bottom:0">Two things this mockup deliberately does <b>not</b> decide, because they
   are behaviour and belong in the WATER-1 prompt, not a layout gate: whether the goal (8) is user-configurable,
-  and whether there is any way to <b>remove</b> a mis-tapped cup. Flagging the second one loudly — a one-tap
-  incrementer with no undo is a real usability hole, and the two obvious answers (long-press to decrement, or a
-  −1 that appears once count &gt; 0) have different layout costs. <b>Neither is drawn here.</b> It needs a ruling
-  before the layout is locked.</p>
+  and whether there is any way to <b>remove</b> a mis-tapped cup. Flagging the second one loudly — now that the
+  button is live you can feel it: there is no way back down. A one-tap incrementer with no undo is a real
+  usability hole, and the two obvious answers (long-press to decrement, or a −1 that appears once count &gt; 0)
+  have different layout costs. <b>Neither is drawn here.</b> It needs a ruling before the layout is locked.</p>
 </div>
 
 
@@ -713,18 +695,22 @@ What is being ruled on is the <b>column marked Required</b>, the durations, and 
   <ul style="margin-left:18px">
     <li><b>1 · Tokens.</b> Adopt <code>water</code> / <code>water-deep</code> / <code>water-mist</code> at ~192° as
         drawn? Or run the element on <code>--accent</code> and accept that it reads as another blue bar?</li>
-    <li><b>2 · Concept.</b> A, B, C or D. (A = safest and rhymes with its neighbours; C = most distinctive, costs
-        ~40 pt more; B and D are the reductions.)</li>
-    <li><b>3 · Trough height</b> — <i>only if A or B wins.</i> A uses <b>14 pt</b>, not the 8 pt that
-        <code>purityBlock</code> and the macro bars use. The extra 6 pt is what makes the surface legible as water
-        at all; at 8 pt (as B draws it) the meniscus is a rim highlight and the "water" reading gets thin. Is
-        breaking the 8 pt track convention acceptable here?</li>
+    <li><b>2 · Concept.</b> A, B, C or D. (A = safest and rhymes with its neighbours; C = most distinctive and the
+        best home for the texture, costs ~36 pt more; B and D are the reductions.)</li>
+    <li><b>3 · Trough height</b> — <i>only if A or B wins.</i> A now uses <b>18 pt</b> against the 8 pt that
+        <code>purityBlock</code> and the macro bars use. The extra height is what gives the wave and the caustic
+        room to read at all; B at 10 pt is close to the floor where both stop being legible. This is a bigger
+        break of the track convention than the last revision — is it acceptable here?</li>
     <li><b>4 · Cup pips.</b> Keep (discrete, countable without reading, and the colour-blind fallback) or drop for
         density? Present in A and C, absent in B and D.</li>
-    <li><b>5 · Undo.</b> No way to remove a mis-tapped cup is currently drawn. Long-press to decrement, a
-        conditional −1, or explicitly none?</li>
-    <li><b>6 · Splash budget.</b> Drawn at ≤400 ms against the ≤600 ms target. Keep it snappy, or spend the
-        remaining 200 ms on a slower, more liquid arc?</li>
+    <li><b>5 · Undo.</b> Still not drawn. Long-press to decrement, a conditional −1, or explicitly none?</li>
+    <li><b>6 · Splash budget.</b> Drawn at ≤410 ms against the ≤600 ms target. Keep it snappy, or spend the
+        remaining ~190 ms on a slower, more liquid arc?</li>
+    <li><b>7 · The caustic texture.</b> <span class="rule">has a real price</span> Live shader, looping asset, or
+        drop the texture and keep the gradient + wave? See the cost box in §4 — this is the only item here that
+        changes the engineering scope rather than the layout.</li>
+    <li><b>8 · Button labelling.</b> The droplet button carries no <code>+1</code> glyph now. It is unmistakably a
+        water action, but "adds exactly one cup" is learned rather than shown. Accept, or add a small <code>+</code>?</li>
   </ul>
 </div>
 
@@ -733,174 +719,357 @@ What is being ruled on is the <b>column marked Required</b>, the durations, and 
 </p>
 
 
+<!-- ══════════════════════════════════════════════════════════
+     CAUSTIC FILTER DEFS
+     Band-passed fractal noise. feTurbulence makes clouds; the narrow alpha band in
+     feComponentTransfer keeps only a thin slice of luminance, which is what turns
+     clouds into a ribbon NETWORK. feComposite operator="in" against SourceGraphic
+     paints the result with the element's own currentColor, so the texture themes
+     itself from the CSS variables instead of hardcoding a blue.
+     Three seeds per role so adjacent vessels do not show an identical pattern.
+     ══════════════════════════════════════════════════════════ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+
+  <filter id="cxL1" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.050 0.072" numOctaves="2" seed="11" result="t">
+      <animate attributeName="baseFrequency" dur="26s" repeatCount="indefinite"
+               values="0.050 0.072; 0.059 0.063; 0.050 0.072"/>
+    </feTurbulence>
+    <feColorMatrix in="t" type="matrix" result="a"
+      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0"/>
+    <feComponentTransfer in="a" result="band">
+      <feFuncA type="table" tableValues="0 0 0 0 0 1 0 0 0 0 0"/>
+    </feComponentTransfer>
+    <feComponentTransfer in="band" result="hard">
+      <feFuncA type="linear" slope="3" intercept="-1.25"/>
+    </feComponentTransfer>
+    <feComposite in="SourceGraphic" in2="hard" operator="in"/>
+  </filter>
+
+  <filter id="cxL2" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.045 0.066" numOctaves="2" seed="29" result="t">
+      <animate attributeName="baseFrequency" dur="30s" repeatCount="indefinite"
+               values="0.045 0.066; 0.053 0.058; 0.045 0.066"/>
+    </feTurbulence>
+    <feColorMatrix in="t" type="matrix" result="a"
+      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0"/>
+    <feComponentTransfer in="a" result="band">
+      <feFuncA type="table" tableValues="0 0 0 0 0 1 0 0 0 0 0"/>
+    </feComponentTransfer>
+    <feComponentTransfer in="band" result="hard">
+      <feFuncA type="linear" slope="3" intercept="-1.25"/>
+    </feComponentTransfer>
+    <feComposite in="SourceGraphic" in2="hard" operator="in"/>
+  </filter>
+
+  <filter id="cxL3" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.055 0.079" numOctaves="2" seed="47" result="t">
+      <animate attributeName="baseFrequency" dur="28s" repeatCount="indefinite"
+               values="0.055 0.079; 0.064 0.069; 0.055 0.079"/>
+    </feTurbulence>
+    <feColorMatrix in="t" type="matrix" result="a"
+      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0"/>
+    <feComponentTransfer in="a" result="band">
+      <feFuncA type="table" tableValues="0 0 0 0 0 1 0 0 0 0 0"/>
+    </feComponentTransfer>
+    <feComponentTransfer in="band" result="hard">
+      <feFuncA type="linear" slope="3" intercept="-1.25"/>
+    </feComponentTransfer>
+    <feComposite in="SourceGraphic" in2="hard" operator="in"/>
+  </filter>
+
+  <!-- deeper, softer, lower-frequency patches that sit UNDER the ribbons -->
+  <filter id="cxD1" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.021 0.032" numOctaves="2" seed="5" result="t">
+      <animate attributeName="baseFrequency" dur="34s" repeatCount="indefinite"
+               values="0.021 0.032; 0.026 0.027; 0.021 0.032"/>
+    </feTurbulence>
+    <feColorMatrix in="t" type="matrix" result="a"
+      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0"/>
+    <feComponentTransfer in="a" result="band">
+      <feFuncA type="table" tableValues="0 0 0.85 1 0.35 0 0"/>
+    </feComponentTransfer>
+    <feComposite in="SourceGraphic" in2="band" operator="in"/>
+  </filter>
+
+  <filter id="cxD2" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.025 0.037" numOctaves="2" seed="23" result="t">
+      <animate attributeName="baseFrequency" dur="38s" repeatCount="indefinite"
+               values="0.025 0.037; 0.030 0.032; 0.025 0.037"/>
+    </feTurbulence>
+    <feColorMatrix in="t" type="matrix" result="a"
+      values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0"/>
+    <feComponentTransfer in="a" result="band">
+      <feFuncA type="table" tableValues="0 0 0.85 1 0.35 0 0"/>
+    </feComponentTransfer>
+    <feComposite in="SourceGraphic" in2="band" operator="in"/>
+  </filter>
+
+</defs></svg>
+
+
 <script>
-/* ────────────────────────────────────────────────────────────
-   Tile generation. Every concept × state × theme is built from
-   one template set so the four strips cannot drift apart.
-   ──────────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════
+   Tile generation + live counter.
+   Every concept × state × theme is built from one template set,
+   so the four concepts cannot drift apart.
+   ════════════════════════════════════════════════════════════ */
+const GOAL = 8, PIPS = 8;
 const STATES = [
-  {k:'0', lvl:'0%',    n:0, cap:'Empty · 0 / 8'},
-  {k:'5', lvl:'62.5%', n:5, cap:'Partial · 5 / 8'},
-  {k:'8', lvl:'100%',  n:8, cap:'Goal met · 8 / 8'},
-  {k:'9', lvl:'100%',  n:9, cap:'Overfull · 9 / 8'}
+  {n:0, cap:'Empty · 0 / 8'},
+  {n:5, cap:'Partial · 5 / 8'},
+  {n:8, cap:'Goal met · 8 / 8'},
+  {n:9, cap:'Overfull · 9 / 8'}
 ];
 
-const pips = (n) => {
-  let s = '<div class="pips">';
-  for (let i = 1; i <= 8; i++) {
-    const over = (n > 8 && i === 8) ? ' over' : '';
-    s += `<i class="pip${i <= Math.min(n,8) ? ' on' : ''}${over}"></i>`;
-  }
-  return s + '</div>';
+/* ── water body: gradient + two caustic layers ───────────────
+   No viewBox on the <svg>: user units stay equal to CSS px, so the caustic keeps
+   one physical scale in the wide trough AND in the 32pt minimal vessel. */
+let causticSeq = 0;
+const LITE = ['cxL1','cxL2','cxL3'], DEEP = ['cxD1','cxD2'];
+const body = () => {
+  const l = LITE[causticSeq % LITE.length], d = DEEP[causticSeq % DEEP.length];
+  causticSeq++;
+  return `<div class="wbody">
+    <svg class="caustic deep"><rect width="100%" height="100%" fill="currentColor" filter="url(#${d})"/></svg>
+    <svg class="caustic lite"><rect width="100%" height="100%" fill="currentColor" filter="url(#${l})"/></svg>
+  </div>`;
 };
 
-const reading = (n, big) => {
-  const over = n > 8 ? `<span class="overchip">+${n-8}</span>` : '';
-  return `<span class="wread"><span class="v"${big?' style="font-size:26px"':''}>${n}</span>` +
-         `<span class="t"> / 8</span><span class="u">cups</span>${over}</span>`;
-};
+/* ── the wavy surface ────────────────────────────────────────
+   4 whole sine periods across a 200%-wide path, translated by exactly 50% (= 2
+   periods) => seamless loop, no jump. Painted in the TRACK colour so it carves the
+   waterline, which also makes the empty state correct for free. */
+/* `periods` must be EVEN: the layer is 200% wide and shifts by 50% (= half the path),
+   so an odd count would land crests on troughs and the loop would visibly jump.
+   The count differs per orientation so the crest spacing is roughly the same number
+   of PIXELS in a ~180pt trough as in a 46pt vessel — one path reused everywhere
+   would give the wide bar three lazy humps and the small vessel a comb. */
+function wavePath(periods){
+  const W = 120, step = W / (periods * 2);          // one half-period
+  let d = `M0,7 Q${(step/2).toFixed(3)},2.5 ${step.toFixed(3)},7`;
+  for (let x = step*2; x <= W + 0.001; x += step) d += ` T${x.toFixed(3)},7`;
+  return d + ' V0 H0 Z';
+}
+const WAVE_H = wavePath(24);   // horizontal troughs (wide)
+const WAVE_V = wavePath(6);    // vertical vessels (narrow)
+const wave = (d) => `
+  <svg class="wavetop slow" viewBox="0 0 120 12" preserveAspectRatio="none"><path d="${d}"/></svg>
+  <svg class="wavetop"      viewBox="0 0 120 12" preserveAspectRatio="none"><path d="${d}"/></svg>`;
 
-/* splash particles, anchored to the surface for each orientation */
-/* 5 droplets: travel vector (--dx/--dy) + stagger (--d). Stagger spans 0-66 ms so the
-   burst reads as a scatter rather than a single ring. */
+/* ── the droplet button ──────────────────────────────────── */
+const DROPLET = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.2c0 0-7.2 8.5-7.2 13.1a7.2 7.2 0 0 0 14.4 0C19.2 10.7 12 2.2 12 2.2Z"/></svg>';
+const btn = (size) => `<button class="plus ${size}" data-add aria-label="Add one cup">${DROPLET}</button>`;
+
+/* ── splash particles: travel vector + stagger, anchored off --lvl ── */
 const H_DROPS = [
-  {dx:  9, dy:-15, d: 0, top:2},
-  {dx: -6, dy:-17, d:26, top:2},
-  {dx: 15, dy: -9, d:52, top:4},
-  {dx:  3, dy:-19, d:14, top:1},
-  {dx:-11, dy:-11, d:66, top:4}
+  {dx: 10, dy:-17, d: 0, t:2}, {dx: -7, dy:-19, d:26, t:2}, {dx: 17, dy:-11, d:52, t:5},
+  {dx:  3, dy:-22, d:14, t:1}, {dx:-13, dy:-13, d:70, t:5}
 ];
 const V_DROPS = [
-  {dx:  7, dy:-19, d: 0, at:.30},
-  {dx: -8, dy:-15, d:26, at:.55},
-  {dx:  2, dy:-23, d:52, at:.44},
-  {dx: 12, dy:-11, d:14, at:.36},
-  {dx: -3, dy:-20, d:66, at:.60}
+  {dx:  8, dy:-21, d: 0, at:.30}, {dx: -9, dy:-17, d:26, at:.58}, {dx: 2, dy:-26, d:52, at:.44},
+  {dx: 13, dy:-12, d:14, at:.34}, {dx: -3, dy:-22, d:70, at:.64}
 ];
+const hSplash = () =>
+  `<div class="hsplash">
+     <span class="ripple" style="width:15px;height:15px;left:-7px;top:1px"></span>` +
+   H_DROPS.map(p=>`<span class="drop" style="--dx:${p.dx}px;--dy:${p.dy}px;--d:${p.d}ms;left:-2px;top:${p.t}px"></span>`).join('') +
+  `</div>`;
+const vSplash = (w) =>
+  `<div class="vsplash">
+     <span class="ripple" style="width:${w-14}px;height:9px;left:7px;bottom:-4px;border-radius:50%"></span>` +
+   V_DROPS.map(p=>`<span class="drop" style="--dx:${p.dx}px;--dy:${p.dy}px;--d:${p.d}ms;left:${Math.round(w*p.at)}px;bottom:0"></span>`).join('') +
+  `</div>`;
 
-const hSplash = (lvl) =>
-  `<span class="ripple" style="width:13px;height:13px;left:calc(${lvl} - 6px);top:0"></span>` +
-  H_DROPS.map(p =>
-    `<span class="drop" style="--dx:${p.dx}px;--dy:${p.dy}px;--d:${p.d}ms;left:calc(${lvl} - 2px);top:${p.top}px"></span>`
-  ).join('');
+const hVessel = (thin) => `
+  <div class="hwrap">
+    <div class="htrough${thin?' thin':''}">
+      <div class="hfill">${body()}</div>
+      ${wave(WAVE_H)}
+      <div class="hmen"></div>
+      <div class="brimrim"></div>
+    </div>
+    ${hSplash()}
+  </div>`;
 
-const vSplash = (lvl, w) =>
-  `<span class="ripple" style="width:${w-16}px;height:9px;left:8px;bottom:calc(${lvl} - 4px);border-radius:50%"></span>` +
-  V_DROPS.map(p =>
-    `<span class="drop" style="--dx:${p.dx}px;--dy:${p.dy}px;--d:${p.d}ms;left:${Math.round(w*p.at)}px;bottom:${lvl}"></span>`
-  ).join('');
-
-const brim = (n) => n > 8
-  ? `<div style="position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1.5px var(--water-mist);pointer-events:none"></div>`
-  : '';
+const vVessel = (sm) => `
+  <div class="vwrap">
+    <div class="vessel${sm?' sm':''}">
+      <div class="vfill">${body()}</div>
+      <div class="vsky">${wave(WAVE_V)}</div>
+      <div class="vtick"></div>
+      <div class="brimrim"></div>
+    </div>
+    ${vSplash(sm?32:46)}
+  </div>`;
 
 /* ── the four concept templates ───────────────────────────── */
 const CONCEPT = {
-
-  /* A — horizontal, primary */
-  A: (s) => `
-    <div class="whead">
-      <span class="wlabel">WATER</span>
-      ${reading(s.n)}
+  A: () => `
+    <div class="whead"><span class="wlabel">WATER</span><span data-read></span></div>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:10px">
+      ${hVessel(false)}${btn('sm')}
     </div>
-    <div style="display:flex;align-items:center;gap:11px;margin-top:9px">
-      <div class="htrough" style="flex:1">
-        <div class="hfill"></div>${s.n>0?'<div class="hmen"></div>':''}${brim(s.n)}${hSplash(s.lvl)}
-      </div>
-      <button class="plus sm" data-splash>+</button>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:9px">
-      ${pips(s.n)}<span class="resetnote">Resets 12:00 AM</span>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+      <span data-pips></span><span class="resetnote">Resets 12:00 AM</span>
     </div>`,
 
-  /* B — horizontal, minimal */
-  B: (s) => `
+  B: () => `
     <div style="display:flex;align-items:center;gap:10px">
       <span class="wlabel" style="font-size:12px">WATER</span>
-      <div class="htrough thin" style="flex:1">
-        <div class="hfill"></div>${s.n>0?'<div class="hmen"></div>':''}${brim(s.n)}${hSplash(s.lvl)}
-      </div>
-      <span class="wread" style="white-space:nowrap">
-        <span class="v" style="font-size:14px">${s.n}</span><span class="t">/8</span>
-        ${s.n>8?'<span class="overchip">+'+(s.n-8)+'</span>':''}
-      </span>
-      <button class="plus sm" data-splash>+</button>
+      ${hVessel(true)}
+      <span data-read data-compact style="white-space:nowrap"></span>
+      ${btn('xs')}
     </div>`,
 
-  /* C — vertical, primary */
-  C: (s) => `
-    <div style="display:flex;gap:14px;align-items:center">
-      <div class="vessel">
-        <div class="vfill"></div>
-        ${s.n>0?'<div class="vsurf"><i></i><i class="b"></i></div>':''}
-        <div class="vtick" style="bottom:100%"></div>${brim(s.n)}${vSplash(s.lvl,46)}
-      </div>
+  C: () => `
+    <div style="display:flex;gap:15px;align-items:center">
+      ${vVessel(false)}
       <div style="flex:1;min-width:0">
         <div class="wlabel">WATER</div>
-        <div style="margin-top:3px">${reading(s.n, true)}</div>
-        <button class="plus wide" data-splash style="margin-top:9px">+1 cup</button>
-        <div class="resetnote" style="margin-top:8px">Resets 12:00 AM</div>
+        <div style="margin-top:3px"><span data-read data-big></span></div>
+        <div class="resetnote" style="margin-top:9px">Resets 12:00 AM</div>
       </div>
+      ${btn('lg')}
     </div>`,
 
-  /* D — vertical, minimal */
-  D: (s) => `
+  D: () => `
     <div style="display:flex;gap:11px;align-items:center">
-      <div class="vessel sm">
-        <div class="vfill"></div>
-        ${s.n>0?'<div class="vsurf"><i></i><i class="b"></i></div>':''}
-        ${brim(s.n)}${vSplash(s.lvl,32)}
-      </div>
+      ${vVessel(true)}
       <div style="flex:1;min-width:0">
         <div class="wlabel" style="font-size:12px">WATER</div>
-        <div class="wread" style="margin-top:1px">
-          <span class="v" style="font-size:16px">${s.n}</span><span class="t"> / 8</span>
-          ${s.n>8?'<span class="overchip">+'+(s.n-8)+'</span>':''}
-        </div>
+        <div style="margin-top:1px"><span data-read data-compact></span></div>
       </div>
-      <button class="plus sm" data-splash>+</button>
+      ${btn('xs')}
     </div>`
 };
 
-/* ── build every strip ────────────────────────────────────── */
-['A','B','C','D'].forEach(c => {
-  ['dark','light'].forEach(t => {
+/* ── render a block from its count ────────────────────────── */
+function render(block){
+  const n = +block.dataset.n;
+  block.style.setProperty('--lvl', (Math.min(n/GOAL,1)*100).toFixed(2)+'%');
+  block.dataset.state = n===0 ? '0' : n>GOAL ? 'over' : n===GOAL ? 'full' : 'part';
+
+  const over = n>GOAL ? `<span class="overchip">+${n-GOAL}</span>` : '';
+  block.querySelectorAll('[data-read]').forEach(el=>{
+    const compact = el.hasAttribute('data-compact'), big = el.hasAttribute('data-big');
+    el.className = 'wread';
+    el.innerHTML = compact
+      ? `<span class="v" style="font-size:${big?26:15}px">${n}</span><span class="t">/${GOAL}</span>${over}`
+      : `<span class="v"${big?' style="font-size:26px"':''}>${n}</span><span class="t"> / ${GOAL}</span><span class="u">cups</span>${over}`;
+  });
+
+  const pipHost = block.querySelector('[data-pips]');
+  if (pipHost){
+    pipHost.className = 'pips';
+    let s='';
+    for (let i=1;i<=PIPS;i++){
+      const on = i<=Math.min(n,PIPS), ov = n>GOAL && i===PIPS;
+      s += `<i class="pip${on?' on':''}${ov?' over':''}"></i>`;
+    }
+    pipHost.innerHTML = s;
+  }
+}
+
+/* ── splash + increment ───────────────────────────────────── */
+function splash(block){
+  block.classList.remove('splash');
+  void block.offsetWidth;              // restart the keyframes
+  block.classList.add('splash');
+  clearTimeout(block._st);
+  block._st = setTimeout(()=>block.classList.remove('splash'), 640);
+}
+function add(block){
+  const before = +block.dataset.n;
+  block.dataset.n = before + 1;
+  render(block);
+  splash(block);
+  if (before + 1 === GOAL){          // one-shot glow only on ARRIVAL at goal
+    const v = block.querySelector('.htrough, .vessel');
+    if (v){ v.classList.remove('goalglow'); void v.offsetWidth; v.classList.add('goalglow'); }
+  }
+}
+
+/* ── build ────────────────────────────────────────────────── */
+function makeBlock(concept, n){
+  const el = document.createElement('div');
+  el.className = 'wblock';
+  el.dataset.n = n;
+  el.innerHTML = CONCEPT[concept]();
+  render(el);
+  return el;
+}
+
+['A','B','C','D'].forEach(c=>{
+  ['dark','light'].forEach(t=>{
     const host = document.getElementById(`strip${c}-${t}`);
     if (!host) return;
-    STATES.forEach(s => {
+    STATES.forEach(s=>{
       const tile = document.createElement('div');
       tile.className = `tile theme-${t}`;
-      tile.innerHTML =
-        `<div class="wblock" data-state="${s.k}" style="--lvl:${s.lvl}">${CONCEPT[c](s)}</div>` +
-        `<div class="cap">${s.cap}</div>`;
+      tile.appendChild(makeBlock(c, s.n));
+      const cap = document.createElement('div');
+      cap.className = 'cap'; cap.textContent = s.cap;
+      tile.appendChild(cap);
       host.appendChild(tile);
     });
   });
 });
 
-/* ── splash driver ────────────────────────────────────────── */
-function fire(block){
-  if (!block) return;
-  block.classList.remove('splash');
-  void block.offsetWidth;            // restart the keyframes
-  block.classList.add('splash');
-  setTimeout(() => block.classList.remove('splash'), 620);
-}
-document.addEventListener('click', e => {
-  const btn = e.target.closest('[data-splash]');
-  if (btn) fire(btn.closest('.wblock'));
-});
-document.getElementById('splashAll').addEventListener('click', () => {
-  document.querySelectorAll('.wblock').forEach(fire);
+/* in-context phone frames */
+const ctx = document.getElementById('contextRow');
+[['A','Concept A — horizontal, primary · adds ~76 pt'],
+ ['C','Concept C — vertical, primary · adds ~112 pt']].forEach(([c,label])=>{
+  const wrap = document.createElement('div');
+  const phone = document.createElement('div');
+  phone.className = 'phone theme-dark';
+  phone.innerHTML = `
+    <div class="ph-head"><div class="day">Wednesday, Aug 5</div><div class="ttl">Home</div></div>
+    <div class="ghost" style="height:26px;margin-top:14px">resource row</div>
+    <div class="ghost" style="height:104px;margin-top:16px">calorie hero · rings + summary</div>
+    <div class="live" style="margin-top:18px"><div class="livetag">▼ water lands here</div></div>
+    <div class="ghost" style="height:56px;margin-top:18px">jump cards</div>
+    <div class="ghost" style="height:44px;margin-top:16px">purity</div>`;
+  phone.querySelector('.live').appendChild(makeBlock(c, 5));
+  wrap.appendChild(phone);
+  const cap = document.createElement('div');
+  cap.style.cssText='font-size:11px;color:var(--page-muted);text-align:center;margin-top:9px';
+  cap.innerHTML = `<b style="color:var(--page-ink)">${label.split(' · ')[0]}</b> · ${label.split(' · ')[1]}`;
+  wrap.appendChild(cap);
+  ctx.appendChild(wrap);
 });
 
-/* ── reduce-motion toggle ─────────────────────────────────── */
-const rmBtn = document.getElementById('rmToggle');
-rmBtn.addEventListener('click', () => {
-  const on = document.body.classList.toggle('rm');
+/* ── interaction ──────────────────────────────────────────── */
+document.addEventListener('click', e=>{
+  const b = e.target.closest('[data-add]');
+  if (b) add(b.closest('.wblock'));
+});
+
+document.getElementById('resetAll').addEventListener('click', ()=>{
+  ['A','B','C','D'].forEach(c=>['dark','light'].forEach(t=>{
+    const host = document.getElementById(`strip${c}-${t}`);
+    if (!host) return;
+    [...host.children].forEach((tile,i)=>{
+      const blk = tile.querySelector('.wblock');
+      blk.dataset.n = STATES[i].n; render(blk);
+    });
+  }));
+  ctx.querySelectorAll('.wblock').forEach(b=>{ b.dataset.n = 5; render(b); });
+});
+
+/* The caustic BOIL is SMIL (<animate> on baseFrequency), not a CSS animation, so
+   `animation:none` cannot reach it — Reduce Motion has to pause the filter document
+   explicitly or the texture keeps churning while everything else has stopped. */
+const fxRoot = document.querySelector('svg[aria-hidden="true"]');
+function setReduceMotion(on){
+  document.body.classList.toggle('rm', on);
   rmBtn.classList.toggle('on', on);
   rmBtn.textContent = 'Reduce Motion: ' + (on ? 'ON' : 'off');
-});
+  if (fxRoot) on ? fxRoot.pauseAnimations() : fxRoot.unpauseAnimations();
+}
+const rmBtn = document.getElementById('rmToggle');
+rmBtn.addEventListener('click', ()=> setReduceMotion(!document.body.classList.contains('rm')));
+if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) setReduceMotion(true);
 </script>
 </body>
 </html>
