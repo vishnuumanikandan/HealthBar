@@ -27,12 +27,20 @@
   (UI/HomeView.swift `cleanContent`) — i.e. directly below the daily rings/summary,
   above the jump cards. Neighbours are drawn as gray blocks in §2.
 
-  REV 6 — vertical vessel is longer and thinner (28x116, moving toward the ratio
-  the pixel arm's PurityVerticalBar already set). THREE NEW SURFACES: §6 the pixel
-  arm's own water (a different renderer, with STEPPED motion — smooth is wrong
-  there), §7 the Tools toggle that puts the tracker on Home, §8 the Tools entry
-  point. §8 is flagged as NOT water-scoped: it changes the Log tab for everyone
-  and wants its own prompt and PR.
+  REV 8 — PLACEMENT MOVED. The element is no longer a Home block: the column now
+  stands vertically beside the three macro tracks in FoodLogView's `foodHeroClean`
+  (a ~110pt gap that is exactly the shape of a thin column), and the add control is
+  a corner button. Both appear only when the §7 toggle is on. That decides ruling
+  item 2 — Concepts A and B (horizontal) have nowhere to go in this slot and are
+  marked superseded in §3.
+
+  Also adds the HYBRID: pixel water inside a curved themed shell. It is the only
+  one of the three renderings that can serve BOTH arms, because the pure pixel
+  renderer carries fixed colours that only work on parchment.
+
+  Earlier revs: §6 pixel arm (STEPPED motion — smooth is wrong there), §7 the
+  Tools toggle, §8 the Tools entry point. §8 is flagged NOT water-scoped: it
+  changes the Log tab for everyone and wants its own prompt and PR.
 -->
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -616,6 +624,61 @@ body.rm .pxbtn.pxhit .pxbody{animation:none}
 }
 .tools-stacked .g{font-size:15px;line-height:1}
 .tools-stacked .l{font-size:7.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:700}
+
+/* ═════════════════════════════════════════════════════════════
+   §2  PLACEMENT — the Log tab food hero + a corner button
+   ═════════════════════════════════════════════════════════════ */
+.logframe{
+  width:300px;border-radius:26px;border:1px solid var(--line);background:var(--bg);
+  padding:14px 13px 0;position:relative;overflow:hidden;
+}
+.foodhero{display:flex;align-items:center;gap:13px;padding:4px 0 2px}
+.miniring{
+  width:52px;height:52px;border-radius:50%;flex:none;
+  border:4px solid var(--sunk);border-top-color:var(--accent);border-right-color:var(--accent);
+  display:flex;align-items:center;justify-content:center;transform:rotate(-38deg);
+}
+.miniring span{transform:rotate(38deg);font-family:var(--font-display);font-size:13px;color:var(--ink)}
+.mtracks{flex:1;min-width:0;display:flex;flex-direction:column;gap:13px}
+.mtrack .mrow{display:flex;align-items:baseline;justify-content:space-between}
+.mtrack .mrow b{font-size:10.5px;font-weight:700}
+.mtrack .mrow span{font-size:9.5px;color:var(--faint)}
+.mtrack .mrow span i{font-family:var(--font-display);font-style:normal;font-size:11px;color:var(--ink)}
+.mtrack .mbar{height:6px;border-radius:3px;background:var(--ringEmpty,var(--sunk));margin-top:5px;overflow:hidden}
+.mtrack .mbar i{display:block;height:100%;border-radius:3px}
+
+/* the water column that sits beside the three tracks */
+.wcol{flex:none;position:relative;display:flex;flex-direction:column;align-items:center;gap:5px}
+.wcol .wnum{font-family:var(--font-display);font-size:11px;color:var(--ink);line-height:1}
+.wcol .wcap{font-size:7.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
+
+/* Erewhon rendering of the column */
+.wtube{
+  position:relative;width:22px;height:102px;border-radius:7px;
+  background:var(--sunk);border:1px solid var(--line);overflow:hidden;isolation:isolate;
+}
+/* HYBRID: pixel content, curved container. The container owns the edge; the pixel
+   art inside keeps its hard grid and stepped motion. */
+.wtube.hybrid{background:var(--sunk)}
+.wtube.hybrid .pxwrap{position:absolute;left:50%;bottom:0;transform:translateX(-50%)}
+
+/* the corner button */
+.fab{
+  position:absolute;right:14px;bottom:62px;z-index:5;
+}
+.tabbarstub{
+  position:absolute;left:0;right:0;bottom:0;height:48px;
+  border-top:1px solid var(--line);background:var(--bg);
+  display:flex;align-items:center;justify-content:space-around;
+  font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);
+}
+.tabbarstub b{color:var(--accent);font-weight:700}
+.mealstub{
+  border:1px dashed var(--line);border-radius:11px;
+  background:color-mix(in srgb,var(--ink) 4%,transparent);
+  display:flex;align-items:center;justify-content:center;
+  font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);
+}
 </style>
 </head>
 <body class="">
@@ -751,19 +814,57 @@ body.rm .pxbtn.pxhit .pxbody{animation:none}
 <!-- ══════════════════════════════════════════════════════════
      §2  IN CONTEXT
      ══════════════════════════════════════════════════════════ -->
-<h2><span class="n">§2</span>In context — Home, both orientations</h2>
-<p class="note">Dashed gray blocks are the real neighbours, sketched. Only the water element is drawn for real.
-Both frames are Erewhon Dark, starting at 5/8 — tap the droplets.</p>
-
-<div class="strip" id="contextRow" style="align-items:flex-start"></div>
+<h2><span class="n">§2</span>Placement — beside the macro tracks</h2>
+<p class="note">Rev 8 moves the element. It is no longer a Home block below the calorie hero: the column now lives
+on the <b>Log tab</b>, standing vertically beside the three macro tracks, with the add control as a
+<b>corner button</b>. Both appear only when the toggle in §7 is on.</p>
 
 <div class="docbox">
-  <p class="note" style="margin-top:0"><b>The compactness argument, stated plainly.</b> Concept A costs ~76 pt and
-  keeps the horizontal rhythm every neighbouring block already uses (purity, macros and the XP track are all
-  left-to-right capsule fills). Concept C costs ~132 pt — <b>~56 pt more</b> — and interrupts that rhythm with the
-  only vertical form on the screen. That interruption is the entire argument <i>for</i> it: it is the most
-  water-like and the most memorable, and with the caustic texture the vertical vessel is where the reference image
-  actually reads. On a screen being de-cluttered, A is the safer choice and C is the more delightful one.</p>
+  <p class="note" style="margin-top:0"><b>The slot is real and it fits.</b> <code>foodHeroClean</code> in
+  <code>FoodLogView</code> is already an <code>HStack</code> of a mini calorie ring and a
+  <code>VStack</code> of three stacked macro tracks — Protein, Carbs, Fat. Each track is a label row plus a 6 pt
+  capsule, about 28 pt, and they sit 13 pt apart: <b>≈110 pt of stacked height</b> with nothing to the right of
+  it. A thin vertical column is exactly the shape that gap wants, which is why this placement works better than
+  the Home one it replaces.</p>
+  <p class="note" style="margin-bottom:0"><b>It also puts water where food is logged</b> rather than on a
+  dashboard — the tab you are already on when you have just drunk something.</p>
+</div>
+
+<div class="docbox warn">
+  <div class="rule">⚠ This decides ruling item 2 for you</div>
+  <p class="note" style="margin-top:0">A 110 pt slot beside three tracks can only take a vertical column, so
+  <b>Concepts A and B (horizontal) are superseded by this placement</b> — a horizontal bar has nowhere to go here.
+  They are left in §3 for the record, marked, rather than quietly deleted. What survives from that section is the
+  <i>vessel treatment</i> (texture, wave, states), which carries over unchanged.</p>
+  <p class="note" style="margin-bottom:0"><b>And it raises a new question the Home placement never had:</b> the
+  column and the button are now <b>far apart</b> — one is mid-screen, the other is pinned to the corner. The tap
+  no longer happens next to the thing it changes. The corner button is the more reachable control on a large
+  phone, but the splash-at-the-source connection is weakened, so the level change has to carry the feedback. It
+  is ruling item 16.</p>
+</div>
+
+<div class="strip" id="placementRow"></div>
+
+<h3>The vessel, three ways <span class="lite">· same slot, same states — only the rendering differs</span></h3>
+<p class="note">Rev 8 adds the <b>hybrid</b> you asked for: pixel water — hard grid, quantised fill, stepped
+motion — inside a <b>curved</b> container. The rounded shell owns the edge, so the pixel outline and its notched
+corners are dropped; keeping them would put a hard square frame inside a rounded one, which is the exact thing
+the hybrid is trying not to be.</p>
+<div class="strip" id="hybridRow"></div>
+
+<div class="docbox warn">
+  <div class="rule">⚠ Why the hybrid is the answer to "use the pixel look in both themes"</div>
+  <p class="note" style="margin-top:0"><b>Look at the middle tile.</b> Its empty track is nearly white on a dark
+  card. That is not a mistake in the drawing — it is <code>px-track</code> <code>#E5E7EB</code>, the fixed colour
+  the pixel arm actually uses, doing exactly what it is told. <b>The pixel arm does not read theme tokens at all</b>;
+  its surfaces are parchment by day and near-black at night, and every colour in it is picked against those. Drop
+  that renderer into Erewhon unchanged and the empty state becomes a bright white column on a dark screen.</p>
+  <p class="note" style="margin-bottom:0"><b>The hybrid dissolves the problem rather than patching it,</b> which is
+  why it is worth having as its own thing rather than a compromise. The curved shell is a normal themed component —
+  it takes <code>--sunk</code> for the track, <code>--line</code> for the edge, <code>--water-neon</code> for the
+  overfull glow — and only the <i>water</i> is pixel art, drawn transparent over it. So the empty state is correct
+  in both themes for free, the rounded corners match everything around them, and you still get the hard grid, the
+  quantised fill and the stepped motion. <b>One renderer, both themes, no fixed colours.</b> That is ruling item 16.</p>
 </div>
 
 
@@ -774,11 +875,11 @@ Both frames are Erewhon Dark, starting at 5/8 — tap the droplets.</p>
 <p class="note">Four starting states per strip: <b>empty (0/8)</b> · <b>partial (5/8)</b> · <b>goal met (8/8)</b> ·
 <b>overfull (9/8)</b>. Every tile is live.</p>
 
-<h3>Concept A — horizontal, primary <span class="lite">· label row + 18pt trough + 8 cup pips + reset note · ~76 pt</span></h3>
+<h3><span style="color:#E0B047">⊘</span> Concept A — horizontal, primary <span class="lite">superseded by the §2 placement · · label row + 18pt trough + 8 cup pips + reset note · ~76 pt</span></h3>
 <div class="themetag">Erewhon Dark</div>  <div class="strip" id="stripA-dark"></div>
 <div class="themetag">Erewhon Light</div> <div class="strip" id="stripA-light"></div>
 
-<h3>Concept B — horizontal, minimal <span class="lite">· one row, 10pt trough, no pips, no reset note · ~34 pt</span></h3>
+<h3><span style="color:#E0B047">⊘</span> Concept B — horizontal, minimal <span class="lite">superseded by the §2 placement · · one row, 10pt trough, no pips, no reset note · ~34 pt</span></h3>
 <div class="themetag">Erewhon Dark</div>  <div class="strip" id="stripB-dark"></div>
 <div class="themetag">Erewhon Light</div> <div class="strip" id="stripB-light"></div>
 
@@ -1100,8 +1201,9 @@ they ask for it. Two readings of "secret toggle" are drawn below, because they l
   <ul style="margin-left:18px">
     <li><b>1 · Tokens.</b> Adopt <code>water</code> / <code>water-deep</code> / <code>water-foam</code> at ~192° as
         drawn? Or run the element on <code>--accent</code> and accept that it reads as another blue bar?</li>
-    <li><b>2 · Concept.</b> A, B, C or D. (A = safest and rhymes with its neighbours; C = most distinctive and the
-        best home for the texture, costs ~36 pt more; B and D are the reductions.)</li>
+    <li><b>2 · Concept.</b> <span class="rule">decided by §2</span> The placement settles this: a ~110 pt slot
+        beside three macro tracks only takes a vertical column, so A and B (horizontal) are superseded and marked
+        as such in §3. What is still open is which <i>rendering</i> fills the column — see item 16.</li>
     <li><b>3 · Trough height</b> — <i>only if A or B wins.</i> A now uses <b>18 pt</b> against the 8 pt that
         <code>purityBlock</code> and the macro bars use. The extra height is what gives the wave and the caustic
         room to read at all; B at 10 pt is close to the floor where both stop being legible. This is a bigger
@@ -1143,7 +1245,16 @@ they ask for it. Two readings of "secret toggle" are drawn below, because they l
         recommendation is 2 (keyline), which reads as a control without out-shouting the Log Food CTA. But this
         changes the Log tab for every user regardless of water, so I would rule on it here and <b>ship it
         separately</b>, not inside WATER-1.</li>
-    <li><b>15 · Button labelling.</b> The droplet button carries no <code>+1</code> glyph now. It is unmistakably a
+    <li><b>15 · Button distance.</b> <span class="rule">new with the placement</span> The column is mid-screen
+        and the button is pinned to the corner, so the tap no longer happens next to the thing it changes. The
+        corner is far more reachable one-handed on a large phone, which is the argument for it — but the
+        splash-at-the-source connection is gone, so the <b>level change has to carry the feedback</b> on its own.
+        Accept that, or keep a small control beside the column too?</li>
+    <li><b>16 · One renderer or two.</b> The hybrid (pixel water, curved themed shell) can serve <b>both</b> arms,
+        which is what you asked for — and it is the only one of the three that can, because the pure pixel
+        renderer carries fixed colours that only work on parchment (see the warning above §3). Adopt the hybrid
+        everywhere, or keep Erewhon smooth and pixel hard and maintain two?</li>
+    <li><b>17 · Button labelling.</b> The droplet button carries no <code>+1</code> glyph now. It is unmistakably a
         water action, but "adds exactly one cup" is learned rather than shown. Accept, or add a small <code>+</code>?</li>
   </ul>
 </div>
@@ -1411,28 +1522,11 @@ function makeBlock(concept, n){
   });
 });
 
-/* in-context phone frames */
-const ctx = document.getElementById('contextRow');
-[['A','Concept A — horizontal, primary · adds ~76 pt'],
- ['C','Concept C — vertical, primary · adds ~132 pt']].forEach(([c,label])=>{
-  const wrap = document.createElement('div');
-  const phone = document.createElement('div');
-  phone.className = 'phone theme-dark';
-  phone.innerHTML = `
-    <div class="ph-head"><div class="day">Wednesday, Aug 5</div><div class="ttl">Home</div></div>
-    <div class="ghost" style="height:26px;margin-top:14px">resource row</div>
-    <div class="ghost" style="height:104px;margin-top:16px">calorie hero · rings + summary</div>
-    <div class="live" style="margin-top:18px"><div class="livetag">▼ water lands here</div></div>
-    <div class="ghost" style="height:56px;margin-top:18px">jump cards</div>
-    <div class="ghost" style="height:44px;margin-top:16px">purity</div>`;
-  phone.querySelector('.live').appendChild(makeBlock(c, 5));
-  wrap.appendChild(phone);
-  const cap = document.createElement('div');
-  cap.style.cssText='font-size:11px;color:var(--page-muted);text-align:center;margin-top:9px';
-  cap.innerHTML = `<b style="color:var(--page-ink)">${label.split(' · ')[0]}</b> · ${label.split(' · ')[1]}`;
-  wrap.appendChild(cap);
-  ctx.appendChild(wrap);
-});
+/* (the old Home in-context builder was removed with §2 in rev 8 — the placement
+   section now draws its own Log-tab frames) */
+
+
+
 
 /* ── interaction ──────────────────────────────────────────── */
 document.addEventListener('click', e=>{
@@ -1459,13 +1553,14 @@ document.getElementById('resetAll').addEventListener('click', ()=>{
       blk.dataset.n = STATES[i].n; render(blk);
     });
   }));
-  ctx.querySelectorAll('.wblock').forEach(b=>{ b.dataset.n = 5; render(b); });
   const pxHost = document.getElementById('pixelStrip');
   if (pxHost) [...pxHost.children].forEach((tile,i)=>{
     tile.dataset.n = (i < STATES.length ? STATES[i].n : 5);   // last tile is the night example
     renderPixelTile(tile);
   });
 });
+
+
 
 /* Rev 3 needed an explicit pauseAnimations() here, because the caustic boil was
    SMIL and `animation:none` cannot reach SMIL. The texture is pure CSS as of rev 4,
@@ -1495,8 +1590,10 @@ const CREST = [0,0,1,1,1,0,0,0];
 const SPARK = [[0,3,3],[4,1,2],[3,6,3],[1,9,3],[5,4,2],[2,12,3],[4,15,2],[0,18,3],
                [3,21,3],[1,24,2],[4,28,2],[0,31,3],[2,35,3],[5,38,2]];
 
-function pixelVessel(n){
-  const {w,h,scale} = PX;
+function pixelVessel(n, o){
+  o = o || {};
+  const w = o.w || PX.w, h = o.h || PX.h, scale = o.unit || PX.scale;
+  const bare = !!o.bare;   // hybrid: the curved container draws the border instead
   const innerW = w-2, innerH = h-2;                 // 1-unit outline all round
   const lvl   = Math.min(n/GOAL, 1);
   const water = Math.round(lvl * innerH);           // whole units only
@@ -1504,10 +1601,15 @@ function pixelVessel(n){
   const over  = n > GOAL;
   let g = '';
 
-  // track + outline. Corners are omitted, which is what makes it read as pixel art
-  g += r(1,0,w-2,1,PX.outline) + r(1,h-1,w-2,1,PX.outline)
-     + r(0,1,1,h-2,PX.outline) + r(w-1,1,1,h-2,PX.outline);
-  g += r(1,1,innerW,innerH,PX.track);
+  // track + outline. Corners are omitted, which is what makes it read as pixel art.
+  // In `bare` mode the curved container supplies the edge, so the pixel outline and
+  // its notched corners are dropped — keeping them would put a hard square frame
+  // inside a rounded one, which is the exact thing the hybrid is trying not to be.
+  if (!bare){
+    g += r(1,0,w-2,1,PX.outline) + r(1,h-1,w-2,1,PX.outline)
+       + r(0,1,1,h-2,PX.outline) + r(w-1,1,1,h-2,PX.outline);
+  }
+  g += r(1,1,innerW,innerH, bare ? 'transparent' : PX.track);
 
   if (water > 0){
     // body, with the bottom two rows deepened so the column has weight
@@ -1543,13 +1645,16 @@ function pixelVessel(n){
        + r(0,1,1,h-2,PX.neon) + r(w-1,1,1,h-2,PX.neon) + `</g>`;
   }
 
+  const cid = 'pxc' + (pixelVessel._id = (pixelVessel._id||0) + 1);
+  const frame = bare ? '' :
+    r(1,0,w-2,1,PX.outline)+r(1,h-1,w-2,1,PX.outline)+r(0,1,1,h-2,PX.outline)+r(w-1,1,1,h-2,PX.outline);
+  const neonFrame = (over && !bare)
+    ? `<g class="pxneon">${r(1,0,w-2,1,PX.neon)}${r(1,h-1,w-2,1,PX.neon)}${r(0,1,1,h-2,PX.neon)}${r(w-1,1,1,h-2,PX.neon)}</g>`
+    : '';
   return `<div class="pxwrap"><svg class="pxsvg" width="${w*scale}" height="${h*scale}"
     viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges">
-    <defs><clipPath id="pxc${n}"><rect x="1" y="1" width="${innerW}" height="${innerH}"/></clipPath></defs>
-    <g clip-path="url(#pxc${n})">${g}</g>
-    ${r(1,0,w-2,1,PX.outline)}${r(1,h-1,w-2,1,PX.outline)}
-    ${r(0,1,1,h-2,PX.outline)}${r(w-1,1,1,h-2,PX.outline)}
-    ${over ? `<g class="pxneon">${r(1,0,w-2,1,PX.neon)}${r(1,h-1,w-2,1,PX.neon)}${r(0,1,1,h-2,PX.neon)}${r(w-1,1,1,h-2,PX.neon)}</g>` : ''}
+    <defs><clipPath id="${cid}"><rect x="1" y="1" width="${innerW}" height="${innerH}"/></clipPath></defs>
+    <g clip-path="url(#${cid})">${g}</g>${frame}${neonFrame}
   </svg></div>`;
 }
 
@@ -1703,6 +1808,96 @@ const toggleRow = (on) => `
     nav(`<span class="tools-filled">⚒ Tools</span>`, '3 · filled',
         'loudest. Risks out-shouting the primary CTA on the same screen.')
   );
+})();
+
+/* ════════════════════════════════════════════════════════════
+   §2  PLACEMENT — Log tab food hero + corner button
+   ════════════════════════════════════════════════════════════ */
+const MACROS = [['Protein','var(--accent)',.72,142,180,'g'],
+                ['Carbs','#F37513',.54,148,275,'g'],
+                ['Fat','#429C5A',.61,44,72,'g']];
+
+const macroTracks = () => `<div class="mtracks">` + MACROS.map(([l,c,p,v,t,u])=>`
+  <div class="mtrack">
+    <div class="mrow"><b style="color:${c}">${l}</b><span><i>${v}</i> / ${t} ${u}</span></div>
+    <div class="mbar"><i style="width:${p*100}%;background:${c}"></i></div>
+  </div>`).join('') + `</div>`;
+
+/* the three renderings of the column, all in the same 22 x 102 slot */
+function waterColumn(kind, n){
+  const lvl = (Math.min(n/GOAL,1)*100).toFixed(2)+'%';
+  const state = n===0?'0':n>GOAL?'over':n===GOAL?'full':'part';
+  if (kind === 'pixel')
+    return `<div class="wcol"><span class="wnum">${n}</span>
+      ${pixelVessel(n,{w:8,h:34,unit:3})}
+      <span class="wcap">cups</span></div>`;
+  if (kind === 'hybrid')
+    return `<div class="wcol"><span class="wnum">${n}</span>
+      <div class="wtube hybrid wblock" data-state="${state}" style="--lvl:${lvl}">
+        ${pixelVessel(n,{w:8,h:34,unit:3,bare:true})}
+        <div class="brimrim"></div>
+      </div>
+      <span class="wcap">cups</span></div>`;
+  return `<div class="wcol"><span class="wnum">${n}</span>
+    <div class="wtube wblock" data-state="${state}" style="--lvl:${lvl}">
+      <div class="vfill">${body()}</div>
+      <div class="vsky">${wave(WAVE_V)}</div>
+      <div class="brimrim"></div>
+    </div>
+    <span class="wcap">cups</span></div>`;
+}
+
+function logFrame(kind, n, on){
+  return `<div class="logframe theme-dark">
+    <div class="datenav" style="border-style:solid">
+      <span class="chev">‹</span>
+      <div class="dayw"><small>Wed, Aug 6</small><b>Today</b></div>
+      <span class="chev">›</span>
+      <span class="tools-keyline">⚒ Tools</span>
+    </div>
+    <div class="foodhero">
+      <div class="miniring"><span>1,240</span></div>
+      ${macroTracks()}
+      ${on ? waterColumn(kind, n) : ''}
+    </div>
+    <div class="mealstub" style="height:40px;margin-top:10px">breakfast</div>
+    <div class="mealstub" style="height:40px;margin-top:8px">lunch</div>
+    <div class="mealstub" style="height:52px;margin-top:8px">dinner</div>
+    ${on ? `<div class="fab">${kind==='pixel'||kind==='hybrid' ? pixelButton() : btn('lg')}</div>` : ''}
+    <div class="tabbarstub"><span>Home</span><b>Log</b><span>Battle</span><span>Arena</span><span>You</span></div>
+  </div>`;
+}
+
+(function buildPlacement(){
+  const host = document.getElementById('placementRow');
+  if (!host) return;
+  [['hybrid', 5, true,  'Toggle ON · hybrid column + corner button'],
+   ['clean',  5, true,  'Toggle ON · Erewhon column'],
+   ['clean',  5, false, 'Toggle OFF · nothing added, nothing moved']
+  ].forEach(([kind,n,on,cap])=>{
+    const d = document.createElement('div');
+    d.innerHTML = logFrame(kind,n,on) +
+      `<div style="font-size:11px;color:var(--page-muted);text-align:center;margin-top:9px;width:300px">${cap}</div>`;
+    host.appendChild(d);
+  });
+})();
+
+(function buildHybrid(){
+  const host = document.getElementById('hybridRow');
+  if (!host) return;
+  [['clean','Erewhon · smooth fill, sine wave, soft glow'],
+   ['pixel','Pixel as-is · note the near-white empty track'],
+   ['hybrid','HYBRID · pixel water in a curved shell']
+  ].forEach(([kind,cap])=>{
+    const tile = document.createElement('div');
+    tile.className = 'tile theme-dark';
+    tile.style.width = '208px';
+    tile.innerHTML =
+      `<div style="display:flex;gap:16px;justify-content:center;align-items:flex-end">` +
+      [0,5,9].map(n=>waterColumn(kind,n)).join('') +
+      `</div><div class="cap">${cap}</div>`;
+    host.appendChild(tile);
+  });
 })();
 
 const rmBtn = document.getElementById('rmToggle');
