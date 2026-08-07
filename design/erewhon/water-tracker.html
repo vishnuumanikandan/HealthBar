@@ -27,13 +27,12 @@
   (UI/HomeView.swift `cleanContent`) — i.e. directly below the daily rings/summary,
   above the jump cards. Neighbours are drawn as gray blocks in §2.
 
-  REV 4 — the caustic ribbon network is GONE, replaced by a minimal three-glint
-  sheen, and nothing in the element animates a paint property any more. Those
-  were the same problem: 68 live `feTurbulence` filters were re-rasterizing every
-  frame and starving the main thread, and the ripple was animating `border-width`.
-  Everything now animates transform and opacity only. This also RETIRES the
-  rev-2/3 shader-vs-asset question (§4) — but it thins the §1 argument, since the
-  dense white texture was carrying part of the water/accent separation.
+  REV 5 — the caustic ribbon network is BACK (rev 4's minimal sheen read too
+  plain) but built the cheap way: the filter is baked ONCE into a tiling image
+  instead of run live on 68 elements every frame, so the rev-3 look now costs what
+  rev 4 cost. Palette moved to very light cyan + white foam. New OVERFULL
+  treatment: the vessel highlights and its border glows neon. Every animation in
+  the element is transform/opacity only.
 -->
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -70,9 +69,10 @@
   --accent-deep:#2B62EF;
 
   /* PROPOSED water family — dark column */
-  --water:#6FC9F2;         /* light sky blue */
-  --water-deep:#2E86B8;
-  --water-foam:#FFFFFF;    /* foam / surface glints — pure white */
+  --water:#7BDFF2;         /* very light cyan */
+  --water-deep:#2A9CC4;    /* depth + the dark caustic patches */
+  --water-foam:#FFFFFF;    /* foam ribbons — pure white */
+  --water-neon:#5FE9FF;    /* OVERFULL only: the highlight + border glow */
 }
 
 /* ── Erewhon LIGHT (pinned) ──────────────────────────────── */
@@ -89,9 +89,10 @@
   --accent-deep:#0022B1;
 
   /* PROPOSED water family — light column */
-  --water:#2189C4;         /* sky blue, deepened — see the contrast note in §1 */
-  --water-deep:#10618F;
-  --water-foam:#FFFFFF;    /* foam / surface glints — pure white */
+  --water:#17849F;         /* same cyan hue, deepened — see the contrast note in §1 */
+  --water-deep:#0C5F74;
+  --water-foam:#FFFFFF;    /* foam ribbons — pure white */
+  --water-neon:#00AFD9;    /* OVERFULL only: the highlight + border glow */
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -160,38 +161,49 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
 .wread .t{font-size:11px;color:var(--muted);margin-left:1px}
 .wread .u{font-size:11px;color:var(--faint);margin-left:5px}
 
-/* ── WATER BODY: gradient base + a minimal surface sheen ─────
-   REV 4 replaced the caustic ribbon network with three soft glints — the least
-   texture that still reads as light on water rather than paint in a box.
+/* ── WATER BODY: gradient base + the caustic ribbon network ──
+   REV 5 restores the rev-3 texture (rev 4's three-glint sheen read too plain) but
+   builds it a completely different way, because the ORIGINAL construction is what
+   made the page stutter.
 
-   This was BOTH the simplification and the performance fix. The caustic was
-   band-passed fractal noise, and `feTurbulence` is a per-pixel CPU filter: the
-   page ran 68 of them with their frequency animated, forcing a full re-rasterize
-   every frame. Nothing else could stay smooth through that. The sheen below is
-   three gradients on one composited layer — effectively free once painted.
+   Rev 2/3 ran a live `feTurbulence` filter on every water layer — 68 of them —
+   each with its frequency animated. feTurbulence is a per-pixel CPU filter, so an
+   animated one re-rasterizes EVERY FRAME, 68 times over, and nothing else on the
+   page could get a frame in edgeways.
 
-   Percentage sizes and positions, so one declaration reads correctly in a ~180pt
-   trough and in a 32pt vessel with no per-size variant.                        */
+   Rev 5 rasterizes the texture ONCE. The same filter is baked into a small
+   `stitchTiles` SVG that the browser rasterizes a single time and then tiles as an
+   ordinary background image. The only thing that animates is `transform`, which
+   never touches paint. Net effect: identical look, one raster instead of 68 per
+   frame, and the loop is now SEAMLESS (a whole-tile translate wraps perfectly)
+   where rev 3 had to ping-pong because a noise field is not tileable.
+
+   The tile is built in JS from the live token values (see `causticURI`), so the
+   texture still themes itself instead of hardcoding a blue.                     */
 .wbody{
   position:absolute;inset:0;
-  background:linear-gradient(180deg,var(--water) 0%,var(--water-deep) 135%);
+  background:linear-gradient(180deg,var(--water) 0%,var(--water-deep) 128%);
 }
-.wsheen{
-  position:absolute;inset:0 -8%;pointer-events:none;
-  background:
-    /* two long glints — the primary "this is water" cue */
-    radial-gradient(68% 13% at 33% 25%, color-mix(in srgb,var(--water-foam) 58%,transparent) 0%, transparent 72%),
-    radial-gradient(50% 10% at 67% 60%, color-mix(in srgb,var(--water-foam) 32%,transparent) 0%, transparent 74%),
-    /* one soft shadow low down, so the body has depth instead of reading flat */
-    radial-gradient(82% 17% at 50% 94%, color-mix(in srgb,var(--water-deep) 55%,transparent) 0%, transparent 78%);
-  animation:glide 16s ease-in-out infinite alternate;       /* DECORATIVE */
+.caustic{
+  position:absolute;top:-12%;left:0;height:124%;
+  width:calc(100% + var(--cx-tile));      /* one spare tile, so the wrap never gaps */
+  background-repeat:repeat;
+  background-size:var(--cx-tile) var(--cx-tile);
+  pointer-events:none;
+  will-change:transform;
 }
-/* transform + opacity are the only two properties the compositor can animate
-   without repainting, and every CONTINUOUS animation here is limited to those two.
-   Two bounded exceptions remain and are deliberate: the goal glow (box-shadow) and
-   the Reduce-Motion pulse (filter: brightness). Both are ONE-SHOT, on ONE element,
-   fired by a tap — not per-frame work competing with a scroll. */
-@keyframes glide{from{transform:translate3d(-3.5%,0,0)}to{transform:translate3d(3.5%,0,0)}}
+.caustic.deep{opacity:.55;animation:causticDrift 27s linear infinite}       /* DECORATIVE */
+.caustic.lite{opacity:.85;animation:causticDrift 19s linear infinite}       /* DECORATIVE */
+.theme-dark  .caustic.lite{background-image:var(--cx-lite-dark)}
+.theme-dark  .caustic.deep{background-image:var(--cx-deep-dark)}
+.theme-light .caustic.lite{background-image:var(--cx-lite-light)}
+.theme-light .caustic.deep{background-image:var(--cx-deep-light)}
+/* Translating by exactly one tile wraps with no seam and no jump. transform only —
+   the background image is already rasterized and is never repainted. */
+@keyframes causticDrift{
+  from{transform:translate3d(0,0,0)}
+  to  {transform:translate3d(calc(var(--cx-tile) * -1),0,0)}
+}
 
 /* ── ANIMATED WAVY SURFACE ───────────────────────────────────
    The waterline is carved by an opaque `--sunk` "sky" whose BOTTOM edge is a sine
@@ -265,13 +277,37 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
 /* goal tick on the vessel wall */
 .vtick{position:absolute;right:0;width:7px;height:1px;background:var(--faint);opacity:.55;bottom:100%}
 
-/* overfull brim rim — opacity-toggled, never conditional markup */
+/* ── OVERFULL: the vessel lights up ──────────────────────────
+   Two layers, because the vessel clips its own overflow: `brimrim` lives INSIDE
+   and draws the crisp neon hairline against the water, `neon` lives in the
+   wrapper OUTSIDE the clip and carries the glow that would otherwise be cut off.
+   Both are opacity-toggled — never conditional markup, never an animated shadow. */
 .brimrim{
   position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-  box-shadow:inset 0 0 0 1.5px var(--water-foam);
-  opacity:0;transition:opacity .2s ease;
+  box-shadow:inset 0 0 0 1.5px var(--water-neon);
+  opacity:0;transition:opacity .28s ease;
 }
 .wblock[data-state="over"] .brimrim{opacity:1}
+
+.neon{
+  position:absolute;inset:0;border-radius:9px;pointer-events:none;opacity:0;
+  box-shadow:0 0 0 1.5px var(--water-neon),
+             0 0 9px 1px  color-mix(in srgb,var(--water-neon) 62%,transparent),
+             0 0 22px 3px color-mix(in srgb,var(--water-neon) 30%,transparent);
+  transition:opacity .28s ease;
+}
+.hwrap:has(.htrough.thin) .neon{border-radius:5px}
+.vwrap .neon{border-radius:11px}
+.vwrap:has(.vessel.sm) .neon{border-radius:8px}
+/* The shadow itself is STATIC; only the layer's opacity breathes, so the glow
+   costs one composited layer rather than a repaint per frame. */
+.wblock[data-state="over"] .neon{opacity:1;animation:neonBreathe 2.8s ease-in-out infinite}
+@keyframes neonBreathe{0%,100%{opacity:.72}50%{opacity:1}}
+
+/* and the water itself brightens — "highlighted", not just outlined */
+.wblock[data-state="over"] .wbody{
+  background:linear-gradient(180deg,var(--water-neon) 0%,var(--water) 52%,var(--water-deep) 132%);
+}
 
 /* ── THE BUTTON: perfect circle, knocked-out droplet ─────── */
 .plus{
@@ -362,25 +398,42 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
   14% {opacity:1;transform:rotate(var(--a)) translateY(calc(var(--r) * -0.42)) scale(1)}
   100%{opacity:0;transform:rotate(var(--a)) translateY(calc(var(--r) * -1)) scale(.3)}
 }
-/* goal-met one-shot glow — DECORATIVE */
-.goalglow{animation:glow 500ms ease-out}
-@keyframes glow{
-  0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--water) 55%,transparent)}
-  100%{box-shadow:0 0 0 9px transparent}
+/* ── goal-met one-shot ring — DECORATIVE ─────────────────────
+   Rev 4 animated box-shadow here, which is a paint property. It is a scaling ring
+   now, so the LAST animated paint property in the element is gone. Lives in the
+   wrapper so it can expand past the vessel's clip. */
+.goalring{
+  position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  border:2px solid var(--water);opacity:0;
+}
+.hwrap .goalring{border-radius:9px}
+.hwrap:has(.htrough.thin) .goalring{border-radius:5px}
+.vwrap .goalring{border-radius:11px}
+.vwrap:has(.vessel.sm) .goalring{border-radius:8px}
+.goalglow .goalring{animation:goalPop 520ms cubic-bezier(.2,.7,.3,1) forwards}
+@keyframes goalPop{
+  0%  {opacity:.9;transform:scale(1)}
+  100%{opacity:0; transform:scale(1.34)}
 }
 
 /* ── REDUCE MOTION ───────────────────────────────────────── */
 /* Decorative motion OFF. Level change survives (it is state feedback).
    Splash degrades to a single brightness pulse — no droplets, no ripple.  */
-body.rm .wsheen,
+body.rm .caustic,
 body.rm .wavetop,
 body.rm .hmen,
-body.rm .goalglow{animation:none!important}
+body.rm .neon,
+body.rm .goalring{animation:none!important}
+/* the overfull glow STAYS — it is state, not decoration — it just stops breathing */
+body.rm .wblock[data-state="over"] .neon{opacity:1}
+/* the one-shot goal ring is pure celebration, so it does not fire at all;
+   the button's brightness pulse is the acknowledgement under Reduce Motion */
+body.rm .goalring{opacity:0!important}
 body.rm .plus .ring,body.rm .plus .sd{display:none}
 body.rm .plus.hit{animation:rmpulse 180ms ease-out}   /* no scale, no throw — light only */
 @keyframes rmpulse{0%{filter:brightness(1.6)}100%{filter:brightness(1)}}
 @media (prefers-reduced-motion:reduce){
-  .wsheen,.wavetop,.hmen{animation:none!important}
+  .caustic,.wavetop,.hmen{animation:none!important}
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -472,17 +525,13 @@ body.rm .plus.hit{animation:rmpulse 180ms ease-out}   /* no scale, no throw — 
     <div style="background:#4882FF;color:#fff">accent 221°</div>
     <div style="background:#E0B047">amber 43°</div>
   </div>
-  <p class="note" style="margin-bottom:0"><b>Rev 3 narrowed this, and it should be said plainly.</b> Moving the
-  water from cyan to <b>light sky blue</b> pulled it from ~192° to ~199°, so the gap to the accent is now
-  <b>~22°, not ~30°</b>. Hue alone is doing less work than it was. What replaces it is stronger: the water is now
-  far <i>lighter</i> than the accent (69% vs 60% lightness in dark), and it is the only element on Home that is
-  <b>textured, wavy-edged and pip-counted</b> at all. Nothing else in Erewhon looks remotely like it.</p>
-  <p class="note" style="margin-bottom:0"><span class="rule">rev 4 weakened this</span> The dense white caustic
-  was doing real separation work, and simplifying it to three soft glints gives some of that back. What now
-  carries the distinction is the <b>animated wavy waterline</b> and the <b>circular droplet button</b> — both
-  unique on the screen, neither colour-dependent, so the colour-blind case is still covered. But hue alone is
-  down to ~22°, and if a future pass also flattens the wave, the water would become a light blue bar sitting
-  under a blue calorie ring. <b>Flagging it as a floor: the wavy surface is now load-bearing, not decoration.</b></p>
+  <p class="note" style="margin-bottom:0"><b>Rev 5 restored the margin.</b> Very light cyan sits at <b>~190°</b>,
+  so the gap to the 221° accent is back to <b>~31°</b> — wider than any revision so far, and the water is also far
+  <i>lighter</i> than the accent (72% vs 60% lightness in dark). With the caustic network back, the water is again
+  the only element on Home that is <b>textured, wavy-edged and pip-counted</b>. Nothing else in Erewhon looks
+  remotely like it, and none of that reading depends on hue, so the colour-blind case is covered structurally
+  rather than by the palette. The rev-4 worry about the wave being load-bearing is resolved: it now has the
+  texture sharing the load again.</p>
   <p class="note" style="margin-bottom:0"><b>Alternative if the ruling is "no new colour":</b> the element can run
   entirely on <code>--accent</code> + <code>--sunk</code>. It costs the glance-distinction above and makes the
   water read as a second progress bar; the caustic, wave and splash all still work. Say the word and I'll add that arm.</p>
@@ -490,12 +539,17 @@ body.rm .plus.hit{animation:rmpulse 180ms ease-out}   /* no scale, no throw — 
 
 <h3>Dark column (Erewhon Dark)</h3>
 <div class="swrow">
-  <div class="sw"><span class="chip" style="background:#6FC9F2"></span><div class="meta">
-    <div class="nm">water</div><div class="hx">#6FC9F2 · h199 s83 l69</div>
-    <div class="use">Light sky blue. Fill body (top stop), filled cup pips, the droplet button, the overfull chip.</div></div></div>
-  <div class="sw"><span class="chip" style="background:#2E86B8"></span><div class="meta">
-    <div class="nm">water-deep</div><div class="hx">#2E86B8 · h202 s60 l45</div>
-    <div class="use">Bottom stop of the fill gradient and of the button; the soft shadow band in the sheen.</div></div></div>
+  <div class="sw"><span class="chip" style="background:#7BDFF2"></span><div class="meta">
+    <div class="nm">water</div><div class="hx">#7BDFF2 · h190 s79 l72</div>
+    <div class="use">Very light cyan. Fill body (top stop), filled cup pips, the droplet button, the overfull chip.</div></div></div>
+  <div class="sw"><span class="chip" style="background:#2A9CC4"></span><div class="meta">
+    <div class="nm">water-deep</div><div class="hx">#2A9CC4 · h196 s65 l47</div>
+    <div class="use">Bottom stop of the fill gradient and of the button; the broad dark caustic patches.
+    It is what the white ribbons read <i>against</i> — with water this pale, the depth is doing the contrast work.</div></div></div>
+  <div class="sw"><span class="chip" style="background:#5FE9FF"></span><div class="meta">
+    <div class="nm">water-neon</div><div class="hx">#5FE9FF · h188 s100 l69</div>
+    <div class="use"><b>Overfull only.</b> The border glow, the inner hairline, and the top stop of the
+    brightened body. Never appears below 9 cups, so it stays a signal rather than a colour.</div></div></div>
   <div class="sw"><span class="chip" style="background:#FFFFFF"></span><div class="meta">
     <div class="nm">water-foam</div><div class="hx">#FFFFFF · pure white</div>
     <div class="use">The surface glints, meniscus, splash crown + ripples, overfull brim rim.
@@ -504,40 +558,45 @@ body.rm .plus.hit{animation:rmpulse 180ms ease-out}   /* no scale, no throw — 
 
 <h3>Light column (Erewhon Light)</h3>
 <div class="swrow">
-  <div class="sw"><span class="chip" style="background:#2189C4"></span><div class="meta">
-    <div class="nm">water</div><div class="hx">#2189C4 · h202 s71 l45</div>
+  <div class="sw"><span class="chip" style="background:#17849F"></span><div class="meta">
+    <div class="nm">water</div><div class="hx">#17849F · h192 s75 l36</div>
     <div class="use"><b>Deepened on purpose.</b> The dark column&rsquo;s sky blue is far too pale to sit on
     <code>#F3F4F6</code> — see the light-theme note below. Same hue family, more depth.</div></div></div>
-  <div class="sw"><span class="chip" style="background:#10618F"></span><div class="meta">
-    <div class="nm">water-deep</div><div class="hx">#10618F · h202 s80 l31</div>
+  <div class="sw"><span class="chip" style="background:#0C5F74"></span><div class="meta">
+    <div class="nm">water-deep</div><div class="hx">#0C5F74 · h192 s81 l25</div>
     <div class="use">Bottom stop of the fill gradient; the soft shadow band in the sheen.</div></div></div>
   <div class="sw"><span class="chip" style="background:#FFFFFF"></span><div class="meta">
     <div class="nm">water-foam</div><div class="hx">#FFFFFF · pure white</div>
     <div class="use">Identical in both columns — foam is foam. It only ever sits ON water, never on the page, which
     is what makes pure white safe here and disqualifying anywhere else.</div></div></div>
+  <div class="sw"><span class="chip" style="background:#00AFD9"></span><div class="meta">
+    <div class="nm">water-neon</div><div class="hx">#00AFD9 · h192 s100 l43</div>
+    <div class="use"><b>Overfull only.</b> Vivid rather than pale, so the glow still reads as a glow against a
+    near-white page.</div></div></div>
 </div>
 
 <div class="docbox warn">
   <div class="rule">⚠ Why the light column is not the same sky blue</div>
-  <p class="note" style="margin-top:0">"Light sky blue" is the design intent and it is drawn that way in Erewhon
-  Dark, where it sits on a near-black page and reads beautifully at <b>10.4:1</b>. Erewhon Light is the problem:
-  the page is <code>#F3F4F6</code> and the empty track is <code>#E8EAED</code>, both essentially white. The dark
-  column's <code>#6FC9F2</code> on that track measures <b>1.5:1</b> — a filled bar would be nearly
+  <p class="note" style="margin-top:0">"Very light cyan" is the design intent and it is drawn exactly that way in
+  Erewhon Dark, where it sits on a near-black page and reads at <b>12.3:1</b>. Erewhon Light is the problem: the
+  page is <code>#F3F4F6</code> and the empty track is <code>#E8EAED</code>, both essentially white. The dark
+  column's <code>#7BDFF2</code> on that track measures <b>1.3:1</b> — a filled bar would be almost
   indistinguishable from an empty one in sunlight or for anyone with reduced contrast sensitivity, and the fill
   level is the entire point of the element.</p>
-  <p class="note" style="margin-bottom:0">So the light column keeps the sky-blue <i>hue</i> (202°, same family)
-  and takes it down to <code>#2189C4</code>, which lands at <b>3.2:1</b> against the track — just over the floor.
-  It still reads as sky blue against white; it is simply not pale. This mirrors what the palette already does
-  elsewhere: m-carbs is <code>#F37513</code> in dark and <code>#CD4B00</code> in light, m-fat
-  <code>#429C5A</code> / <code>#0F6A31</code>. <b>If you want the pale blue in light mode too, that is available
-  — but it costs the fill/empty distinction, and I would want that said out loud rather than discovered later.</b></p>
+  <p class="note" style="margin-bottom:0">So the light column keeps the cyan <i>hue</i> (192°, same family) and
+  takes it down to <code>#17849F</code>, landing at <b>3.6:1</b> against the track. It still reads as cyan against
+  white; it is simply not pale. This mirrors what the palette already does elsewhere: m-carbs is
+  <code>#F37513</code> in dark and <code>#CD4B00</code> in light, m-fat <code>#429C5A</code> /
+  <code>#0F6A31</code>. <b>The pale cyan in light mode is available if you want it — but it costs the fill/empty
+  distinction, and that should be said out loud rather than discovered later.</b> It is ruling item 8.</p>
 </div>
 
 <table>
   <tr><th>Check</th><th>Result</th></tr>
-  <tr><td><code>water</code> vs <code>accent</code> hue separation</td><td>dark 199° vs 221° = <b>22°</b> · light 202° vs 223° = <b>21°</b> — narrower than rev 2. Now backed by a large lightness gap and the white texture, not hue alone</td></tr>
-  <tr><td><code>water</code> on <code>--bg</code>, as a fill (non-text)</td><td>dark <b>10.4:1</b> · light <b>3.5:1</b> — both clear the 3:1 floor for a meaningful graphic</td></tr>
-  <tr><td><code>water</code> against its own empty track</td><td>dark <b>7.9:1</b> vs <code>#222838</code> · light <b>3.2:1</b> vs <code>#E8EAED</code> — this is the one that nearly failed, see below</td></tr>
+  <tr><td><code>water</code> vs <code>accent</code> hue separation</td><td>dark 190° vs 221° = <b>31°</b> · light 192° vs 223° = <b>31°</b> — the widest of any revision, and backed by a large lightness gap plus the texture</td></tr>
+  <tr><td><code>water</code> on <code>--bg</code>, as a fill (non-text)</td><td>dark <b>12.3:1</b> · light <b>4.3:1</b> — both clear the 3:1 floor for a meaningful graphic</td></tr>
+  <tr><td><code>water</code> against its own empty track</td><td>dark <b>9.4:1</b> vs <code>#222838</code> · light <b>3.6:1</b> vs <code>#E8EAED</code> — this is the constraint that sets the light column, see below</td></tr>
+  <tr><td><code>water-neon</code> vs <code>water</code></td><td>Deliberately close in hue and only a step brighter. The overfull signal is meant to read as the <i>same water lit up</i>, not a different substance — the glow does the work, not a colour change</td></tr>
   <tr><td>Reading text (<code>5 / 8 cups</code>)</td><td>uses <code>--ink</code>/<code>--muted</code>, never a water token — the count stays legible even if the ruling changes the blues</td></tr>
   <tr><td>Colour-blind check (deuteranopia/protanopia)</td><td>cyan vs accent-blue is the <i>weakest</i> of the separations. Mitigated structurally: water is now the only element on Home with a <b>texture</b>, a wavy edge and cup pips, and it is labelled. <b>Do not rely on hue alone.</b></td></tr>
 </table>
@@ -628,13 +687,23 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
         goal — cups 9, 10, 11… get the light impact again, so overfull never feels like a repeated achievement.</td>
   </tr>
   <tr>
-    <td><b>Surface sheen</b><br><span style="color:var(--page-faint)">three soft glints on the body</span></td>
+    <td><b>Caustic drift</b><br><span style="color:var(--page-faint)">the ribbon network flowing</span></td>
     <td style="color:var(--page-faint)">decorative</td>
-    <td>16 s, infinite, ping-pong</td>
-    <td>±3.5% translate, ease-in-out</td>
-    <td>The entire texture, and the cheapest thing on the page: three gradients on one composited layer drifting
-        as a unit. Ping-pong rather than a wrapping loop since there is nothing to tile. Replaced the rev-2/3
-        caustic network — see the box below for why that is a straight win rather than a compromise.</td>
+    <td>19 s + 27 s, infinite, <b>seamless</b></td>
+    <td>Whole-tile translate, linear</td>
+    <td>Two layers — thin white ribbons over broad dark patches — drifting at different rates. Each translates by
+        exactly one tile width, so the loop wraps with no seam and no jump. Rev 3 had to ping-pong here because a
+        live noise field is not tileable; baking the texture with <code>stitchTiles</code> made a true loop
+        possible, so this is both cheaper AND better than the version it replaces.</td>
+  </tr>
+  <tr>
+    <td><b>Overfull glow</b><br><span style="color:var(--page-faint)">the neon border breathing</span></td>
+    <td style="color:var(--page-faint)">decorative</td>
+    <td>2.8 s, infinite</td>
+    <td>Opacity 0.72 ⇄ 1.0, ease-in-out</td>
+    <td>The shadow itself is <b>static</b>; only the layer's opacity breathes, so the glow costs one composited
+        layer rather than a repaint per frame. Under Reduce Motion the glow <b>stays lit at full opacity</b> and
+        simply stops breathing — it is state, not decoration, and hiding it would lose information.</td>
   </tr>
   <tr>
     <td><b>Wavy surface</b></td>
@@ -658,28 +727,39 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
     <td>The leading edge of a horizontal fill. Fades out at 0 cups.</td>
   </tr>
   <tr>
-    <td><b>Goal-met glow</b></td>
+    <td><b>Goal-met ring</b></td>
     <td style="color:var(--page-faint)">decorative</td>
-    <td>500 ms, one-shot</td>
-    <td>Ring expands 0→9 pt and fades</td>
-    <td>Fires once, only on the transition <i>into</i> 8/8. Not on load, not on 9/8.</td>
+    <td>520 ms, one-shot</td>
+    <td>Ring scales 1→1.34 and fades</td>
+    <td>Fires once, only on the transition <i>into</i> 8/8 — not on load, not on 9/8. Drawn in the wrapper rather
+        than the vessel so it can expand past the vessel's own clip. Suppressed entirely under Reduce Motion,
+        where it is pure celebration and the button's brightness pulse already acknowledges the tap.</td>
   </tr>
 </table>
 
 <div class="docbox">
-  <div class="rule">✓ Rev 4 retired the texture cost question</div>
-  <p class="note" style="margin-top:0">Revs 2 and 3 carried a real open problem here: the caustic ribbon network
-  was band-passed fractal noise, which no arrangement of gradients can produce, so shipping it meant either a
-  noise shader or a hand-authored looping texture asset. That was the only item on this page with an engineering
-  price attached, and it was <b>ruling item 7</b>.</p>
-  <p class="note"><b>Simplifying the texture removed the question entirely — and it was also the performance
-  fix.</b> The two turned out to be the same problem. <code>feTurbulence</code> is a per-pixel CPU filter; the page
-  was running 68 of them with their frequency animated, which forces a full re-rasterize every single frame.
-  That is what made the button splash feel blocky: the animation was fine, but the main thread never had a frame
-  to spare. The sheen that replaced it is three <code>radial-gradient</code>s on one composited layer.</p>
-  <p class="note" style="margin-bottom:0">So the texture now costs <b>nothing beyond what a plain gradient fill
-  already costs</b> — no shader, no asset, no art direction, nothing to keep in sync. Ruling item 7 is closed
-  unless you want the dense caustic back, in which case the shader-vs-asset choice returns with it.</p>
+  <div class="rule">✓ How the texture got cheap — and what that means for the build</div>
+  <p class="note" style="margin-top:0">This went three ways before it landed, and the path matters more than the
+  destination because it is the same decision the implementation faces.</p>
+  <p class="note"><b>Rev 2/3 ran the filter live.</b> The caustic is band-passed fractal noise — a noise field
+  thresholded to a narrow luminance band, which is what turns clouds into a ribbon web. No arrangement of
+  gradients produces it. So each water layer carried its own <code>feTurbulence</code>, 68 in all, each with its
+  frequency animated. <code>feTurbulence</code> is a <b>per-pixel CPU filter</b>: animating it forces a full
+  re-rasterize every frame, 68 times over. That is what made the button splash feel blocky — the animation was
+  correct, the main thread just never had a frame to spare.</p>
+  <p class="note"><b>Rev 4 removed the texture</b> to fix the stutter, and lost the look.</p>
+  <p class="note"><b>Rev 5 keeps both</b> by separating <i>generating</i> the texture from <i>animating</i> it.
+  The identical filter is baked <b>once</b> into a small <code>stitchTiles</code> SVG, which the browser
+  rasterizes a single time and then tiles as an ordinary background image. Nothing animates but
+  <code>transform</code>. One raster, for the whole page, forever — instead of 68 per frame. The loop also got
+  <i>better</i>: a tiled image can translate by exactly one tile and wrap invisibly, where the live version had to
+  ping-pong because a noise field is not tileable.</p>
+  <p class="note" style="margin-bottom:0"><b>The conclusion to carry into WATER-1:</b> the answer to the old
+  shader-vs-asset question is <b>asset</b> — but a <i>generated</i> one, not a hand-authored one. The texture is
+  produced from the token values rather than drawn by hand, so it restyles with the theme and there is no artwork
+  to keep in sync. Ruling item 7 stands closed; what replaces it is a note that the texture must be <b>rendered
+  once and reused</b>, never evaluated per frame. Getting that backwards is precisely what made revs 2 and 3
+  stutter.</p>
 </div>
 
 <div class="docbox">
@@ -727,8 +807,11 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
   </tr>
   <tr>
     <td><b>Overfull</b><br>9 / 8</td>
-    <td><b>Fill is clamped at 100% forever</b>, and stays still like the full state. Above goal it gains a white
-        brim rim — "brimming", not "broken".</td>
+    <td><b>Fill is clamped at 100% forever</b>, and stays still like the full state. The vessel then
+        <b>lights up</b>: the body brightens to <code>water-neon</code> at the top, a neon hairline runs inside
+        the rim, and a soft neon glow sits outside it, breathing slowly. Read as "brimming", never as "broken" —
+        it is the most celebratory the element ever gets, which is deliberate, because drinking more water than
+        the goal is a good outcome and the surface should look pleased about it.</td>
     <td>Count keeps counting truthfully: <code>9 / 8</code>, then 10, 11… A keyline
         <code>+N</code> chip (2 pt left rule, no fill — the GUILD-UI-1 keyline-tag language) sits after the count.
         Pips: all 8 filled, the last carrying an over-ring. <b>Never <code>danger</code>, never a warning</b> —
@@ -771,10 +854,10 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
     <li><b>5 · Undo.</b> Still not drawn. Long-press to decrement, a conditional −1, or explicitly none?</li>
     <li><b>6 · Splash budget.</b> Drawn at ≤410 ms against the ≤600 ms target. Keep it snappy, or spend the
         remaining ~190 ms on a slower, more liquid arc?</li>
-    <li><b>7 · The texture.</b> <span class="rule">closed in rev 4</span> The dense caustic network is gone,
-        replaced by a three-glint sheen that costs nothing beyond a gradient fill — no shader, no asset. Nothing
-        to rule on unless you want the busy version back, which would reopen the shader-vs-asset question. Left
-        here so the history is visible rather than silently dropped.</li>
+    <li><b>7 · The texture.</b> <span class="rule">closed</span> The caustic network is back and now costs a
+        single rasterization for the whole page instead of a live filter per element. Nothing left to rule on —
+        the constraint that replaced it is an implementation note, not a choice: render the texture <b>once</b>
+        and reuse it, never per frame. Kept here so the history stays visible rather than silently dropped.</li>
     <li><b>8 · Light-theme water depth.</b> The light column is a deeper sky blue (<code>#2189C4</code>) because
         the dark column&rsquo;s pale blue measures 1.5:1 against the near-white empty track — the fill/empty
         distinction would be lost. Accept the deeper light value, or take the pale blue in both and accept that
@@ -806,10 +889,62 @@ const STATES = [
   {n:9, cap:'Overfull · 9 / 8'}
 ];
 
-/* ── water body: gradient + a three-glint sheen ──────────────
-   No filter, no seeds, no per-tile variation to manage: the sheen is the same
-   three gradients everywhere and costs one composited layer. */
-const body = () => `<div class="wbody"><div class="wsheen"></div></div>`;
+/* ── THE CAUSTIC TILE ────────────────────────────────────────
+   The rev-2/3 filter, baked ONCE into a tileable image instead of run live on 68
+   elements. `stitchTiles="stitch"` makes feTurbulence periodic over the tile, so
+   the image repeats with no seam and a whole-tile translate loops perfectly.
+
+   Colour comes from the live token values, read off a throwaway probe of each
+   theme — so the texture still themes itself rather than hardcoding a blue, even
+   though a data URI cannot see CSS variables. */
+const CX_TILE = 220;
+
+function causticURI(color, cfg){
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${CX_TILE}" height="${CX_TILE}">` +
+      `<filter id="f" x="0" y="0" width="100%" height="100%">` +
+        `<feTurbulence type="fractalNoise" baseFrequency="${cfg.bf}" numOctaves="2"` +
+        ` seed="${cfg.seed}" stitchTiles="stitch" result="t"/>` +
+        `<feColorMatrix in="t" type="matrix" result="a"` +
+        ` values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0"/>` +
+        `<feComponentTransfer in="a" result="band">` +
+          `<feFuncA type="table" tableValues="${cfg.table}"/>` +
+        `</feComponentTransfer>` +
+        (cfg.hard
+          ? `<feComponentTransfer in="band" result="band">` +
+              `<feFuncA type="linear" slope="${cfg.hard[0]}" intercept="${cfg.hard[1]}"/>` +
+            `</feComponentTransfer>`
+          : ``) +
+        `<feComposite in="SourceGraphic" in2="band" operator="in"/>` +
+      `</filter>` +
+      `<rect width="${CX_TILE}" height="${CX_TILE}" fill="${color}" filter="url(#f)"/>` +
+    `</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
+/* Thin ribbons (narrow band, hardened) over broad soft patches (wide band). */
+const CX_LITE = {bf:'0.050 0.072', seed:11, table:'0 0 0 0 0 1 0 0 0 0 0', hard:[3, -1.25]};
+const CX_DEEP = {bf:'0.021 0.032', seed:5,  table:'0 0 0.85 1 0.35 0 0'};
+
+(function bakeCaustics(){
+  const root = document.documentElement.style;
+  root.setProperty('--cx-tile', CX_TILE + 'px');
+  ['dark','light'].forEach(t=>{
+    const probe = document.createElement('div');
+    probe.className = 'theme-' + t;
+    probe.style.display = 'none';
+    document.body.appendChild(probe);
+    const cs = getComputedStyle(probe);
+    const foam = cs.getPropertyValue('--water-foam').trim();
+    const deep = cs.getPropertyValue('--water-deep').trim();
+    probe.remove();
+    root.setProperty(`--cx-lite-${t}`, causticURI(foam, CX_LITE));
+    root.setProperty(`--cx-deep-${t}`, causticURI(deep, CX_DEEP));
+  });
+})();
+
+const body = () => `<div class="wbody">` +
+  `<div class="caustic deep"></div><div class="caustic lite"></div></div>`;
 
 /* ── the wavy surface ────────────────────────────────────────
    4 whole sine periods across a 200%-wide path, translated by exactly 50% (= 2
@@ -865,6 +1000,8 @@ const hVessel = (thin) => `
       <div class="hmen"></div>
       <div class="brimrim"></div>
     </div>
+    <div class="neon"></div>
+    <div class="goalring"></div>
   </div>`;
 
 const vVessel = (sm) => `
@@ -875,6 +1012,8 @@ const vVessel = (sm) => `
       <div class="vtick"></div>
       <div class="brimrim"></div>
     </div>
+    <div class="neon"></div>
+    <div class="goalring"></div>
   </div>`;
 
 /* ── the four concept templates ───────────────────────────── */
@@ -960,7 +1099,7 @@ function add(button){
   render(block);
   splash(button);                      // the splash is on the DISC, not the water
   if (before + 1 === GOAL){            // one-shot glow only on ARRIVAL at goal
-    const v = block.querySelector('.htrough, .vessel');
+    const v = block.querySelector('.hwrap, .vwrap');
     if (v){ v.classList.remove('goalglow'); void v.offsetWidth; v.classList.add('goalglow'); }
   }
 }
