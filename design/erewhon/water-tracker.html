@@ -493,6 +493,43 @@ body.rm .pxwave,body.rm .pxcaustic{animation:none!important}
 .pxneon{animation:pxBlink 1.2s steps(2) infinite}
 @keyframes pxBlink{0%{opacity:1}50%{opacity:.45}100%{opacity:1}}
 body.rm .pxneon{animation:none!important;opacity:1}
+
+/* ── the pixel droplet button ─────────────────────────────────
+   Same control as the Erewhon disc, drawn in the other medium. The press is a
+   1-unit SINK (things in pixel art do not scale — a scaled sprite resamples and
+   goes soft), and the crown is blocky squares stepping outward.
+
+   Every particle travels a whole number of UNITS and gets steps() equal to that
+   number, so each frame lands exactly on the grid. Getting that wrong is what
+   makes pixel motion look mushy: a 20 px travel over 4 steps puts frames on 5 px
+   boundaries, which is off-grid at a 4 px unit and resamples every one of them. */
+.pxbtn{position:relative;display:inline-block;line-height:0;border:0;padding:0;background:none;cursor:pointer;
+       -webkit-tap-highlight-color:transparent}
+.pxbtn .pxbody{display:block}
+.pxbtn.pxhit .pxbody{animation:pxSink 240ms steps(1)}
+@keyframes pxSink{0%{transform:translateY(4px)}100%{transform:translateY(0)}}
+
+.pxsd{position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;
+      background:var(--pxsd,#1D7CA6);opacity:0;pointer-events:none}
+/* The crown flies clear of the disc and lands on the CARD, so it is read against
+   the card. Foam-white works on the night card and disappears on parchment. */
+.pixeltile .pxsd{--pxsd:#1D7CA6}
+.pixeltile.night .pxsd{--pxsd:#DFF7FF}
+.pxbtn.pxhit .pxsd{
+  animation-name:pxCrown;
+  animation-duration:var(--dur,380ms);
+  animation-delay:var(--d,0ms);
+  animation-fill-mode:forwards;
+}
+.pxsd.s3{animation-timing-function:steps(3)}
+.pxsd.s5{animation-timing-function:steps(5)}
+.pxsd.s7{animation-timing-function:steps(7)}
+@keyframes pxCrown{
+  0%  {opacity:1;transform:translate(0,0)}
+  100%{opacity:0;transform:translate(var(--dx),var(--dy))}
+}
+body.rm .pxsd{display:none}
+body.rm .pxbtn.pxhit .pxbody{animation:none}
 /* The pixel arm does NOT use theme tokens: its cards are parchment by day and
    near-black at night (HomeView: #ECD9B5 / #1C1917). Drawing the pixel vessel on
    an Erewhon dark card was wrong and hid the outline entirely — a dark outline on
@@ -950,8 +987,20 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
 <h2><span class="n">§6</span>Pixel arm — the water, pixelated</h2>
 <p class="note">Home has two renderers. Everything above is the flat (Erewhon) arm; the pixel arm is a different
 drawing, not a filter over the same one. Rendered below at 4× so the grid is legible — every edge sits on a whole
-pixel, nothing is anti-aliased, and the fill quantises to <b>one block per cup</b>, which a water tracker wants
-anyway.</p>
+pixel and nothing is anti-aliased. <b>These tiles are live too:</b> tap a droplet to fill one.</p>
+
+<div class="docbox">
+  <p class="note" style="margin-top:0"><b>The geometry is chosen, not guessed.</b> The column is 9 × 42 units,
+  which leaves an inner well of 7 × 40 — and 40 divides by 8, so <b>one cup is exactly 5 pixel-units</b>. The fill
+  never lands on a half pixel and never needs rounding, which is the whole reason to work on a grid. At 4× that is
+  a 36 × 168 pt column, 1:4.7, sitting between the Erewhon vessel (1:4.1) and the pixel arm's existing
+  <code>PurityVerticalBar</code> (24×150, 1:6.3).</p>
+  <p class="note" style="margin-bottom:0"><b>The button is the same control in the other medium.</b> A hand-set
+  13×13 pixel disc — rasterising a circle at this size looks wrong unless the shoulders are placed by eye — with
+  the droplet knocked out in the outline colour and a darker underside so it reads as an object rather than a
+  sticker. The press is a <b>1-unit sink</b>, not a scale: scaling a sprite resamples it and the whole thing goes
+  soft, which is the one thing pixel art cannot survive.</p>
+</div>
 
 <div class="docbox">
   <p class="note" style="margin-top:0"><b>The motion rule inverts here, and it matters.</b> Everything in §4 is
@@ -960,11 +1009,18 @@ anyway.</p>
   keyline <b>blinks</b> between two states rather than breathing through a gradient, and there is no glow at all
   because a soft glow cannot be drawn on a pixel grid. Chunky frames are a bug in the Erewhon arm and the medium
   in this one — worth stating plainly, because "make it smoother" is the exact wrong note to give this variant.</p>
-  <p class="note" style="margin-bottom:0"><b>It also rhymes with something that already exists.</b> The pixel
-  Home already has a tall thin vertical bar: <code>PurityVerticalBar</code>, 24×150 with a 2 pt border, a flat
-  track and a banded fill. The pixel water is built to that family — same proportion, same border weight, same
-  hard track — so it reads as a sibling rather than a transplant. That is also why the Erewhon vessel got
-  narrower in this revision: the two arms should be the same object.</p>
+  <p class="note"><b>It also rhymes with something that already exists.</b> The pixel Home already has a tall
+  thin vertical bar: <code>PurityVerticalBar</code>, 24×150 with a 2 pt border, a flat track and a banded fill.
+  The pixel water is built to that family — same proportion, same border weight, same hard track — so it reads as
+  a sibling rather than a transplant. That is also why the Erewhon vessel got narrower: the two arms should be
+  the same object.</p>
+  <p class="note" style="margin-bottom:0"><b>Two things the grid forced, worth knowing before this is built.</b>
+  Each crown droplet travels a whole number of units and gets <code>steps()</code> equal to that number, so every
+  frame lands exactly on the grid; a 20 pt travel over 4 steps would put frames on 5 pt boundaries, which is
+  off-grid at a 4 pt unit and resamples every one of them. And the crown is drawn in <b>deep water, not foam</b> —
+  the droplets fly clear of the disc and land on the <i>card</i>, and foam-white is invisible on parchment. The
+  night card flips it back to foam. Colour that is chosen against the wrong surface is the commonest way a pixel
+  sprite reads as broken.</p>
 </div>
 
 <div class="themetag">Pixel arm · 4× · states</div>
@@ -1072,18 +1128,22 @@ they ask for it. Two readings of "secret toggle" are drawn below, because they l
         pixel arm does not use <code>tc.*</code> — so they need their own ruling. Note <code>px-foam</code> is
         <code>#DFF7FF</code> rather than white: on a pixel grid, pure white against mid cyan reads as a hole
         punched in the water rather than a highlight.</li>
-    <li><b>11 · Pixel motion.</b> Confirm the inversion is wanted: in the pixel arm the wave and caustic move in
+    <li><b>11 · Pixel button shape.</b> Drawn as a 13×13 pixel <i>disc</i>, the direct translation of the
+        Erewhon circular droplet button. The alternative is a notched square matching
+        <code>AdaptiveCardShapeStyle</code>, which is the shape language the rest of the pixel arm uses. Disc is
+        the better echo of the other arm; notched square is the better citizen of this one.</li>
+    <li><b>12 · Pixel motion.</b> Confirm the inversion is wanted: in the pixel arm the wave and caustic move in
         <b>whole-pixel steps</b>, the overfull keyline <b>blinks</b> between two states, and there is no glow at
         all. This is the opposite of the smoothness work in §4, on purpose. "Make it smoother" would be the wrong
         note for that variant.</li>
-    <li><b>12 · The Tools toggle.</b> A (a plain labelled "On Home" section) or B (a literal <code>???</code>
+    <li><b>13 · The Tools toggle.</b> A (a plain labelled "On Home" section) or B (a literal <code>???</code>
         section on the SECRET-1 pattern)? Both drawn in §7. Worth knowing before you pick: <b>Tools lives on the
         Log tab</b>, so either way the switch that controls Home is not discoverable from Home.</li>
-    <li><b>13 · The Tools entry point.</b> <span class="rule">own PR</span> Variant 1, 2 or 3 in §8 — my
+    <li><b>14 · The Tools entry point.</b> <span class="rule">own PR</span> Variant 1, 2 or 3 in §8 — my
         recommendation is 2 (keyline), which reads as a control without out-shouting the Log Food CTA. But this
         changes the Log tab for every user regardless of water, so I would rule on it here and <b>ship it
         separately</b>, not inside WATER-1.</li>
-    <li><b>14 · Button labelling.</b> The droplet button carries no <code>+1</code> glyph now. It is unmistakably a
+    <li><b>15 · Button labelling.</b> The droplet button carries no <code>+1</code> glyph now. It is unmistakably a
         water action, but "adds exactly one cup" is learned rather than shown. Accept, or add a small <code>+</code>?</li>
   </ul>
 </div>
@@ -1378,6 +1438,16 @@ const ctx = document.getElementById('contextRow');
 document.addEventListener('click', e=>{
   const b = e.target.closest('[data-add]');
   if (b) add(b);
+
+  const px = e.target.closest('[data-pxadd]');
+  if (px){
+    const tile = px.closest('.tile');
+    tile.dataset.n = +tile.dataset.n + 1;
+    renderPixelTile(tile);
+    px.classList.remove('pxhit'); void px.offsetWidth; px.classList.add('pxhit');
+    clearTimeout(px._st);
+    px._st = setTimeout(()=>px.classList.remove('pxhit'), 560);
+  }
 });
 
 document.getElementById('resetAll').addEventListener('click', ()=>{
@@ -1390,6 +1460,11 @@ document.getElementById('resetAll').addEventListener('click', ()=>{
     });
   }));
   ctx.querySelectorAll('.wblock').forEach(b=>{ b.dataset.n = 5; render(b); });
+  const pxHost = document.getElementById('pixelStrip');
+  if (pxHost) [...pxHost.children].forEach((tile,i)=>{
+    tile.dataset.n = (i < STATES.length ? STATES[i].n : 5);   // last tile is the night example
+    renderPixelTile(tile);
+  });
 });
 
 /* Rev 3 needed an explicit pauseAnimations() here, because the caustic boil was
@@ -1407,7 +1482,7 @@ function setReduceMotion(on){
    deliberately the same tall-thin proportion as the Erewhon vessel so the two
    arms read as one object drawn twice.
    ════════════════════════════════════════════════════════════ */
-const PX = {w:11, h:34, scale:4,
+const PX = {w:9, h:42, scale:4,          // inner 7 x 40 => EXACTLY 5 units per cup
   water:'#45C2E6', deep:'#1D7CA6', foam:'#DFF7FF', neon:'#7BE9FF',
   outline:'#17232E', track:'#E5E7EB'};
 
@@ -1417,7 +1492,8 @@ const r = (x,y,w,h,f,cls) => `<rect x="${x}" y="${y}" width="${w}" height="${h}"
 const CREST = [0,0,1,1,1,0,0,0];
 /* Caustic as horizontal STREAKS [col, rowFromWaterTop, width], period 8 across.
    Single dots read as carbonation; short runs read as light on water. */
-const SPARK = [[0,3,3],[4,1,2],[5,6,3],[1,9,4],[6,4,2],[2,12,3],[4,15,2],[0,18,4],[5,21,3],[1,24,2]];
+const SPARK = [[0,3,3],[4,1,2],[3,6,3],[1,9,3],[5,4,2],[2,12,3],[4,15,2],[0,18,3],
+               [3,21,3],[1,24,2],[4,28,2],[0,31,3],[2,35,3],[5,38,2]];
 
 function pixelVessel(n){
   const {w,h,scale} = PX;
@@ -1477,6 +1553,49 @@ function pixelVessel(n){
   </svg></div>`;
 }
 
+/* A 13x13 pixel circle, given as [startX, width] per row. Hand-set rather than
+   computed: a rasterised circle at this size looks wrong unless the shoulders are
+   chosen by eye. */
+const PXCIRCLE = [[4,5],[2,9],[1,11],[1,11],[0,13],[0,13],[0,13],[0,13],[0,13],[1,11],[1,11],[2,9],[4,5]];
+/* droplet glyph, 7 wide x 9 tall, [startX, width] per row */
+const PXDROP = [[3,1],[2,3],[2,3],[1,5],[1,5],[0,7],[0,7],[1,5],[2,3]];
+
+/* Crown: dx/dy in UNITS. steps == the unit count, so every frame is on the grid.
+   Directions are cardinal/diagonal only — an arbitrary angle puts the two axes on
+   different step sizes and one of them lands between pixels. */
+const PXCROWN = [
+  {dx: 0, dy:-7, n:7, d:  0}, {dx: 5, dy:-5, n:5, d: 40},
+  {dx:-5, dy:-5, n:5, d: 20}, {dx: 7, dy: 0, n:7, d: 60},
+  {dx:-7, dy: 0, n:7, d: 30}, {dx: 3, dy:-3, n:3, d: 80},
+  {dx:-3, dy:-3, n:3, d: 70}
+];
+
+function pixelButton(){
+  const u = PX.scale, D = 13;
+  let g = '';
+  PXCIRCLE.forEach(([x,w],y)=> g += r(x,y,w,1,PX.water));
+  // 1-unit darker underside so the disc reads as an object, not a sticker
+  PXCIRCLE.slice(9).forEach(([x,w],i)=> g += r(x,9+i,w,1,PX.deep));
+  // droplet knocked out in the outline colour, centred (3,2)
+  PXDROP.forEach(([x,w],y)=> g += r(3+x,2+y,w,1,PX.outline));
+
+  const parts = PXCROWN.map(p=>
+    `<i class="pxsd s${p.n}" style="--dx:${p.dx*u}px;--dy:${p.dy*u}px;--d:${p.d}ms;--dur:${p.n*54}ms"></i>`
+  ).join('');
+
+  return `<button class="pxbtn" data-pxadd aria-label="Add one cup">
+    <svg class="pxsvg pxbody" width="${D*u}" height="${D*u}" viewBox="0 0 ${D} ${D}"
+         shape-rendering="crispEdges">${g}</svg>${parts}</button>`;
+}
+
+function renderPixelTile(tile){
+  const n = +tile.dataset.n;
+  tile.querySelector('[data-pxvessel]').innerHTML = pixelVessel(n);
+  tile.querySelector('[data-pxread]').innerHTML =
+    `<span class="v" style="font-size:19px">${n}</span><span class="t"> / ${GOAL}</span>` +
+    (n>GOAL ? `<span class="overchip">+${n-GOAL}</span>` : '');
+}
+
 (function buildPixel(){
   const host = document.getElementById('pixelStrip');
   if (!host) return;
@@ -1485,20 +1604,20 @@ function pixelVessel(n){
   rows.forEach(({st,night})=>{
     const tile = document.createElement('div');
     tile.className = 'tile pixeltile' + (night?' night':'');
-    tile.style.width = '170px';
+    tile.style.width = '196px';
+    tile.dataset.n = st.n;
     tile.innerHTML =
-      `<div style="display:flex;gap:12px;align-items:center">
-         ${pixelVessel(st.n)}
-         <div>
+      `<div style="display:flex;gap:10px;align-items:center">
+         <span data-pxvessel></span>
+         <div style="flex:1;min-width:0">
            <div class="wlabel" style="font-size:12px">WATER</div>
-           <div class="wread" style="margin-top:2px">
-             <span class="v" style="font-size:19px">${st.n}</span><span class="t"> / ${GOAL}</span>
-             ${st.n>GOAL?`<span class="overchip">+${st.n-GOAL}</span>`:''}
-           </div>
+           <div class="wread" style="margin-top:2px;white-space:nowrap" data-pxread></div>
          </div>
+         ${pixelButton()}
        </div>
        <div class="cap">${night ? 'Night card · 5 / 8' : st.cap}</div>`;
     host.appendChild(tile);
+    renderPixelTile(tile);
   });
 })();
 
