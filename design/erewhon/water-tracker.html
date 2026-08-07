@@ -27,12 +27,12 @@
   (UI/HomeView.swift `cleanContent`) — i.e. directly below the daily rings/summary,
   above the jump cards. Neighbours are drawn as gray blocks in §2.
 
-  REV 5 — the caustic ribbon network is BACK (rev 4's minimal sheen read too
-  plain) but built the cheap way: the filter is baked ONCE into a tiling image
-  instead of run live on 68 elements every frame, so the rev-3 look now costs what
-  rev 4 cost. Palette moved to very light cyan + white foam. New OVERFULL
-  treatment: the vessel highlights and its border glows neon. Every animation in
-  the element is transform/opacity only.
+  REV 6 — vertical vessel is longer and thinner (28x116, moving toward the ratio
+  the pixel arm's PurityVerticalBar already set). THREE NEW SURFACES: §6 the pixel
+  arm's own water (a different renderer, with STEPPED motion — smooth is wrong
+  there), §7 the Tools toggle that puts the tracker on Home, §8 the Tools entry
+  point. §8 is flagged as NOT water-scoped: it changes the Log tab for everyone
+  and wants its own prompt and PR.
 -->
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -254,11 +254,14 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
 
 /* ── VERTICAL vessel ─────────────────────────────────────── */
 .vwrap{position:relative;flex:none}       /* splash escapes the vessel clip */
+/* Rev 6: longer and thinner. 28x116 is a 1:4.1 column, moving toward the ratio the
+   pixel arm's PurityVerticalBar (24x150, 1:6.3) already established — so the two
+   arms read as the same family of object rather than two different ideas. */
 .vessel{
-  position:relative;width:46px;height:78px;border-radius:11px;
+  position:relative;width:28px;height:116px;border-radius:8px;
   background:var(--sunk);border:1px solid var(--line);overflow:hidden;isolation:isolate;
 }
-.vessel.sm{width:32px;height:46px;border-radius:8px}
+.vessel.sm{width:20px;height:74px;border-radius:6px}
 .vfill{
   position:absolute;left:0;right:0;bottom:0;height:var(--lvl);
   overflow:hidden;
@@ -297,8 +300,8 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
   transition:opacity .28s ease;
 }
 .hwrap:has(.htrough.thin) .neon{border-radius:5px}
-.vwrap .neon{border-radius:11px}
-.vwrap:has(.vessel.sm) .neon{border-radius:8px}
+.vwrap .neon{border-radius:8px}
+.vwrap:has(.vessel.sm) .neon{border-radius:6px}
 /* The shadow itself is STATIC; only the layer's opacity breathes, so the glow
    costs one composited layer rather than a repaint per frame. */
 .wblock[data-state="over"] .neon{opacity:1;animation:neonBreathe 2.8s ease-in-out infinite}
@@ -408,8 +411,8 @@ th{color:var(--page-muted);font-weight:600;font-size:11px;letter-spacing:.09em;t
 }
 .hwrap .goalring{border-radius:9px}
 .hwrap:has(.htrough.thin) .goalring{border-radius:5px}
-.vwrap .goalring{border-radius:11px}
-.vwrap:has(.vessel.sm) .goalring{border-radius:8px}
+.vwrap .goalring{border-radius:8px}
+.vwrap:has(.vessel.sm) .goalring{border-radius:6px}
 .goalglow .goalring{animation:goalPop 520ms cubic-bezier(.2,.7,.3,1) forwards}
 @keyframes goalPop{
   0%  {opacity:.9;transform:scale(1)}
@@ -470,6 +473,112 @@ body.rm .plus.hit{animation:rmpulse 180ms ease-out}   /* no scale, no throw — 
 }
 .btn:hover{border-color:#2BC0E4;color:#2BC0E4}
 .btn.on{background:#2BC0E4;border-color:#2BC0E4;color:#04121a}
+
+/* ═════════════════════════════════════════════════════════════
+   §6  PIXEL ARM
+   The pixel Home is a different renderer, not a filter over the same art. Every
+   edge is on the pixel grid, nothing is anti-aliased, and — the important part —
+   motion is STEPPED. Smooth interpolation is wrong here: in the Erewhon arm
+   chunky frames are a bug, in the pixel arm they are the medium.
+   ═════════════════════════════════════════════════════════════ */
+.pxwrap{display:inline-block;position:relative;line-height:0}
+.pxsvg{display:block;shape-rendering:crispEdges;image-rendering:pixelated}
+/* whole-pixel motion: steps() is load-bearing, not a stylistic flourish */
+.pxwave{animation:pxDrift 2.4s steps(8) infinite}
+.pxcaustic{animation:pxDrift 3.6s steps(8) infinite}
+.pxcaustic.b{animation-duration:5.2s;animation-direction:reverse}
+@keyframes pxDrift{from{transform:translateX(0)}to{transform:translateX(-8px)}}
+body.rm .pxwave,body.rm .pxcaustic{animation:none!important}
+/* overfull in pixel: no soft glow — a hard 1px neon keyline that BLINKS on steps */
+.pxneon{animation:pxBlink 1.2s steps(2) infinite}
+@keyframes pxBlink{0%{opacity:1}50%{opacity:.45}100%{opacity:1}}
+body.rm .pxneon{animation:none!important;opacity:1}
+/* The pixel arm does NOT use theme tokens: its cards are parchment by day and
+   near-black at night (HomeView: #ECD9B5 / #1C1917). Drawing the pixel vessel on
+   an Erewhon dark card was wrong and hid the outline entirely — a dark outline on
+   a dark card is no outline. */
+.pixeltile{background:#ECD9B5;border-color:#B08D57}
+.pixeltile .wlabel,.pixeltile .wread .v{color:#2B2118}
+.pixeltile .wread .t{color:#6B5842}
+.pixeltile .cap{color:#8B7355}
+.pixeltile .overchip{color:#1D7CA6;border-left-color:#1D7CA6}
+.pixeltile.night{background:#1C1917;border-color:#44403C}
+.pixeltile.night .wlabel,.pixeltile.night .wread .v{color:#E7E5E4}
+.pixeltile.night .wread .t{color:#A8A29E}
+.pixeltile.night .cap{color:#78716C}
+.pixeltile.night .overchip{color:#7BE9FF;border-left-color:#7BE9FF}
+
+/* ═════════════════════════════════════════════════════════════
+   §7-§8  TOOLS SURFACES
+   ═════════════════════════════════════════════════════════════ */
+.toolsheet{
+  width:290px;border-radius:20px;border:1px solid var(--line);background:var(--bg);
+  padding:14px 13px 16px;
+}
+.toolsheet .sheettitle{
+  font-family:var(--font-display);font-size:17px;color:var(--ink);text-align:center;
+  padding-bottom:11px;border-bottom:1px solid var(--line);margin-bottom:12px;
+}
+.calcgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.calccard{
+  border:1px solid var(--line);border-radius:11px;background:var(--surface);
+  padding:10px 9px;min-height:56px;
+}
+.calccard .ic{font-size:13px;line-height:1}
+.calccard .t{font-size:11px;font-weight:700;color:var(--ink);margin-top:5px}
+.calccard .d{font-size:9px;color:var(--faint);margin-top:2px;line-height:1.3}
+
+/* the toggle row */
+.sechead{
+  font-size:9px;letter-spacing:.17em;text-transform:uppercase;color:var(--faint);
+  margin:16px 0 8px;display:flex;align-items:center;gap:8px;
+}
+.sechead::after{content:'';flex:1;height:1px;background:var(--line)}
+.togrow{
+  display:flex;align-items:center;gap:10px;
+  border:1px solid var(--line);border-radius:11px;background:var(--surface);padding:10px 11px;
+}
+.togrow .tt{flex:1;min-width:0}
+.togrow .tt b{display:block;font-size:11.5px;font-weight:700;color:var(--ink)}
+.togrow .tt small{display:block;font-size:9.5px;color:var(--faint);margin-top:1px}
+.switch{
+  width:38px;height:22px;border-radius:11px;flex:none;position:relative;
+  background:var(--sunk);transition:background .2s ease;cursor:pointer;
+}
+.switch i{
+  position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;
+  background:var(--faint);transition:transform .2s cubic-bezier(.3,1.3,.5,1),background .2s ease;
+}
+.switch.on{background:color-mix(in srgb,var(--water) 42%,transparent)}
+.switch.on i{transform:translateX(16px);background:var(--water)}
+
+/* §8 Tools entry-point variants, drawn on the Log tab date-nav row */
+.datenav{
+  display:flex;align-items:center;gap:8px;
+  border:1px dashed var(--line);border-radius:12px;padding:9px 10px;background:var(--bg);
+}
+.datenav .chev{color:var(--faint);font-size:13px}
+.datenav .dayw{flex:1;text-align:center}
+.datenav .dayw b{display:block;font-family:var(--font-display);font-size:16px;color:var(--ink);line-height:1.1}
+.datenav .dayw small{display:block;font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+
+.tools-now{color:var(--muted);font-size:15px;width:30px;text-align:center}
+.tools-keyline{
+  display:inline-flex;align-items:center;gap:5px;flex:none;
+  border:1px solid var(--water);border-radius:9px;padding:5px 9px;
+  color:var(--water);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:700;
+}
+.tools-filled{
+  display:inline-flex;align-items:center;gap:5px;flex:none;
+  background:var(--water);border-radius:9px;padding:6px 10px;
+  color:var(--bg);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:800;
+}
+.tools-stacked{
+  display:inline-flex;flex-direction:column;align-items:center;gap:1px;flex:none;
+  color:var(--muted);
+}
+.tools-stacked .g{font-size:15px;line-height:1}
+.tools-stacked .l{font-size:7.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:700}
 </style>
 </head>
 <body class="">
@@ -614,7 +723,7 @@ Both frames are Erewhon Dark, starting at 5/8 — tap the droplets.</p>
 <div class="docbox">
   <p class="note" style="margin-top:0"><b>The compactness argument, stated plainly.</b> Concept A costs ~76 pt and
   keeps the horizontal rhythm every neighbouring block already uses (purity, macros and the XP track are all
-  left-to-right capsule fills). Concept C costs ~112 pt — <b>~36 pt more</b> — and interrupts that rhythm with the
+  left-to-right capsule fills). Concept C costs ~132 pt — <b>~56 pt more</b> — and interrupts that rhythm with the
   only vertical form on the screen. That interruption is the entire argument <i>for</i> it: it is the most
   water-like and the most memorable, and with the caustic texture the vertical vessel is where the reference image
   actually reads. On a screen being de-cluttered, A is the safer choice and C is the more delightful one.</p>
@@ -636,11 +745,11 @@ Both frames are Erewhon Dark, starting at 5/8 — tap the droplets.</p>
 <div class="themetag">Erewhon Dark</div>  <div class="strip" id="stripB-dark"></div>
 <div class="themetag">Erewhon Light</div> <div class="strip" id="stripB-light"></div>
 
-<h3>Concept C — vertical, primary <span class="lite">· 46×78 vessel + stat column + 42pt droplet button · ~112 pt</span></h3>
+<h3>Concept C — vertical, primary <span class="lite">· 28×116 vessel + stat column + 42pt droplet button · ~132 pt</span></h3>
 <div class="themetag">Erewhon Dark</div>  <div class="strip" id="stripC-dark"></div>
 <div class="themetag">Erewhon Light</div> <div class="strip" id="stripC-light"></div>
 
-<h3>Concept D — vertical, minimal <span class="lite">· 32×46 vessel, inline count, 28pt button · ~58 pt</span></h3>
+<h3>Concept D — vertical, minimal <span class="lite">· 20×74 vessel, inline count, 28pt button · ~86 pt</span></h3>
 <div class="themetag">Erewhon Dark</div>  <div class="strip" id="stripD-dark"></div>
 <div class="themetag">Erewhon Light</div> <div class="strip" id="stripD-light"></div>
 
@@ -836,9 +945,101 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
 
 
 <!-- ══════════════════════════════════════════════════════════
-     §6  OPEN FOR RULING
+     §6  PIXEL ARM
      ══════════════════════════════════════════════════════════ -->
-<h2><span class="n">§6</span>Open for ruling</h2>
+<h2><span class="n">§6</span>Pixel arm — the water, pixelated</h2>
+<p class="note">Home has two renderers. Everything above is the flat (Erewhon) arm; the pixel arm is a different
+drawing, not a filter over the same one. Rendered below at 4× so the grid is legible — every edge sits on a whole
+pixel, nothing is anti-aliased, and the fill quantises to <b>one block per cup</b>, which a water tracker wants
+anyway.</p>
+
+<div class="docbox">
+  <p class="note" style="margin-top:0"><b>The motion rule inverts here, and it matters.</b> Everything in §4 is
+  about making animation smooth — interpolated, sub-pixel, compositor-driven. In the pixel arm that is
+  <i>wrong</i>. The wave and the caustic move in <b>whole-pixel steps</b> (<code>steps(8)</code>), the overfull
+  keyline <b>blinks</b> between two states rather than breathing through a gradient, and there is no glow at all
+  because a soft glow cannot be drawn on a pixel grid. Chunky frames are a bug in the Erewhon arm and the medium
+  in this one — worth stating plainly, because "make it smoother" is the exact wrong note to give this variant.</p>
+  <p class="note" style="margin-bottom:0"><b>It also rhymes with something that already exists.</b> The pixel
+  Home already has a tall thin vertical bar: <code>PurityVerticalBar</code>, 24×150 with a 2 pt border, a flat
+  track and a banded fill. The pixel water is built to that family — same proportion, same border weight, same
+  hard track — so it reads as a sibling rather than a transplant. That is also why the Erewhon vessel got
+  narrower in this revision: the two arms should be the same object.</p>
+</div>
+
+<div class="themetag">Pixel arm · 4× · states</div>
+<div class="strip" id="pixelStrip"></div>
+
+<h3>Pixel palette — proposed, for ruling <span class="lite">· the pixel arm uses fixed colours, not theme tokens</span></h3>
+<div class="swrow">
+  <div class="sw"><span class="chip" style="background:#45C2E6"></span><div class="meta">
+    <div class="nm">px-water</div><div class="hx">#45C2E6</div>
+    <div class="use">Body of the water. Mid cyan — the pixel arm has no gradient, so this is the whole fill.</div></div></div>
+  <div class="sw"><span class="chip" style="background:#1D7CA6"></span><div class="meta">
+    <div class="nm">px-water-deep</div><div class="hx">#1D7CA6</div>
+    <div class="use">Shadow blocks, and the bottom two rows so the column has weight.</div></div></div>
+  <div class="sw"><span class="chip" style="background:#DFF7FF"></span><div class="meta">
+    <div class="nm">px-foam</div><div class="hx">#DFF7FF</div>
+    <div class="use">Crest blocks + caustic sparkle. Not pure white: on a pixel grid pure white next to mid cyan
+    reads as a hole rather than a highlight.</div></div></div>
+  <div class="sw"><span class="chip" style="background:#7BE9FF"></span><div class="meta">
+    <div class="nm">px-neon</div><div class="hx">#7BE9FF</div>
+    <div class="use">Overfull keyline. Blinks on <code>steps(2)</code> — no glow, because a glow is un-pixelable.</div></div></div>
+  <div class="sw"><span class="chip" style="background:#17232E"></span><div class="meta">
+    <div class="nm">px-outline</div><div class="hx">#17232E</div>
+    <div class="use">The 1-unit vessel outline and the notched corners.</div></div></div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     §7  PUTTING IT ON HOME
+     ══════════════════════════════════════════════════════════ -->
+<h2><span class="n">§7</span>Putting it on Home — the Tools toggle</h2>
+<p class="note">The water tracker is <b>opt-in</b>: it does not appear on Home until you switch it on from Tools.
+That is a good call for a screen being de-cluttered — it means shipping this costs nobody any Home space unless
+they ask for it. Two readings of "secret toggle" are drawn below, because they lead to different designs.</p>
+
+<div class="docbox warn">
+  <div class="rule">⚠ One thing to settle before this can be specced</div>
+  <p class="note" style="margin-top:0"><b>Tools is not on Home — it is on the Log tab</b>
+  (<code>FoodLogView</code>, opened as a sheet from the date-nav row). So "put the water tracker on the Home
+  screen from the Tools menu" is a control on one tab that changes another. That works, and it is where a
+  power-user toggle belongs, but it is worth naming: the toggle is <b>not</b> discoverable from the screen it
+  affects. If the intent is that people find this on their own, the Home surface would need an entry point of
+  its own — which is a different, bigger change.</p>
+  <p class="note" style="margin-bottom:0">Also flagging that "secret" is doing real work in the request and I
+  can read it two ways. <b>A</b> takes it as "a small extra toggle tucked in Tools" — visible, just not a
+  headline. <b>B</b> takes it literally, matching the SECRET-1 hidden-settings pattern already in the app
+  (a <code>???</code> section that only appears once you have found it). They are drawn side by side.</p>
+</div>
+
+<div class="strip" id="toolsToggleRow"></div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     §8  THE TOOLS BUTTON
+     ══════════════════════════════════════════════════════════ -->
+<h2><span class="n">§8</span>The Tools entry point</h2>
+
+<div class="docbox warn">
+  <div class="rule">⚠ Scope note — this one is not really a water change</div>
+  <p class="note" style="margin-top:0">Making Tools noticeable changes the <b>Log tab for everyone</b>, whether or
+  not they ever touch water. It is drawn here because it came up with the water work and it is cheap to show, but
+  it wants <b>its own prompt and its own PR</b> — bundling a nav change into a feature diff is how both become
+  unreviewable. Ruling on it here is fine; shipping it in WATER-1 is not what I would do.</p>
+  <p class="note" style="margin-bottom:0"><b>Why it goes unnoticed today</b> is not a mystery once you look at it:
+  it is a bare <code>wrench.and.screwdriver</code> glyph at 17 pt in <code>textSecondary</code>, with no label, no
+  border, no fill and no background, sitting as a trailing overlay on the date-nav row. It has a 44 pt tap target,
+  so it is reachable — it just does not read as a control. Three ways to fix that, in ascending loudness:</p>
+</div>
+
+<div class="strip" id="toolsEntryRow"></div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     §9  OPEN FOR RULING
+     ══════════════════════════════════════════════════════════ -->
+<h2><span class="n">§9</span>Open for ruling</h2>
 <div class="docbox">
   <ul style="margin-left:18px">
     <li><b>1 · Tokens.</b> Adopt <code>water</code> / <code>water-deep</code> / <code>water-foam</code> at ~192° as
@@ -862,7 +1063,27 @@ What is being ruled on is the <b>Required</b> column, the durations, and the Red
         the dark column&rsquo;s pale blue measures 1.5:1 against the near-white empty track — the fill/empty
         distinction would be lost. Accept the deeper light value, or take the pale blue in both and accept that
         cost knowingly?</li>
-    <li><b>9 · Button labelling.</b> The droplet button carries no <code>+1</code> glyph now. It is unmistakably a
+    <li><b>9 · Vessel proportion.</b> The vertical vessel is now <b>28×116</b> (1:4.1), down from 46×78.
+        That deliberately moves it toward the pixel arm's existing <code>PurityVerticalBar</code> (24×150, 1:6.3)
+        so the two arms read as one object. Thinner still is available — 1:6 would match the pixel bar exactly —
+        but past roughly 1:5 the caustic stops being legible at this width.</li>
+    <li><b>10 · Pixel palette.</b> <code>px-water</code> / <code>px-water-deep</code> / <code>px-foam</code> /
+        <code>px-neon</code> / <code>px-outline</code> in §6. These are FIXED colours, not theme tokens — the
+        pixel arm does not use <code>tc.*</code> — so they need their own ruling. Note <code>px-foam</code> is
+        <code>#DFF7FF</code> rather than white: on a pixel grid, pure white against mid cyan reads as a hole
+        punched in the water rather than a highlight.</li>
+    <li><b>11 · Pixel motion.</b> Confirm the inversion is wanted: in the pixel arm the wave and caustic move in
+        <b>whole-pixel steps</b>, the overfull keyline <b>blinks</b> between two states, and there is no glow at
+        all. This is the opposite of the smoothness work in §4, on purpose. "Make it smoother" would be the wrong
+        note for that variant.</li>
+    <li><b>12 · The Tools toggle.</b> A (a plain labelled "On Home" section) or B (a literal <code>???</code>
+        section on the SECRET-1 pattern)? Both drawn in §7. Worth knowing before you pick: <b>Tools lives on the
+        Log tab</b>, so either way the switch that controls Home is not discoverable from Home.</li>
+    <li><b>13 · The Tools entry point.</b> <span class="rule">own PR</span> Variant 1, 2 or 3 in §8 — my
+        recommendation is 2 (keyline), which reads as a control without out-shouting the Log Food CTA. But this
+        changes the Log tab for every user regardless of water, so I would rule on it here and <b>ship it
+        separately</b>, not inside WATER-1.</li>
+    <li><b>14 · Button labelling.</b> The droplet button carries no <code>+1</code> glyph now. It is unmistakably a
         water action, but "adds exactly one cup" is learned rather than shown. Accept, or add a small <code>+</code>?</li>
   </ul>
 </div>
@@ -1133,7 +1354,7 @@ function makeBlock(concept, n){
 /* in-context phone frames */
 const ctx = document.getElementById('contextRow');
 [['A','Concept A — horizontal, primary · adds ~76 pt'],
- ['C','Concept C — vertical, primary · adds ~112 pt']].forEach(([c,label])=>{
+ ['C','Concept C — vertical, primary · adds ~132 pt']].forEach(([c,label])=>{
   const wrap = document.createElement('div');
   const phone = document.createElement('div');
   phone.className = 'phone theme-dark';
@@ -1179,6 +1400,192 @@ function setReduceMotion(on){
   rmBtn.classList.toggle('on', on);
   rmBtn.textContent = 'Reduce Motion: ' + (on ? 'ON' : 'off');
 }
+
+/* ════════════════════════════════════════════════════════════
+   §6  PIXEL ARM
+   Built cell by cell on an integer grid. 11 x 34 units at 4x = 44 x 136 px,
+   deliberately the same tall-thin proportion as the Erewhon vessel so the two
+   arms read as one object drawn twice.
+   ════════════════════════════════════════════════════════════ */
+const PX = {w:11, h:34, scale:4,
+  water:'#45C2E6', deep:'#1D7CA6', foam:'#DFF7FF', neon:'#7BE9FF',
+  outline:'#17232E', track:'#E5E7EB'};
+
+const r = (x,y,w,h,f,cls) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${f}"${cls?` class="${cls}"`:''}/>`;
+
+/* crest profile, period 8 — how many units the water rises in each column */
+const CREST = [0,0,1,1,1,0,0,0];
+/* Caustic as horizontal STREAKS [col, rowFromWaterTop, width], period 8 across.
+   Single dots read as carbonation; short runs read as light on water. */
+const SPARK = [[0,3,3],[4,1,2],[5,6,3],[1,9,4],[6,4,2],[2,12,3],[4,15,2],[0,18,4],[5,21,3],[1,24,2]];
+
+function pixelVessel(n){
+  const {w,h,scale} = PX;
+  const innerW = w-2, innerH = h-2;                 // 1-unit outline all round
+  const lvl   = Math.min(n/GOAL, 1);
+  const water = Math.round(lvl * innerH);           // whole units only
+  const top   = 1 + (innerH - water);               // y of the waterline
+  const over  = n > GOAL;
+  let g = '';
+
+  // track + outline. Corners are omitted, which is what makes it read as pixel art
+  g += r(1,0,w-2,1,PX.outline) + r(1,h-1,w-2,1,PX.outline)
+     + r(0,1,1,h-2,PX.outline) + r(w-1,1,1,h-2,PX.outline);
+  g += r(1,1,innerW,innerH,PX.track);
+
+  if (water > 0){
+    // body, with the bottom two rows deepened so the column has weight
+    g += r(1,top,innerW,water,PX.water);
+    if (water > 2) g += r(1,h-3,innerW,2,PX.deep);
+
+    // crest: a stepped waterline that scrolls one whole pixel at a time
+    let crest = '';
+    for (let x = -8; x < w + 8; x++){
+      const up = CREST[((x % 8) + 8) % 8];
+      if (up) crest += r(x, top-up, 1, up, PX.water);
+      crest += r(x, top-up, 1, 1, PX.foam);          // foam sits ON the crest
+    }
+    g += `<g class="pxwave">${crest}</g>`;
+
+    // caustic streaks, two layers at different step rates
+    const sp = (cls, dy, col) => {
+      let o='';
+      for (let rep=-1; rep<3; rep++)
+        for (const [cx,cy,cw] of SPARK){
+          const x = 1 + cx + rep*8, y = top + cy + dy;
+          if (y < h-2 && y > top) o += r(x,y,cw,1,col);
+        }
+      return `<g class="pxcaustic${cls}">${o}</g>`;
+    };
+    g += sp(' b', 5, PX.deep) + sp('', 2, PX.foam);
+  }
+
+  // overfull: a hard 1-unit keyline that blinks. No glow — glow is un-pixelable.
+  if (over){
+    g += `<g class="pxneon">`
+       + r(1,0,w-2,1,PX.neon) + r(1,h-1,w-2,1,PX.neon)
+       + r(0,1,1,h-2,PX.neon) + r(w-1,1,1,h-2,PX.neon) + `</g>`;
+  }
+
+  return `<div class="pxwrap"><svg class="pxsvg" width="${w*scale}" height="${h*scale}"
+    viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges">
+    <defs><clipPath id="pxc${n}"><rect x="1" y="1" width="${innerW}" height="${innerH}"/></clipPath></defs>
+    <g clip-path="url(#pxc${n})">${g}</g>
+    ${r(1,0,w-2,1,PX.outline)}${r(1,h-1,w-2,1,PX.outline)}
+    ${r(0,1,1,h-2,PX.outline)}${r(w-1,1,1,h-2,PX.outline)}
+    ${over ? `<g class="pxneon">${r(1,0,w-2,1,PX.neon)}${r(1,h-1,w-2,1,PX.neon)}${r(0,1,1,h-2,PX.neon)}${r(w-1,1,1,h-2,PX.neon)}</g>` : ''}
+  </svg></div>`;
+}
+
+(function buildPixel(){
+  const host = document.getElementById('pixelStrip');
+  if (!host) return;
+  const rows = STATES.map(st=>({st, night:false}));
+  rows.push({st:STATES[1], night:true});          // one night-theme example
+  rows.forEach(({st,night})=>{
+    const tile = document.createElement('div');
+    tile.className = 'tile pixeltile' + (night?' night':'');
+    tile.style.width = '170px';
+    tile.innerHTML =
+      `<div style="display:flex;gap:12px;align-items:center">
+         ${pixelVessel(st.n)}
+         <div>
+           <div class="wlabel" style="font-size:12px">WATER</div>
+           <div class="wread" style="margin-top:2px">
+             <span class="v" style="font-size:19px">${st.n}</span><span class="t"> / ${GOAL}</span>
+             ${st.n>GOAL?`<span class="overchip">+${st.n-GOAL}</span>`:''}
+           </div>
+         </div>
+       </div>
+       <div class="cap">${night ? 'Night card · 5 / 8' : st.cap}</div>`;
+    host.appendChild(tile);
+  });
+})();
+
+/* ════════════════════════════════════════════════════════════
+   §7  TOOLS TOGGLE — two readings of "secret"
+   ════════════════════════════════════════════════════════════ */
+const CALCS = [['\u{1F525}','TDEE','Daily calorie needs'],['\u{1F4AA}','Protein','Daily protein target'],
+               ['\u{1F3CB}','One Rep Max','Estimate your 1RM'],['\u{1F9EC}','Muscle Gain','Realistic rate'],
+               ['\u{1F48A}','Creatine','Loading & maintenance'],['\u{1F4CA}','Strength','Where you stand'],
+               ['\u{1F634}','Sleep','Cycles & timing'],['\u{1F373}','Macros','Split your calories']];
+
+const calcGrid = (n) => `<div class="calcgrid">` +
+  CALCS.slice(0,n).map(c=>`<div class="calccard"><div class="ic">${c[0]}</div>
+    <div class="t">${c[1]}</div><div class="d">${c[2]}</div></div>`).join('') + `</div>`;
+
+const toggleRow = (on) => `
+  <div class="togrow">
+    <div class="tt"><b>Water tracker</b><small>Show it on Home</small></div>
+    <div class="switch${on?' on':''}" data-switch><i></i></div>
+  </div>`;
+
+(function buildToolsToggle(){
+  const host = document.getElementById('toolsToggleRow');
+  if (!host) return;
+
+  const A = document.createElement('div');
+  A.innerHTML = `
+    <div class="toolsheet theme-dark">
+      <div class="sheettitle">Tools</div>
+      ${calcGrid(6)}
+      <div class="sechead">On Home</div>
+      ${toggleRow(true)}
+    </div>
+    <div style="font-size:11px;color:var(--page-muted);text-align:center;margin-top:9px;max-width:290px">
+      <b style="color:var(--page-ink)">A · plain</b> · a labelled section under the calculators.
+      Findable, self-explaining, one tap.
+    </div>`;
+
+  const B = document.createElement('div');
+  B.innerHTML = `
+    <div class="toolsheet theme-dark">
+      <div class="sheettitle">Tools</div>
+      ${calcGrid(6)}
+      <div class="sechead">???</div>
+      ${toggleRow(false)}
+    </div>
+    <div style="font-size:11px;color:var(--page-muted);text-align:center;margin-top:9px;max-width:290px">
+      <b style="color:var(--page-ink)">B · secret</b> · the <code style="font-size:10px">???</code> section only
+      appears once found (long-press the title), matching SECRET-1.
+    </div>`;
+
+  host.append(A, B);
+})();
+
+/* ════════════════════════════════════════════════════════════
+   §8  TOOLS ENTRY POINT — drawn on the Log tab date-nav row
+   ════════════════════════════════════════════════════════════ */
+(function buildToolsEntry(){
+  const host = document.getElementById('toolsEntryRow');
+  if (!host) return;
+  const nav = (control, tag, note) => {
+    const d = document.createElement('div');
+    d.style.width = '290px';
+    d.innerHTML = `
+      <div class="datenav theme-dark">
+        <span class="chev">‹</span>
+        <div class="dayw"><small>Wed, Aug 6</small><b>Today</b></div>
+        <span class="chev">›</span>
+        ${control}
+      </div>
+      <div style="font-size:11px;color:var(--page-muted);margin-top:9px">
+        <b style="color:var(--page-ink)">${tag}</b> · ${note}
+      </div>`;
+    return d;
+  };
+  host.append(
+    nav(`<span class="tools-now">⚒</span>`, 'Today',
+        'bare glyph, <code style="font-size:10px">textSecondary</code>, no label or chrome — the thing being fixed'),
+    nav(`<span class="tools-stacked"><span class="g">⚒</span><span class="l">Tools</span></span>`, '1 · labelled',
+        'adds the word, keeps the weight. Smallest change that fixes discoverability.'),
+    nav(`<span class="tools-keyline">⚒ Tools</span>`, '2 · keyline (recommended)',
+        'reads as a control without competing with the Log Food CTA. Matches Erewhon’s keyline language.'),
+    nav(`<span class="tools-filled">⚒ Tools</span>`, '3 · filled',
+        'loudest. Risks out-shouting the primary CTA on the same screen.')
+  );
+})();
+
 const rmBtn = document.getElementById('rmToggle');
 rmBtn.addEventListener('click', ()=> setReduceMotion(!document.body.classList.contains('rm')));
 if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) setReduceMotion(true);
