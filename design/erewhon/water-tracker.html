@@ -598,25 +598,39 @@ body.rm .pxbtn.pxhit .pxbody{animation:none}
 .switch.on i{transform:translateX(16px);background:var(--water)}
 
 /* §8 Tools entry-point variants, drawn on the Log tab date-nav row */
+/* Faithful to FoodLogView.dateNavigator: the chevron+date group is CENTRED in the row
+   (HStack inside .frame(maxWidth:.infinity)) and the Tools control is a TRAILING OVERLAY that
+   consumes no layout width — which is why today's bare 44 pt glyph never shifts the date.
+   Widths are the real ones scaled to this row: 44 / 148 / 18 pt at 361 pt of content. */
 .datenav{
-  display:flex;align-items:center;gap:8px;
+  display:flex;align-items:center;justify-content:center;gap:12px;position:relative;
   border:1px dashed var(--line);border-radius:12px;padding:9px 10px;background:var(--bg);
 }
-.datenav .chev{color:var(--faint);font-size:13px}
-.datenav .dayw{flex:1;text-align:center}
+.datenav .chev{color:var(--faint);font-size:13px;width:30px;text-align:center;flex:none}
+.datenav .dayw{flex:none;min-width:105px;text-align:center}
+.toolsslot{position:absolute;right:9px;top:50%;transform:translateY(-50%);display:flex;align-items:center}
+/* RESERVED — a LABELLED control is wider than the free space the overlay floats in, so it has to
+   take real width, and an EQUAL leading reservation is what keeps the date centred. The date
+   group pays for it: tighter chevrons, tighter gaps, narrower day block. See §8. */
+.datenav.reserved{--toolsres:66px;gap:8px;padding-left:var(--toolsres);padding-right:var(--toolsres)}
+.datenav.reserved .chev{width:22px}
+.datenav.reserved .dayw{min-width:76px}
 .datenav .dayw b{display:block;font-family:var(--font-display);font-size:16px;color:var(--ink);line-height:1.1}
 .datenav .dayw small{display:block;font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
 
 .tools-now{color:var(--muted);font-size:15px;width:30px;text-align:center}
+/* Pill sizes are drawn to the frame's scale: this 300 px phone stands for 393 pt, so 1 px ≈ 1.31 pt.
+   A real "⚒ Tools" keyline pill at 10 pt caps is ~66 pt wide, which is ~50 px here. Drawing it
+   larger would understate how much of the date navigator it costs. */
 .tools-keyline{
-  display:inline-flex;align-items:center;gap:5px;flex:none;
-  border:1px solid var(--water);border-radius:9px;padding:5px 9px;
-  color:var(--water);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:700;
+  display:inline-flex;align-items:center;gap:4px;flex:none;
+  border:1px solid var(--water);border-radius:8px;padding:4px 7px;
+  color:var(--water);font-size:8px;letter-spacing:.11em;text-transform:uppercase;font-weight:700;
 }
 .tools-filled{
-  display:inline-flex;align-items:center;gap:5px;flex:none;
-  background:var(--water);border-radius:9px;padding:6px 10px;
-  color:var(--bg);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:800;
+  display:inline-flex;align-items:center;gap:4px;flex:none;
+  background:var(--water);border-radius:8px;padding:4.5px 8px;
+  color:var(--bg);font-size:8px;letter-spacing:.11em;text-transform:uppercase;font-weight:800;
 }
 .tools-stacked{
   display:inline-flex;flex-direction:column;align-items:center;gap:1px;flex:none;
@@ -651,6 +665,17 @@ body.rm .pxbtn.pxhit .pxbody{animation:none}
 .wcol{flex:none;position:relative;display:flex;flex-direction:column;align-items:center;gap:5px}
 .wcol .wnum{font-family:var(--font-display);font-size:11px;color:var(--ink);line-height:1}
 .wcol .wcap{font-size:7.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
+
+/* IN THE FOOD HERO the vessel must centre on the BAR RUN — bar 1's top edge to bar 3's bottom
+   edge — NOT on the macro stack's box. Those are not the same line: each macro track is
+   [label][5 px][bar], so the box carries one extra label block at the top and the bar run's
+   centre sits half a label block BELOW the box centre (measured: 10.75 px).
+   The fix is structural, not a nudge — give the column the SAME top block as a macro track
+   (label height + the same 5 px gap) and nothing below it. Both boxes are then top-heavy by
+   exactly 21.5 px, so ordinary centre alignment puts the two centres on the same line. */
+.wcol.inhero{gap:5px}
+.wcol.inhero .wnum{height:16.5px;line-height:16.5px;font-size:10.5px}  /* = .mtrack .mrow height */
+.wcol.inhero .wcap{display:none}                                       /* bottom block must be 0 */
 
 /* Erewhon rendering of the column */
 .wtube{
@@ -844,6 +869,24 @@ on the <b>Log tab</b>, standing vertically beside the three macro tracks, with t
 </div>
 
 <div class="strip" id="placementRow"></div>
+
+<div class="docbox">
+  <div class="rule">Rev 9 · the column is centred on the <i>bar run</i>, not on the macro stack</div>
+  <p class="note" style="margin-top:0">Those are not the same line, which is why rev 8 looked a touch high.
+  Each macro track is <code>[label][5 pt][bar]</code>, so the stack carries <b>one extra label block at the
+  top</b>: the centre of the bar run — bar 1's top edge to bar 3's bottom edge — sits <b>10.75 px below</b>
+  the centre of the box that contains it. Centre-aligning against the box therefore misses by half a label row.</p>
+  <p class="note"><b>The fix is structural, not a nudge.</b> Give the water column the same top block as a macro
+  track — a label of the same height plus the same 5 pt gap — and put <b>nothing</b> below the vessel. Both
+  boxes are then top-heavy by exactly the same 21.5 px, so ordinary centre alignment lands the two centres on
+  the same line with no magic offset to maintain. Measured on this page: <b>0.00 px</b> apart. The cost is the
+  "cups" caption, which the label absorbs by reading <code>5/8</code> — the same shape as the macro rows'
+  <code>142 / 180 g</code>.</p>
+  <p class="note" style="margin-bottom:0"><b>One consequence to rule on:</b> the vessel is 102 pt but the bar
+  run is only 87 pt, so switching water on makes the food hero <b>15 pt taller</b> and pushes the meal list
+  down. Accept it, or shorten the vessel to exactly the bar-run height so the hero never changes size and the
+  column reads as a fourth track spanning the other three? That is ruling item 18.</p>
+</div>
 
 <h3>The vessel, three ways <span class="lite">· same slot, same states — only the rendering differs</span></h3>
 <p class="note">Rev 8 adds the <b>hybrid</b> you asked for: pixel water — hard grid, quantised fill, stepped
@@ -1188,6 +1231,14 @@ they ask for it. Two readings of "secret toggle" are drawn below, because they l
   it is a bare <code>wrench.and.screwdriver</code> glyph at 17 pt in <code>textSecondary</code>, with no label, no
   border, no fill and no background, sitting as a trailing overlay on the date-nav row. It has a 44 pt tap target,
   so it is reachable — it just does not read as a control. Three ways to fix that, in ascending loudness:</p>
+  <p class="note" style="margin-bottom:0"><b>Rev 9 — a labelled control is not free, and this is why.</b> The
+  date navigator is an <code>HStack</code> centred with <code>.frame(maxWidth: .infinity)</code>, and Tools is an
+  <code>.overlay(alignment: .trailing)</code> — an overlay takes <b>no layout width</b>, which is exactly why a
+  bare 44 pt glyph has never shifted the date. A pill is wider than the free space that overlay floats in, so it
+  has to take real width, and the moment it does <b>the date stops being centred</b> unless an equal reservation
+  is added on the leading side. Rows 3 and 4 below are drawn that way: date dead-centre, chevrons symmetric, and
+  the date group paying for it in tighter chevrons and a narrower day block. Rows 1 and 2 need no reservation —
+  they fit the space the overlay already has.</p>
 </div>
 
 <div class="strip" id="toolsEntryRow"></div>
@@ -1256,6 +1307,17 @@ they ask for it. Two readings of "secret toggle" are drawn below, because they l
         everywhere, or keep Erewhon smooth and pixel hard and maintain two?</li>
     <li><b>17 · Button labelling.</b> The droplet button carries no <code>+1</code> glyph now. It is unmistakably a
         water action, but "adds exactly one cup" is learned rather than shown. Accept, or add a small <code>+</code>?</li>
+    <li><b>18 · Vessel height vs the bar run.</b> <span class="rule">new in rev 9</span> The vessel is 102 pt
+        against an 87 pt bar run, so turning water on makes the food hero <b>15 pt taller</b> and moves the meal
+        list down. Keep the taller vessel (more room to read the level, and it is the proportion you approved),
+        or shorten it to the bar run so the hero never changes height and the column reads as a fourth track
+        spanning the other three? Note the pixel renderer constrains this: its height must stay a whole number of
+        units <b>and</b> divide evenly into cups, so 87 pt is not directly available — 84 pt at a 2 px unit is
+        the nearest clean fit, at the cost of halving the pixel size.</li>
+    <li><b>19 · What the labelled Tools control costs.</b> <span class="rule">own PR</span> Ruling 14's pill
+        forces the reservation described in §8, and the date navigator is what pays: chevron frames and spacing
+        tighten and the day block narrows. Accept that trade, or keep variant 1 (glyph + word), which fits the
+        existing overlay space and costs the date navigator nothing?</li>
   </ul>
 </div>
 
@@ -1783,15 +1845,15 @@ const toggleRow = (on) => `
 (function buildToolsEntry(){
   const host = document.getElementById('toolsEntryRow');
   if (!host) return;
-  const nav = (control, tag, note) => {
+  const nav = (control, tag, note, reserved) => {
     const d = document.createElement('div');
     d.style.width = '290px';
     d.innerHTML = `
-      <div class="datenav theme-dark">
+      <div class="datenav theme-dark${reserved ? ' reserved' : ''}">
         <span class="chev">‹</span>
         <div class="dayw"><small>Wed, Aug 6</small><b>Today</b></div>
         <span class="chev">›</span>
-        ${control}
+        <span class="toolsslot">${control}</span>
       </div>
       <div style="font-size:11px;color:var(--page-muted);margin-top:9px">
         <b style="color:var(--page-ink)">${tag}</b> · ${note}
@@ -1804,9 +1866,10 @@ const toggleRow = (on) => `
     nav(`<span class="tools-stacked"><span class="g">⚒</span><span class="l">Tools</span></span>`, '1 · labelled',
         'adds the word, keeps the weight. Smallest change that fixes discoverability.'),
     nav(`<span class="tools-keyline">⚒ Tools</span>`, '2 · keyline (recommended)',
-        'reads as a control without competing with the Log Food CTA. Matches Erewhon’s keyline language.'),
+        'reads as a control without competing with the Log Food CTA. Matches Erewhon’s keyline language. '
+      + '<b>Needs the reservation</b> — note the tighter chevrons and narrower day block.', true),
     nav(`<span class="tools-filled">⚒ Tools</span>`, '3 · filled',
-        'loudest. Risks out-shouting the primary CTA on the same screen.')
+        'loudest. Risks out-shouting the primary CTA on the same screen. Same reservation cost as 2.', true)
   );
 })();
 
@@ -1824,21 +1887,24 @@ const macroTracks = () => `<div class="mtracks">` + MACROS.map(([l,c,p,v,t,u])=>
   </div>`).join('') + `</div>`;
 
 /* the three renderings of the column, all in the same 22 x 102 slot */
-function waterColumn(kind, n){
+function waterColumn(kind, n, inhero){
   const lvl = (Math.min(n/GOAL,1)*100).toFixed(2)+'%';
   const state = n===0?'0':n>GOAL?'over':n===GOAL?'full':'part';
+  const cls = 'wcol' + (inhero ? ' inhero' : '');
+  /* in the hero the label carries the goal too, standing in for the macro row's "142 / 180 g" */
+  const num = inhero ? `${n}/${GOAL}` : `${n}`;
   if (kind === 'pixel')
-    return `<div class="wcol"><span class="wnum">${n}</span>
+    return `<div class="${cls}"><span class="wnum">${num}</span>
       ${pixelVessel(n,{w:8,h:34,unit:3})}
       <span class="wcap">cups</span></div>`;
   if (kind === 'hybrid')
-    return `<div class="wcol"><span class="wnum">${n}</span>
+    return `<div class="${cls}"><span class="wnum">${num}</span>
       <div class="wtube hybrid wblock" data-state="${state}" style="--lvl:${lvl}">
         ${pixelVessel(n,{w:8,h:34,unit:3,bare:true})}
         <div class="brimrim"></div>
       </div>
       <span class="wcap">cups</span></div>`;
-  return `<div class="wcol"><span class="wnum">${n}</span>
+  return `<div class="${cls}"><span class="wnum">${num}</span>
     <div class="wtube wblock" data-state="${state}" style="--lvl:${lvl}">
       <div class="vfill">${body()}</div>
       <div class="vsky">${wave(WAVE_V)}</div>
@@ -1849,16 +1915,16 @@ function waterColumn(kind, n){
 
 function logFrame(kind, n, on){
   return `<div class="logframe theme-dark">
-    <div class="datenav" style="border-style:solid">
+    <div class="datenav reserved" style="border-style:solid">
       <span class="chev">‹</span>
       <div class="dayw"><small>Wed, Aug 6</small><b>Today</b></div>
       <span class="chev">›</span>
-      <span class="tools-keyline">⚒ Tools</span>
+      <span class="toolsslot"><span class="tools-keyline">⚒ Tools</span></span>
     </div>
     <div class="foodhero">
       <div class="miniring"><span>1,240</span></div>
       ${macroTracks()}
-      ${on ? waterColumn(kind, n) : ''}
+      ${on ? waterColumn(kind, n, true) : ''}
     </div>
     <div class="mealstub" style="height:40px;margin-top:10px">breakfast</div>
     <div class="mealstub" style="height:40px;margin-top:8px">lunch</div>
