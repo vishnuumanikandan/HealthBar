@@ -97,10 +97,10 @@
   --accent-deep:#0022B1;
 
   /* PROPOSED water family — light column */
-  --water:#17849F;         /* same cyan hue, deepened — see the contrast note in §1 */
-  --water-deep:#0C5F74;
+  --water:#7BDFF2;         /* RULED rev 10: the SAME pale cyan as dark, by decision */
+  --water-deep:#2A9CC4;
   --water-foam:#FFFFFF;    /* foam ribbons — pure white */
-  --water-neon:#00AFD9;    /* OVERFULL only: the highlight + border glow */
+  --water-neon:#5FE9FF;    /* OVERFULL only: the highlight + border glow */
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -597,6 +597,20 @@ body.rm .pxbtn.pxhit .pxbody{animation:none}
 .switch.on{background:color-mix(in srgb,var(--water) 42%,transparent)}
 .switch.on i{transform:translateX(16px);background:var(--water)}
 
+/* the water goal field in DailyGoalsView — same anatomy as its existing goal fields:
+   label, bordered value box with a trailing unit, helper line underneath */
+.gfield{margin-top:2px}
+.gfield .gl{font-size:10.5px;font-weight:700;color:var(--ink);display:block;margin-bottom:5px}
+.gfield .gbox{
+  display:flex;align-items:center;gap:8px;
+  border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:9px 11px;
+}
+.gfield .gbox b{flex:1;font-family:var(--font-display);font-size:15px;color:var(--ink);font-weight:400}
+.gfield .gbox .gu{font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
+.gfield .gh{display:block;font-size:9px;color:var(--faint);margin-top:5px;line-height:1.4}
+.gstub{border:1px dashed var(--line);border-radius:10px;padding:9px 11px;margin-top:9px;
+  font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+
 /* §8 Tools entry-point variants, drawn on the Log tab date-nav row */
 /* Faithful to FoodLogView.dateNavigator: the chevron+date group is CENTRED in the row
    (HStack inside .frame(maxWidth:.infinity)) and the Tools control is a TRAILING OVERLAY that
@@ -679,7 +693,10 @@ body.rm .pxbtn.pxhit .pxbody{animation:none}
 
 /* Erewhon rendering of the column */
 .wtube{
-  position:relative;width:22px;height:102px;border-radius:7px;
+  /* RULED rev 10 — 87 px is the BAR RUN: bar 1's top edge to bar 3's bottom edge.
+     The vessel spans the three macro tracks exactly, so switching water on no longer
+     changes the food hero's height and the column reads as a fourth track. */
+  position:relative;width:22px;height:87px;border-radius:7px;
   background:var(--sunk);border:1px solid var(--line);overflow:hidden;isolation:isolate;
 }
 /* HYBRID: pixel content, curved container. The container owns the edge; the pixel
@@ -792,37 +809,38 @@ body.rm .pxbtn.pxhit .pxbody{animation:none}
 
 <h3>Light column (Erewhon Light)</h3>
 <div class="swrow">
-  <div class="sw"><span class="chip" style="background:#17849F"></span><div class="meta">
-    <div class="nm">water</div><div class="hx">#17849F · h192 s75 l36</div>
+  <div class="sw"><span class="chip" style="background:#7BDFF2"></span><div class="meta">
+    <div class="nm">water</div><div class="hx">#7BDFF2 · h190 s82 l72</div>
     <div class="use"><b>Deepened on purpose.</b> The dark column&rsquo;s sky blue is far too pale to sit on
     <code>#F3F4F6</code> — see the light-theme note below. Same hue family, more depth.</div></div></div>
-  <div class="sw"><span class="chip" style="background:#0C5F74"></span><div class="meta">
-    <div class="nm">water-deep</div><div class="hx">#0C5F74 · h192 s81 l25</div>
+  <div class="sw"><span class="chip" style="background:#2A9CC4"></span><div class="meta">
+    <div class="nm">water-deep</div><div class="hx">#2A9CC4 · h194 s65 l47</div>
     <div class="use">Bottom stop of the fill gradient; the soft shadow band in the sheen.</div></div></div>
   <div class="sw"><span class="chip" style="background:#FFFFFF"></span><div class="meta">
     <div class="nm">water-foam</div><div class="hx">#FFFFFF · pure white</div>
     <div class="use">Identical in both columns — foam is foam. It only ever sits ON water, never on the page, which
     is what makes pure white safe here and disqualifying anywhere else.</div></div></div>
-  <div class="sw"><span class="chip" style="background:#00AFD9"></span><div class="meta">
-    <div class="nm">water-neon</div><div class="hx">#00AFD9 · h192 s100 l43</div>
+  <div class="sw"><span class="chip" style="background:#5FE9FF"></span><div class="meta">
+    <div class="nm">water-neon</div><div class="hx">#5FE9FF · h189 s100 l69</div>
     <div class="use"><b>Overfull only.</b> Vivid rather than pale, so the glow still reads as a glow against a
     near-white page.</div></div></div>
 </div>
 
-<div class="docbox warn">
-  <div class="rule">⚠ Why the light column is not the same sky blue</div>
-  <p class="note" style="margin-top:0">"Very light cyan" is the design intent and it is drawn exactly that way in
-  Erewhon Dark, where it sits on a near-black page and reads at <b>12.3:1</b>. Erewhon Light is the problem: the
-  page is <code>#F3F4F6</code> and the empty track is <code>#E8EAED</code>, both essentially white. The dark
-  column's <code>#7BDFF2</code> on that track measures <b>1.3:1</b> — a filled bar would be almost
-  indistinguishable from an empty one in sunlight or for anyone with reduced contrast sensitivity, and the fill
-  level is the entire point of the element.</p>
-  <p class="note" style="margin-bottom:0">So the light column keeps the cyan <i>hue</i> (192°, same family) and
-  takes it down to <code>#17849F</code>, landing at <b>3.6:1</b> against the track. It still reads as cyan against
-  white; it is simply not pale. This mirrors what the palette already does elsewhere: m-carbs is
-  <code>#F37513</code> in dark and <code>#CD4B00</code> in light, m-fat <code>#429C5A</code> /
-  <code>#0F6A31</code>. <b>The pale cyan in light mode is available if you want it — but it costs the fill/empty
-  distinction, and that should be said out loud rather than discovered later.</b> It is ruling item 8.</p>
+<div class="docbox">
+  <div class="rule">RULED (rev 10) · one water colour, both themes</div>
+  <p class="note" style="margin-top:0">The pale cyan is now used in Erewhon Light as well. It is drawn that way
+  below — <b>go and look at the light strips before this is locked</b>, because this is the one ruling on the page
+  whose cost is visual rather than structural, and it is much easier to judge on screen than from a number.</p>
+  <p class="note"><b>The number, stated once:</b> <code>#7BDFF2</code> on light's <code>#E8EAED</code> empty track
+  measures <b>1.3:1</b>, against <b>12.3:1</b> in dark. The top of the fill is therefore faint in light mode.
+  What rescues it in practice is that the fill is a <i>gradient</i>, not a flat colour — it reaches
+  <code>--water-deep</code> <code>#2A9CC4</code> at the bottom, which is <b>2.9:1</b> against the same track — plus
+  the 1 px keyline around the vessel and the hard pixel waterline, both of which mark the level independently of
+  the fill colour.</p>
+  <p class="note" style="margin-bottom:0"><b>If it does read badly on a real screen in daylight</b>, the fix does
+  not have to touch the water at all: darkening the vessel's <i>track</i> in light mode restores the separation
+  and leaves the cyan exactly as ruled. That is held as item 8b rather than done pre-emptively, because the track
+  is a neutral and changing it was not what was asked for.</p>
 </div>
 
 <table>
@@ -882,13 +900,12 @@ on the <b>Log tab</b>, standing vertically beside the three macro tracks, with t
   the same line with no magic offset to maintain. Measured on this page: <b>0.00 px</b> apart. The cost is the
   "cups" caption, which the label absorbs by reading <code>5/8</code> — the same shape as the macro rows'
   <code>142 / 180 g</code>.</p>
-  <p class="note" style="margin-bottom:0"><b>One consequence to rule on:</b> the vessel is 102 pt but the bar
-  run is only 87 pt, so switching water on makes the food hero <b>15 pt taller</b> and pushes the meal list
-  down. Accept it, or shorten the vessel to exactly the bar-run height so the hero never changes size and the
-  column reads as a fourth track spanning the other three? That is ruling item 18.</p>
+  <p class="note" style="margin-bottom:0"><b>RULED (rev 10):</b> the vessel is now <b>87 pt</b> — the bar run
+  exactly. It spans the three macro tracks edge to edge, so the food hero is <b>the same height whether water is
+  on or off</b> and the meal list never moves. The column reads as a fourth track rather than an attachment.</p>
 </div>
 
-<h3>The vessel, three ways <span class="lite">· same slot, same states — only the rendering differs</span></h3>
+<h3>The vessel, three ways <span class="lite">· RULED rev 10 — the hybrid wins, and it is now the only renderer</span></h3>
 <p class="note">Rev 8 adds the <b>hybrid</b> you asked for: pixel water — hard grid, quantised fill, stepped
 motion — inside a <b>curved</b> container. The rounded shell owns the edge, so the pixel outline and its notched
 corners are dropped; keeping them would put a hard square frame inside a rounded one, which is the exact thing
@@ -1194,7 +1211,7 @@ pixel and nothing is anti-aliased. <b>These tiles are live too:</b> tap a drople
 <!-- ══════════════════════════════════════════════════════════
      §7  PUTTING IT ON HOME
      ══════════════════════════════════════════════════════════ -->
-<h2><span class="n">§7</span>Putting it on Home — the Tools toggle</h2>
+<h2><span class="n">§7</span>Turning it on, and setting the goal</h2>
 <p class="note">The water tracker is <b>opt-in</b>: it does not appear on Home until you switch it on from Tools.
 That is a good call for a screen being de-cluttered — it means shipping this costs nobody any Home space unless
 they ask for it. Two readings of "secret toggle" are drawn below, because they lead to different designs.</p>
@@ -1214,6 +1231,37 @@ they ask for it. Two readings of "secret toggle" are drawn below, because they l
 </div>
 
 <div class="strip" id="toolsToggleRow"></div>
+
+<h3>Where the goal is set <span class="lite">· rev 10 · the goal sheet, gated on the same toggle</span></h3>
+
+<div class="docbox">
+  <p class="note" style="margin-top:0"><b>There is only one goal surface, and it already has this pattern.</b>
+  <code>DailyGoalsView</code> is a sheet presented from Settings — "the goal sheet" and "daily goals" are the
+  same screen. It already conditionally shows a whole section of extra goal fields:</p>
+  <pre style="font-size:10.5px;line-height:1.5;margin:8px 0 0;color:var(--page-ink);background:rgba(0,0,0,.05);padding:9px 11px;border-radius:8px;overflow-x:auto">if settings.trackAdvancedNutrition {
+    advancedNutritionGoalsSection
+}</pre>
+  <p class="note"><b>Water is the same shape in the same file</b> — one more section, shown when the water
+  toggle is on. No new screen, no new sheet, and the goal stays editable forever instead of being asked once.</p>
+  <p class="note" style="margin-bottom:0"><b>Why not a popup on toggle:</b> it interrupts a switch with a modal,
+  and it puts the number somewhere you cannot go back to. If the goal lives in the goal sheet, the toggle stays a
+  toggle.</p>
+</div>
+
+<div class="strip" id="waterGoalRow"></div>
+
+<div class="docbox">
+  <div class="rule">The goal syncs. The count does not. That asymmetry is deliberate.</div>
+  <p class="note" style="margin-top:0"><b>Goal → <code>DailyGoal.waterGoalCups</code>.</b> That model already
+  syncs through <code>DailyGoalDTO</code> — upload, fetch and a listener all exist. And the rule governing it is
+  the <code>users/{userId}/{collection}/{docId}</code> allowlist, which gates on auth and ownership and carries
+  <b>no <code>keys().hasOnly()</code></b> shape validation (that only appears on cross-user collections).
+  <code>dailyGoals</code> is already on the allowlist. So the new field needs <b>no rules change, no deploy, no
+  allowlist edit</b> — it rides the existing path. Your goal survives a reinstall for free.</p>
+  <p class="note" style="margin-bottom:0"><b>Count → a local <code>WaterDay</code>, <code>userId</code>-scoped,
+  never uploaded</b>, as ruled. Today's cups do not survive a reinstall. Note the consequence honestly: a user
+  who reinstalls mid-day gets their goal back and their progress reset to zero.</p>
+</div>
 
 
 <!-- ══════════════════════════════════════════════════════════
@@ -1250,7 +1298,7 @@ they ask for it. Two readings of "secret toggle" are drawn below, because they l
 <h2><span class="n">§9</span>Open for ruling</h2>
 <div class="docbox">
   <ul style="margin-left:18px">
-    <li><b>1 · Tokens.</b> Adopt <code>water</code> / <code>water-deep</code> / <code>water-foam</code> at ~192° as
+    <li><span class="rule">RULED</span> <b>1 · Tokens.</b> Adopt <code>water</code> / <code>water-deep</code> / <code>water-foam</code> at ~192° as
         drawn? Or run the element on <code>--accent</code> and accept that it reads as another blue bar?</li>
     <li><b>2 · Concept.</b> <span class="rule">decided by §2</span> The placement settles this: a ~110 pt slot
         beside three macro tracks only takes a vertical column, so A and B (horizontal) are superseded and marked
@@ -1268,7 +1316,7 @@ they ask for it. Two readings of "secret toggle" are drawn below, because they l
         single rasterization for the whole page instead of a live filter per element. Nothing left to rule on —
         the constraint that replaced it is an implementation note, not a choice: render the texture <b>once</b>
         and reuse it, never per frame. Kept here so the history stays visible rather than silently dropped.</li>
-    <li><b>8 · Light-theme water depth.</b> The light column is a deeper sky blue (<code>#2189C4</code>) because
+    <li><span class="rule">RULED</span> <b>8 · Light-theme water depth.</b> The light column is a deeper sky blue (<code>#2189C4</code>) because
         the dark column&rsquo;s pale blue measures 1.5:1 against the near-white empty track — the fill/empty
         distinction would be lost. Accept the deeper light value, or take the pale blue in both and accept that
         cost knowingly?</li>
@@ -1276,7 +1324,7 @@ they ask for it. Two readings of "secret toggle" are drawn below, because they l
         That deliberately moves it toward the pixel arm's existing <code>PurityVerticalBar</code> (24×150, 1:6.3)
         so the two arms read as one object. Thinner still is available — 1:6 would match the pixel bar exactly —
         but past roughly 1:5 the caustic stops being legible at this width.</li>
-    <li><b>10 · Pixel palette.</b> <code>px-water</code> / <code>px-water-deep</code> / <code>px-foam</code> /
+    <li><span class="rule">RETIRED</span> <b>10 · Pixel palette.</b> <code>px-water</code> / <code>px-water-deep</code> / <code>px-foam</code> /
         <code>px-neon</code> / <code>px-outline</code> in §6. These are FIXED colours, not theme tokens — the
         pixel arm does not use <code>tc.*</code> — so they need their own ruling. Note <code>px-foam</code> is
         <code>#DFF7FF</code> rather than white: on a pixel grid, pure white against mid cyan reads as a hole
@@ -1301,13 +1349,13 @@ they ask for it. Two readings of "secret toggle" are drawn below, because they l
         corner is far more reachable one-handed on a large phone, which is the argument for it — but the
         splash-at-the-source connection is gone, so the <b>level change has to carry the feedback</b> on its own.
         Accept that, or keep a small control beside the column too?</li>
-    <li><b>16 · One renderer or two.</b> The hybrid (pixel water, curved themed shell) can serve <b>both</b> arms,
+    <li><span class="rule">RULED</span> <b>16 · One renderer.</b> The hybrid (pixel water, curved themed shell) can serve <b>both</b> arms,
         which is what you asked for — and it is the only one of the three that can, because the pure pixel
         renderer carries fixed colours that only work on parchment (see the warning above §3). Adopt the hybrid
         everywhere, or keep Erewhon smooth and pixel hard and maintain two?</li>
     <li><b>17 · Button labelling.</b> The droplet button carries no <code>+1</code> glyph now. It is unmistakably a
         water action, but "adds exactly one cup" is learned rather than shown. Accept, or add a small <code>+</code>?</li>
-    <li><b>18 · Vessel height vs the bar run.</b> <span class="rule">new in rev 9</span> The vessel is 102 pt
+    <li><span class="rule">RULED</span> <b>18 · Vessel height.</b> The vessel is 102 pt
         against an 87 pt bar run, so turning water on makes the food hero <b>15 pt taller</b> and moves the meal
         list down. Keep the taller vessel (more room to read the level, and it is the proportion you approved),
         or shorten it to the bar run so the hero never changes height and the column reads as a fourth track
@@ -1318,6 +1366,18 @@ they ask for it. Two readings of "secret toggle" are drawn below, because they l
         forces the reservation described in §8, and the date navigator is what pays: chevron frames and spacing
         tighten and the day block narrows. Accept that trade, or keep variant 1 (glyph + word), which fits the
         existing overlay space and costs the date navigator nothing?</li>
+    <li><b>20 · The goal's units.</b> Drawn as <b>cups</b>, with "one cup is 8 oz / 240 ml" as the helper line.
+        The alternative is millilitres, which is unambiguous and travels better, but turns a one-tap counter into
+        an amount you have to think about. Cups matches the +1 button; ml would want a different control.</li>
+    <li><b>21 · Goal range and default.</b> Default 8. What are the bounds? The macro fields are free text with
+        validation, so water would follow — but an unbounded field lets someone set 200 cups and get a vessel
+        where one tap is invisible. A range like 1–20 keeps every cup a visible step at 87 pt.</li>
+    <li><b>22 · Reinstall asymmetry.</b> The goal syncs, the count does not, so reinstalling mid-day restores
+        your target and zeroes your progress. That is the direct consequence of "cups not surviving is fine" and
+        it is almost certainly right — flagged only so it is a decision rather than a surprise.</li>
+    <li><b>8b · Light-theme track.</b> <span class="rule">held</span> Only if the pale cyan reads badly on a real
+        screen: darken the vessel's track in light mode to restore the fill/empty separation without touching the
+        ruled water colour. Not done pre-emptively.</li>
   </ul>
 </div>
 
@@ -1639,8 +1699,10 @@ function setReduceMotion(on){
    deliberately the same tall-thin proportion as the Erewhon vessel so the two
    arms read as one object drawn twice.
    ════════════════════════════════════════════════════════════ */
-const PX = {w:9, h:42, scale:4,          // inner 7 x 40 => EXACTLY 5 units per cup
-  water:'#45C2E6', deep:'#1D7CA6', foam:'#DFF7FF', neon:'#7BE9FF',
+/* RULED rev 10 — the hybrid is the single renderer, so there is a SINGLE palette:
+   these are the §1 token hexes, not a separate pixel set. That retires ruling 10. */
+const PX = {w:9, h:42, scale:4,
+  water:'#7BDFF2', deep:'#2A9CC4', foam:'#FFFFFF', neon:'#5FE9FF',
   outline:'#17232E', track:'#E5E7EB'};
 
 const r = (x,y,w,h,f,cls) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${f}"${cls?` class="${cls}"`:''}/>`;
@@ -1802,7 +1864,7 @@ const calcGrid = (n) => `<div class="calcgrid">` +
 
 const toggleRow = (on) => `
   <div class="togrow">
-    <div class="tt"><b>Water tracker</b><small>Show it on Home</small></div>
+    <div class="tt"><b>Water tracker</b><small>Show it on the Log tab</small></div>
     <div class="switch${on?' on':''}" data-switch><i></i></div>
   </div>`;
 
@@ -1837,6 +1899,38 @@ const toggleRow = (on) => `
     </div>`;
 
   host.append(A, B);
+})();
+
+/* ════════════════════════════════════════════════════════════
+   §7b  THE WATER GOAL — a section inside DailyGoalsView
+   ════════════════════════════════════════════════════════════ */
+(function buildWaterGoal(){
+  const host = document.getElementById('waterGoalRow');
+  if (!host) return;
+  const sheet = (theme, on) => {
+    const d = document.createElement('div');
+    d.innerHTML = `
+      <div class="toolsheet theme-${theme}">
+        <div class="sheettitle">Daily Goals</div>
+        <div class="gstub">Calories · Protein · Carbs · Fat · Purity</div>
+        ${on ? `
+        <div class="sechead">Water</div>
+        <div class="gfield">
+          <span class="gl">Daily water goal</span>
+          <div class="gbox"><b>8</b><span class="gu">cups</span></div>
+          <span class="gh">One cup is 8 oz / 240 ml. Resets at local midnight.</span>
+        </div>` : `
+        <div class="gstub" style="opacity:.55">Water section — hidden while the toggle is off</div>`}
+      </div>
+      <div style="font-size:11px;color:var(--page-muted);text-align:center;margin-top:9px;max-width:290px">
+        ${on ? `<b style="color:var(--page-ink)">Toggle ON</b> · the Water section appears under the existing
+                goals, exactly where <code>advancedNutritionGoalsSection</code> already appears.`
+             : `<b style="color:var(--page-ink)">Toggle OFF</b> · the section is absent. Nobody who does not
+                use water ever sees a water field.`}
+      </div>`;
+    return d;
+  };
+  host.append(sheet('dark', true), sheet('light', true), sheet('dark', false));
 })();
 
 /* ════════════════════════════════════════════════════════════
@@ -1893,14 +1987,18 @@ function waterColumn(kind, n, inhero){
   const cls = 'wcol' + (inhero ? ' inhero' : '');
   /* in the hero the label carries the goal too, standing in for the macro row's "142 / 180 g" */
   const num = inhero ? `${n}/${GOAL}` : `${n}`;
+  /* 8 x 29 units at 3 px = 24 x 87 px — the bar run. The fill is Math.round(inner * n/goal),
+     which is why a USER-SET goal costs nothing here: the step is whatever whole number of
+     pixel rows one cup works out to, and it varies by a row between cups at odd goals. */
+  const geo = {w:8, h:29, unit:3};
   if (kind === 'pixel')
     return `<div class="${cls}"><span class="wnum">${num}</span>
-      ${pixelVessel(n,{w:8,h:34,unit:3})}
+      ${pixelVessel(n,geo)}
       <span class="wcap">cups</span></div>`;
   if (kind === 'hybrid')
     return `<div class="${cls}"><span class="wnum">${num}</span>
       <div class="wtube hybrid wblock" data-state="${state}" style="--lvl:${lvl}">
-        ${pixelVessel(n,{w:8,h:34,unit:3,bare:true})}
+        ${pixelVessel(n,Object.assign({bare:true},geo))}
         <div class="brimrim"></div>
       </div>
       <span class="wcap">cups</span></div>`;
@@ -1937,9 +2035,9 @@ function logFrame(kind, n, on){
 (function buildPlacement(){
   const host = document.getElementById('placementRow');
   if (!host) return;
-  [['hybrid', 5, true,  'Toggle ON · hybrid column + corner button'],
-   ['clean',  5, true,  'Toggle ON · Erewhon column'],
-   ['clean',  5, false, 'Toggle OFF · nothing added, nothing moved']
+  [['hybrid', 5, true,  'Toggle ON · the ruled renderer, Erewhon Dark'],
+   ['hybrid', 8, true,  'Toggle ON · goal met'],
+   ['hybrid', 5, false, 'Toggle OFF · nothing added, and now nothing moves either']
   ].forEach(([kind,n,on,cap])=>{
     const d = document.createElement('div');
     d.innerHTML = logFrame(kind,n,on) +
