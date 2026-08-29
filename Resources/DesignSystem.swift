@@ -207,6 +207,19 @@ enum DesignSystem {
             return .custom(name, size: size)
         }
 
+        /// TABVIS-1b: `pixel(_:weight:)` on the fixed-size font path. Identical family and
+        /// weight selection; the only difference is that the returned Font does not track
+        /// system Dynamic Type. Like `pixel(_:weight:)` it does NOT apply
+        /// `textScaleFactor` itself — its caller (`AppFont.boldFixed`) applies it exactly
+        /// once, which is what keeps the TEXTSIZE-1 invariant intact.
+        ///
+        /// Introduced for the Food Database strip's v2 candidate (hypothesis H1); other
+        /// surfaces adopt it only by explicit decision.
+        static func pixelFixed(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+            let name = weight == .bold ? "Silkscreen-Bold" : "Silkscreen-Regular"
+            return .custom(name, fixedSize: size)
+        }
+
         /// 34pt, bold - For large titles
         static func largeTitle(_ text: String) -> some View {
             Text(text)
@@ -1201,6 +1214,23 @@ enum AppFont {
             return .custom("HankenGrotesk-SemiBold", size: scaled)
         }
         return DesignSystem.Typography.pixel(scaled, weight: .bold)
+    }
+
+    /// Same as `bold(_:)` minus system Dynamic Type tracking. Same families
+    /// (Hanken Grotesk SemiBold / Silkscreen bold), same weight, and the same single
+    /// application of `textScaleFactor` at Font construction (TEXTSIZE-1) — only the
+    /// construction path changes, so the app's own text-size setting still scales this
+    /// text while the system Dynamic Type slider no longer compounds on top of it.
+    ///
+    /// Introduced by TABVIS-1b for the Food Database strip (hypothesis H1). Other
+    /// surfaces adopt this only by explicit decision; `bold(_:)` remains the production
+    /// path and is unchanged.
+    static func boldFixed(_ size: CGFloat) -> Font {
+        let scaled = size * SettingsManager.shared.textScaleFactor
+        if SettingsManager.shared.isCleanUI {
+            return .custom("HankenGrotesk-SemiBold", fixedSize: scaled)
+        }
+        return DesignSystem.Typography.pixelFixed(scaled, weight: .bold)
     }
 
     /// Body / regular. Erewhon: Hanken Grotesk Regular. Pixel: Silkscreen regular.
