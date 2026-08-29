@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// Full-screen food database with 5 functional tabs.
 ///
@@ -24,6 +25,38 @@ struct FoodDatabaseView: View {
     @State private var settings = SettingsManager.shared
     private var tc: ThemeColors { settings.activeColors }
 
+    // MARK: - TABVIS-1b (flags, gated computeds, diagnostics state)
+
+    /// Raw device-local debug flags (D2). These two properties are the ONLY raw reads of
+    /// these keys in this file — every downstream site reads the gated computeds below.
+    @AppStorage("debug.stripDiagnostics") private var stripDiagnostics = false
+    @AppStorage("debug.tabStripV2") private var tabStripV2 = false
+
+    /// Diagnostics render only when the flag is set AND the build may expose it. The gate
+    /// itself lives at its single owning site, `SettingsView` (D1/D3).
+    private var diagnosticsEnabled: Bool { stripDiagnostics && SettingsView.isDebugOrTestFlight }
+
+    /// The v2 candidate strip renders only when the flag is set AND the build may expose
+    /// it. Defaults OFF; `tabBar` (v1) stays the production path under every outcome.
+    private var useTabStripV2: Bool { tabStripV2 && SettingsView.isDebugOrTestFlight }
+
+    /// D9 measurements. Written only when the value actually differs, so diagnosing a
+    /// rendering problem never churns layout on its own.
+    @State private var stripContentSize: CGSize = .zero
+    @State private var stripFrameSize: CGSize = .zero
+    @State private var diagContainerSize: CGSize = .zero
+    @State private var diagSafeArea: EdgeInsets = EdgeInsets()
+
+    // Environment read for the readout. These are SwiftUI dependencies: they re-render
+    // this view when they change, and are NOT refreshed by `onAppear`.
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.sizeCategory) private var sizeCategory
+    @Environment(\.legibilityWeight) private var legibilityWeight
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.displayScale) private var displayScale
+
     init(viewModel: FoodLogViewModel) {
         self._viewModel = Bindable(viewModel)
         self._dbViewModel = State(initialValue: FoodDatabaseViewModel(coordinator: viewModel.coordinator))
@@ -32,7 +65,8 @@ struct FoodDatabaseView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                tabBar
+                stripSlot
+                if diagnosticsEnabled { diagnosticsBlock }
                 tabDescription
                 tabContent
                     .animation(.easeInOut(duration: 0.2), value: selectedTab)
@@ -143,6 +177,267 @@ struct FoodDatabaseView: View {
         }
         .frame(height: 52)
         .background(tc.cardBackground)
+    }
+
+    // MARK: - TABVIS-1b: strip slot
+
+    /// The strip slot. `tabBar` (v1) is the production path and its body is byte-untouched
+    /// (D5), so the diagnostics border is applied HERE, from the call site, rather than
+    /// inside it. With both gated computeds false this collapses to plain `tabBar`.
+    @ViewBuilder
+    private var stripSlot: some View {
+        let strip = Group {
+            if useTabStripV2 { tabBarV2 } else { tabBar }
+        }
+        if diagnosticsEnabled {
+            strip
+                .background(stripFrameReader)
+                .border(Color.red, width: 1)
+        } else {
+            strip
+        }
+    }
+
+    // MARK: - TABVIS-1b: v2 candidate strip
+
+    /// The v2 candidate (D6). Differs from `tabBar` in exactly three ways, one per
+    /// hypothesis; colors, spacing tokens, selection logic, animation and
+    /// `buttonStyle(.plain)` are otherwise identical:
+    ///
+    /// - **H1** labels use `AppFont.boldFixed` instead of `AppFont.bold`
+    /// - **H2** `.frame(minHeight: 52)` + `.fixedSize(vertical:)` instead of `.frame(height: 52)`
+    /// - **H3** the Erewhon pill is built inline WITHOUT `.clipShape(Capsule())`
+    ///
+    /// This is a COMBINED candidate. If it eliminates the symptom that is NOT an
+    /// attribution to any one of the three changes — isolation needs its own PR (D14).
+    private var tabBarV2: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                ForEach(FoodDatabaseTab.allCases, id: \.self) { tab in
+                    let isSelected = selectedTab == tab
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            selectedTab = tab
+                        }
+                    } label: {
+                        v2PillLabel(tab, isSelected: isSelected)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, DesignSystem.Spacing.md)
+            .padding(.vertical, DesignSystem.Spacing.sm)
+            .fixedSize(horizontal: false, vertical: true)   // H2
+            .background(stripContentReader)                 // D9: outermost background
+        }
+        .frame(minHeight: 52)                               // H2
+        .background(tc.cardBackground)
+    }
+
+    /// A v2 pill label. The green debug border is a diagnostics-branch `if`, never an
+    /// unconditional modifier (D8).
+    @ViewBuilder
+    private func v2PillLabel(_ tab: FoodDatabaseTab, isSelected: Bool) -> some View {
+        let label = Text(tab.rawValue)
+            .font(AppFont.boldFixed(DesignSystem.FontSizes.footnote))   // H1
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .foregroundStyle(isSelected ? DesignSystem.Erewhon.onAccent : tc.textSecondary)
+
+        if diagnosticsEnabled {
+            v2Pill(label.border(Color.green, width: 1), isSelected: isSelected)
+        } else {
+            v2Pill(label, isSelected: isSelected)
+        }
+    }
+
+    /// H3: the Erewhon pill inline, with `adaptivePill`'s Clean-branch color and width
+    /// selection copied verbatim, minus `.clipShape(Capsule())`. The fill and the stroke
+    /// are both capsule-bounded on their own, so dropping the clip must not change what
+    /// is drawn. `adaptivePill` itself is NOT modified (D5/D6.3), and the pixel branch
+    /// delegates to the untouched `pixelPill` — pixel + Default is the passing cell, so
+    /// only the font changes there.
+    @ViewBuilder
+    private func v2Pill<Content: View>(_ content: Content, isSelected: Bool) -> some View {
+        if SettingsManager.shared.isCleanUI {
+            content
+                .background(
+                    Capsule()
+                        .fill(isSelected ? tc.primary : tc.cardBackground)
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(isSelected ? SettingsManager.shared.activeColors.primary : DesignSystem.Erewhon.line,
+                                lineWidth: isSelected ? 1.5 : 1)
+                )
+        } else {
+            content.pixelPill(
+                borderColor: isSelected ? tc.primary : DesignSystem.Erewhon.line,
+                fillColor: isSelected ? tc.primary : tc.cardBackground
+            )
+        }
+    }
+
+    // MARK: - TABVIS-1b: diagnostics
+
+    /// D8: probe row then readout, directly below the strip in the same VStack slot.
+    /// Diagnostics-ON is a LOCALIZATION mode, not a faithful reproduction of the
+    /// production vertical layout — the diagnostics-OFF screenshot stays the baseline.
+    private var diagnosticsBlock: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            probeRow
+            readout
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, DesignSystem.Spacing.md)
+        .background(diagnosticsGeometryReader)
+    }
+
+    /// D8.2 — a localization ladder, NOT causal proof. Five elements escalating from a
+    /// raw shape to the full production pill construct. Raw `Color` literals are
+    /// deliberate: this is gate-locked debug chrome, so it must not depend on the theme
+    /// tokens whose rendering is under investigation.
+    private var probeRow: some View {
+        HStack(spacing: DesignSystem.Spacing.sm) {
+            // (a) raw shape — no theme, no font
+            Rectangle()
+                .fill(Color.red)
+                .frame(width: 24, height: 24)
+
+            // (b) system font
+            Text("SYS")
+                .font(.system(size: 13, weight: .semibold))
+
+            // (c) production font path (tracks system Dynamic Type)
+            Text("HG")
+                .font(AppFont.bold(DesignSystem.FontSizes.footnote))
+
+            // (d) fixed-size font path — isolates H1 within the diagnostics
+            Text("HGF")
+                .font(AppFont.boldFixed(DesignSystem.FontSizes.footnote))
+
+            // (e) production pill construct, INCLUDING .clipShape(Capsule())
+            Text("PILL")
+                .font(AppFont.bold(DesignSystem.FontSizes.footnote))
+                .fixedSize()
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .foregroundStyle(tc.textSecondary)
+                .adaptivePill(
+                    borderColor: DesignSystem.Erewhon.line,
+                    fillColor: tc.cardBackground,
+                    isSelected: false
+                )
+        }
+        // minHeight, not height: (e) carries the production pill's 8pt vertical padding
+        // and is taller than 24pt, and clipping it would defeat the probe.
+        .frame(minHeight: 24)
+    }
+
+    /// D8.3 — deliberately theme-independent (fixed white on black, system monospaced):
+    /// if the themed strip fails to draw, this block must still be legible.
+    private var readout: some View {
+        Text(readoutLines)
+            .font(.system(size: 11, design: .monospaced))
+            .foregroundColor(Color.white)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DesignSystem.Spacing.sm)
+            .background(Color.black.opacity(0.8))
+    }
+
+    private var readoutLines: String {
+        // Version read the same way `DataManager.submitFeedback` stamps it.
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
+        // `stripContent` measures tabBarV2's inner HStack. v1's body is byte-untouched
+        // (D5), so no reader can be attached inside it — reported honestly as n/a rather
+        // than as a zero that would read as "layout produced nothing".
+        let content = useTabStripV2 ? Self.sizeString(stripContentSize) : "n/a (v1 body untouched)"
+        return """
+        app=\(version) (\(build))
+        device=\(Self.deviceModelIdentifier)
+        os=\(UIDevice.current.systemVersion)
+        colorScheme=\(String(describing: colorScheme))
+        sizeCategory=\(String(describing: sizeCategory))
+        legibility=\(legibilityWeight.map { String(describing: $0) } ?? "nil")
+        contrast=\(String(describing: colorSchemeContrast))
+        diffNoColor=\(differentiateWithoutColor)
+        reduceTransp=\(reduceTransparency)
+        displayScale=\(displayScale)
+        textScale=\(SettingsManager.shared.textScaleFactor)
+        cleanUI=\(SettingsManager.shared.isCleanUI)
+        stripV2=\(useTabStripV2)
+        stripContent=\(content)
+        stripFrame=\(Self.sizeString(stripFrameSize))
+        container=\(Self.sizeString(diagContainerSize))
+        safeArea=t\(Self.fmt(diagSafeArea.top)) l\(Self.fmt(diagSafeArea.leading)) b\(Self.fmt(diagSafeArea.bottom)) r\(Self.fmt(diagSafeArea.trailing))
+        screen=\(Self.sizeString(UIScreen.main.bounds.size))
+        """
+    }
+
+    // MARK: - TABVIS-1b: measurement readers (D9)
+
+    /// tabBarV2's inner HStack, as its OUTERMOST background — after every production
+    /// modifier, before the ScrollView.
+    @ViewBuilder
+    private var stripContentReader: some View {
+        if diagnosticsEnabled {
+            GeometryReader { geo in
+                Color.clear
+                    .onChange(of: geo.size, initial: true) { _, newValue in
+                        if stripContentSize != newValue { stripContentSize = newValue }
+                    }
+            }
+        }
+    }
+
+    /// The active strip's visible frame.
+    @ViewBuilder
+    private var stripFrameReader: some View {
+        if diagnosticsEnabled {
+            GeometryReader { geo in
+                Color.clear
+                    .onChange(of: geo.size, initial: true) { _, newValue in
+                        if stripFrameSize != newValue { stripFrameSize = newValue }
+                    }
+            }
+        }
+    }
+
+    /// Container + safe area at the diagnostics block. Attached as a background rather
+    /// than wrapping the block, so the greedy sizing of a bare GeometryReader cannot
+    /// perturb the layout it is measuring (D10).
+    private var diagnosticsGeometryReader: some View {
+        GeometryReader { geo in
+            Color.clear
+                .onChange(of: geo.size, initial: true) { _, newValue in
+                    if diagContainerSize != newValue { diagContainerSize = newValue }
+                }
+                .onChange(of: geo.safeAreaInsets, initial: true) { _, newValue in
+                    if diagSafeArea != newValue { diagSafeArea = newValue }
+                }
+        }
+    }
+
+    /// The hardware model identifier (e.g. "iPhone17,3") — what actually distinguishes
+    /// the failing unit from every simulator that would not reproduce.
+    private static var deviceModelIdentifier: String {
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        return withUnsafePointer(to: &systemInfo.machine) { pointer in
+            pointer.withMemoryRebound(to: CChar.self, capacity: MemoryLayout.size(ofValue: pointer.pointee)) {
+                String(cString: $0)
+            }
+        }
+    }
+
+    private static func sizeString(_ size: CGSize) -> String {
+        "\(fmt(size.width))x\(fmt(size.height))"
+    }
+
+    private static func fmt(_ value: CGFloat) -> String {
+        String(format: "%.1f", value)
     }
 
     // MARK: - Tab Description

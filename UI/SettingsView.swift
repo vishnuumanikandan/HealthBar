@@ -60,6 +60,35 @@ struct SettingsView: View {
         return "Version \(version)"
     }
 
+    // MARK: - TABVIS-1b (build gate + debug flags)
+
+    /// Whether this build may expose the TABVIS-1b diagnostics UI.
+    ///
+    /// What this proves is **App-Store-exclusion**, NOT TestFlight-exclusivity: App Store
+    /// builds carry a production receipt and resolve `false`, TestFlight builds carry a
+    /// `sandboxReceipt` and resolve `true` — and development/sandbox installs also resolve
+    /// `true`, which is accepted. The invariant that matters is that a shipped App Store
+    /// build can never reach this UI.
+    ///
+    /// This is the gate's single owning site; `FoodDatabaseView` reads it as
+    /// `SettingsView.isDebugOrTestFlight`.
+    static var isDebugOrTestFlight: Bool {
+        #if DEBUG
+        return true
+        #else
+        return Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+        #endif
+    }
+
+    /// TABVIS-1b diagnostics overlay on the Food Database strip. Device-local DEBUG state,
+    /// not user data — deliberately NOT uid-scoped and never synced. Read here only to
+    /// bind the toggle below; every consuming read goes through a gated computed (D3).
+    @AppStorage("debug.stripDiagnostics") private var stripDiagnostics = false
+
+    /// TABVIS-1b experimental v2 tab strip. Same storage semantics as above. Defaults OFF
+    /// and stays OFF: this PR does not adopt v2 as the production path under any outcome.
+    @AppStorage("debug.tabStripV2") private var tabStripV2 = false
+
     init(
         coordinator: AppCoordinator,
         authService: any AuthService,
@@ -252,6 +281,38 @@ struct SettingsView: View {
                 .padding(.top, DesignSystem.Spacing.md)
 
             PoopCounterCard(userId: authService.currentUserEmail ?? "guest")
+
+            // TABVIS-1b: diagnostics rows. Doubly gated — the SECRET-1 section must be
+            // revealed AND the build must be Debug/TestFlight, so a shipped App Store
+            // build renders nothing here even if the hidden section is showing.
+            if Self.isDebugOrTestFlight {
+                Text("DIAGNOSTICS (TestFlight only)")
+                    .font(AppFont.bold(16))
+                    .foregroundColor(tc.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, DesignSystem.Spacing.md)
+
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                    Toggle(isOn: $stripDiagnostics) {
+                        Text("Strip Diagnostics")
+                            .font(AppFont.regular(DesignSystem.FontSizes.body))
+                            .foregroundColor(tc.textPrimary)
+                    }
+                    .tint(tc.primary)
+
+                    Toggle(isOn: $tabStripV2) {
+                        Text("Tab Strip v2 — experimental")
+                            .font(AppFont.regular(DesignSystem.FontSizes.body))
+                            .foregroundColor(tc.textPrimary)
+                    }
+                    .tint(tc.primary)
+                }
+                .padding(DesignSystem.Spacing.md)
+                .adaptiveCard(
+                    borderColor: tc.primary.opacity(0.3),
+                    fillColor: tc.cardBackground
+                )
+            }
         }
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
