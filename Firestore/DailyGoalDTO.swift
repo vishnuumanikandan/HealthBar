@@ -34,6 +34,9 @@ struct DailyGoalDTO: Codable {
     var cholesterolTarget: Double?
     var potassiumTarget: Double?
 
+    // Water goal in cups (WATER-1). Optional, exactly like the siblings above.
+    var waterGoalCups: Int?
+
     // MARK: - Conversion: DailyGoal → DailyGoalDTO
 
     init(from goal: DailyGoal) {
@@ -50,6 +53,7 @@ struct DailyGoalDTO: Codable {
         self.saturatedFatTarget = goal.saturatedFatTarget
         self.cholesterolTarget = goal.cholesterolTarget
         self.potassiumTarget = goal.potassiumTarget
+        self.waterGoalCups = goal.waterGoalCups
     }
 
     // MARK: - Conversion: DailyGoalDTO → DailyGoal
@@ -70,7 +74,8 @@ struct DailyGoalDTO: Codable {
             sodiumTarget: sodiumTarget,
             saturatedFatTarget: saturatedFatTarget,
             cholesterolTarget: cholesterolTarget,
-            potassiumTarget: potassiumTarget
+            potassiumTarget: potassiumTarget,
+            waterGoalCups: waterGoalCups
         )
         goal.userId = userId
         return goal
@@ -94,5 +99,6 @@ struct DailyGoalDTO: Codable {
             || saturatedFatTarget != goal.saturatedFatTarget
             || cholesterolTarget != goal.cholesterolTarget
             || potassiumTarget != goal.potassiumTarget
+            || waterGoalCups != goal.waterGoalCups
     }
 }

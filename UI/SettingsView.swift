@@ -136,6 +136,13 @@ struct SettingsView: View {
                     action: { showingOnboarding = true }
                 )
 
+                // WATER-1 D5: Water Unit — directly below Edit Health Profile, and ONLY
+                // while the tracker is on. Hidden when the toggle is off even if a stored
+                // preference exists.
+                if settings.waterTrackerEnabled {
+                    waterUnitRow
+                }
+
                 // Account button — hidden for guest users (requires a real account)
                 if !authService.isGuest {
                     settingButton(
@@ -340,6 +347,64 @@ struct SettingsView: View {
         withAnimation(DesignSystem.Erewhon.ease(0.25)) {
             secretMenuRevealed.toggle()
         }
+    }
+
+    // MARK: - Water Unit (WATER-1 D5)
+
+    /// Display-unit control for the water tracker. Segmented, in the WeeklySummaryView
+    /// `.seg` convention (recessed track + raised active pill), using existing tokens.
+    /// Storage stays cups-canonical — this only changes what is rendered.
+    private var waterUnitRow: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            HStack(spacing: DesignSystem.Spacing.md) {
+                Image(systemName: "drop.fill")
+                    .font(AppFont.bold(18))
+                    .foregroundColor(.white)
+                    .frame(width: DesignSystem.Sizes.iconCircle, height: DesignSystem.Sizes.iconCircle)
+                    .adaptivePill(
+                        borderColor: settings.isCleanUI ? .clear : tc.primary.adjustedBrightness(-0.2),
+                        fillColor: .clear,
+                        fillGradient: DesignSystem.Colors.adaptiveGradientFrom(tc.primary)
+                    )
+
+                Text("Water Unit")
+                    .font(AppFont.bold(16))
+                    .foregroundColor(tc.textPrimary)
+
+                Spacer()
+            }
+
+            HStack(spacing: 2) {
+                ForEach(WaterUnit.allCases, id: \.self) { unit in
+                    let isSelected = settings.waterUnit == unit
+                    Button {
+                        withAnimation(DesignSystem.Erewhon.ease(0.35)) {
+                            settings.waterUnitPreference = unit.rawValue
+                        }
+                    } label: {
+                        Text(unit.displayName)
+                            .font(isSelected ? AppFont.bold(13) : AppFont.regular(13))
+                            .foregroundColor(isSelected ? tc.segActiveText : tc.segInactiveText)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 34)
+                            .background(
+                                isSelected
+                                    ? RoundedRectangle(cornerRadius: 7).fill(tc.segActiveFill)
+                                    : nil
+                            )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel(unit.displayName)
+                    .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+                }
+            }
+            .padding(3)
+            .background(RoundedRectangle(cornerRadius: 10).fill(tc.segBackground))
+        }
+        .padding(DesignSystem.Spacing.md)
+        .adaptiveCard(borderColor: tc.primary.opacity(0.3), fillColor: tc.cardBackground)
     }
 
     /// Reusable settings button component (moved verbatim from ProfileView).

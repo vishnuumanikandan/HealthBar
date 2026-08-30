@@ -148,6 +148,13 @@ struct DailyGoalsView: View {
                     helperText: "Daily purity = calorie-weighted average toxin of your meals (0-100). Stay under this."
                 )
 
+                // Water goal (WATER-1 D9) — same conditional shape as the advanced section
+                // below, gated on the water toggle instead. Nobody who does not use water
+                // ever sees a water field.
+                if settings.waterTrackerEnabled {
+                    waterGoalSection
+                }
+
                 // Advanced Nutrition Goals (when enabled)
                 if settings.trackAdvancedNutrition {
                     advancedNutritionGoalsSection
@@ -260,6 +267,24 @@ struct DailyGoalsView: View {
                 .foregroundColor(tc.textTertiary)
                 .padding(.leading, DesignSystem.Spacing.xs)
         }
+    }
+
+    // MARK: - Water Goal (WATER-1 D9)
+
+    /// The water goal field. Prefilled from the SAME resolved `DailyGoal` the rest of this
+    /// form uses (`loadCurrentGoals`) — it never calls `makeGoalForToday()` itself and never
+    /// reads a target constant at this site (the GOALFIX regression class). The typed value
+    /// is clamped to `minGoalCups...maxGoalCups` on save, in the view model.
+    private var waterGoalSection: some View {
+        goalInputField(
+            title: "Daily Water Goal",
+            icon: "drop.fill",
+            iconColor: tc.waterFill,
+            placeholder: "\(WaterConstants.defaultGoalCups)",
+            text: $viewModel.waterGoalCupsString,
+            unit: "cups",
+            helperText: "One cup is \(WaterConstants.mlPerCup) ml. \(WaterConstants.minGoalCups)-\(WaterConstants.maxGoalCups) cups. Resets at local midnight."
+        )
     }
 
     /// Advanced nutrition goals section
