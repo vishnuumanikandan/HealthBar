@@ -42,6 +42,12 @@ final class DailyGoalsViewModel {
     var fatTargetString: String = ""
     var purityTargetString: String = ""
 
+    // Water goal (WATER-1 D9). `loadedWaterGoalCups` is the value the resolved goal
+    // carried in — passed back UNCHANGED when the row is hidden, so disabling the tracker
+    // never clears a set goal. `waterGoalCupsString` is the field.
+    private var loadedWaterGoalCups: Int? = nil
+    var waterGoalCupsString: String = ""
+
     // Advanced Nutrition Goal Strings (optional)
     var fiberTargetString: String = ""
     var sugarTargetString: String = ""
@@ -99,6 +105,12 @@ final class DailyGoalsViewModel {
             fatTargetString = String(format: "%.0f", goal.fatTarget)
             purityTargetString = "\(goal.purityTarget)"
 
+            // Water goal. nil means "never set" -> the field shows the default; any stored
+            // value is display-clamped. Both resolve through WaterConstants, the one site
+            // that names these numbers.
+            loadedWaterGoalCups = goal.waterGoalCups
+            waterGoalCupsString = "\(WaterConstants.resolvedGoal(goal.waterGoalCups))"
+
             // Advanced nutrition goal strings (only if set)
             fiberTargetString = goal.fiberTarget.map { String(format: "%.0f", $0) } ?? ""
             sugarTargetString = goal.sugarTarget.map { String(format: "%.0f", $0) } ?? ""
@@ -149,6 +161,18 @@ final class DailyGoalsViewModel {
             let cholesterolTarget = cholesterolTargetString.isEmpty ? nil : Double(cholesterolTargetString)
             let potassiumTarget = potassiumTargetString.isEmpty ? nil : Double(potassiumTargetString)
 
+            // Water goal (D9). Visible: clamp the typed value into
+            // minGoalCups...maxGoalCups (an unparseable field keeps what was loaded rather
+            // than inventing a number). Hidden: pass the stored value through untouched —
+            // turning the tracker off must never clear a goal the user set.
+            // (The shared field uses a decimal pad, so parse leniently and truncate: cups
+            // are integers, and "8.5" must not silently discard the edit.)
+            let typedWaterCups = Double(waterGoalCupsString)
+                .map { Int($0) } ?? WaterConstants.resolvedGoal(loadedWaterGoalCups)
+            let waterGoalCups: Int? = SettingsManager.shared.waterTrackerEnabled
+                ? WaterConstants.clampedGoal(typedWaterCups)
+                : loadedWaterGoalCups
+
             try await coordinator.updateDailyGoal(
                 calories: calories,
                 protein: protein,
@@ -160,7 +184,8 @@ final class DailyGoalsViewModel {
                 sodiumTarget: sodiumTarget,
                 saturatedFatTarget: saturatedFatTarget,
                 cholesterolTarget: cholesterolTarget,
-                potassiumTarget: potassiumTarget
+                potassiumTarget: potassiumTarget,
+                waterGoalCups: waterGoalCups
             )
 
             // Success feedback

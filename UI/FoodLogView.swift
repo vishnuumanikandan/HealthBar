@@ -52,6 +52,33 @@ struct FoodLogView: View {
     // R5a: Add-to-log block's "Scan barcode" row pushes the existing BarcodeOptionsView (D7).
     @State private var showingBarcodeOptions = false
 
+    // MARK: - Water (WATER-1)
+    //
+    // Every piece of state below is view-local, transient and purely decorative. None of it
+    // is persisted — not in SwiftData, not in SettingsManager, not on the view model. The
+    // count and the goal live on the view model; these only describe motion.
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Corner-button disc scale: dips on the tap and springs back past 1 (mockup §4).
+    @State private var waterDiscScale: CGFloat = 1
+    /// Bumped per tap so the splash restarts rather than queueing (D15 retargeting).
+    @State private var waterSplashToken = 0
+    /// Whether a splash burst is currently on screen.
+    @State private var waterSplashRunning = false
+    /// Reduce-Motion stand-in for the splash: one 180 ms wash that fades. Keyed by token
+    /// so each tap builds a fresh one (see `WaterTapPulse`).
+    @State private var waterPulseActive = false
+    @State private var waterPulseToken = 0
+    /// Whether an arrival ring is currently on screen.
+    @State private var waterGoalRingActive = false
+    /// Bumped per crossing: re-identifies the ring so a new one starts from scratch, and
+    /// guards the ring's own teardown against a later crossing.
+    @State private var waterGoalRingToken = 0
+    /// Overfull glow breathing (decorative). Under Reduce Motion the glow stays lit and
+    /// simply stops breathing — it is state, not decoration.
+    @State private var waterOverfullBreathing = false
+
     // MARK: - Initialization
 
     init(
@@ -76,6 +103,22 @@ struct FoodLogView: View {
                     loadingView
                 } else {
                     contentView
+                }
+            }
+            // WATER-1 D15: the corner button. Attached through this screen's existing
+            // overlay mechanism and offset by tokens only — no screen coordinates.
+            //
+            // The bottom offset is `tabBarContentHeight` + a spacing token, the same
+            // clearance this file's `contentMargins` and SettingsView's toast already use:
+            // the TabView mounts the bar as a bottom `safeAreaInset`, and that inset does
+            // NOT propagate into a tab's own NavigationStack, so this container's bottom
+            // edge is the screen's. Verified in the simulator — without it the button
+            // renders behind the translucent bar.
+            .overlay(alignment: .bottomTrailing) {
+                if settings.waterTrackerEnabled {
+                    waterAddButton
+                        .padding(.trailing, DesignSystem.Spacing.lg)
+                        .padding(.bottom, DesignSystem.Erewhon.tabBarContentHeight + DesignSystem.Spacing.lg)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -997,9 +1040,364 @@ struct FoodLogView: View {
                     color: tc.macroBarFat
                 )
             }
+
+            // WATER-1 D12: the fourth track. The carrier is ZERO-HEIGHT and reserves only
+            // the column's width, so switching water on cannot change the food hero's
+            // height — the macro stack still sets it. The column is drawn in the carrier's
+            // overlay, and because the HStack is centre-aligned every child's centre lands
+            // on the same line: carrier centre == macro-stack centre.
+            if settings.waterTrackerEnabled {
+                Color.clear
+                    .frame(width: WaterConstants.vesselWidth, height: 0)
+                    .overlay(waterColumnClean)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)
+    }
+
+    // MARK: - Water Column (WATER-1 D12/D13/D14)
+
+    /// The column: a macro-track-equivalent top block, then the vessel, and NOTHING below.
+    ///
+    /// That shape is the whole centring rule and it is structural, not a nudge. A macro
+    /// track is `[label][6][bar]`, so the macro stack is top-heavy by exactly
+    /// `labelHeight/2 + 3` relative to its own centre — and so is this column, for any
+    /// label height. Ordinary centre alignment therefore puts the vessel's centre on the
+    /// bar run's centre at every text size, with no offset to maintain.
+    private var waterColumnClean: some View {
+        VStack(spacing: 6) {
+            waterCountLabel
+            waterVessel
+        }
+    }
+
+    /// Current count only — the hero drops the mockup's "cups" caption, because the bottom
+    /// block must be zero for the centring rule above. Ink token, display type.
+    private var waterCountLabel: some View {
+        ZStack {
+            // Invisible stand-in for a macro track's label row — the same three fonts on one
+            // baseline, in the same HStack shape `macroTrackClean` uses — so this block is
+            // exactly as tall as a macro label row at every text scale. Load-bearing, not
+            // decoration: it is what makes the centring structural instead of a magic offset.
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text("W").font(AppFont.bold(12))
+                Text("0").font(AppFont.display(13))
+                Text("g").font(AppFont.regular(11))
+            }
+            .lineLimit(1)
+            .fixedSize()
+            .hidden()
+            .accessibilityHidden(true)
+
+            // The reading is labelled on the leaf, not on a merged container: the column
+            // lives in a zero-height carrier's overlay, and a container element there does
+            // not collapse — VoiceOver read a bare "0". This is also what keeps the count
+            // accessible without depending on any animation state.
+            Text(waterReadingText)
+                .font(AppFont.display(13))
+                .foregroundColor(tc.textPrimary)
+                .contentTransition(.numericText())
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .accessibilityLabel("Water")
+                .accessibilityValue(waterReadingAccessibilityValue)
+        }
+        .frame(width: WaterConstants.vesselWidth)
+    }
+
+    /// The vessel: quantised water inside a curved themed shell (the rev-10 hybrid — one
+    /// renderer, both themes). The shell owns the edge and takes theme tokens; only the
+    /// water uses `waterFill`.
+    private var waterVessel: some View {
+        let count = viewModel.waterCupCount
+        let goal = viewModel.waterGoalCups
+        let units = WaterConstants.filledUnits(count: count, goal: goal)
+        let isStill = count >= goal          // goal met or overfull: the water goes still
+        let isOver = count > goal
+
+        return ZStack(alignment: .bottom) {
+            // Empty state falls out for free: no fill, and therefore no crest and no motion.
+            if units > 0 {
+                waterFillBody(units: units, isStill: isStill, isOver: isOver)
+            }
+        }
+        // `alignment: .bottom` is load-bearing: the ZStack sizes to the fill, and a bare
+        // `.frame` would CENTRE that block in the vessel — the water floated mid-column.
+        .frame(
+            width: WaterConstants.vesselWidth,
+            height: WaterConstants.vesselHeight,
+            alignment: .bottom
+        )
+        .background(
+            RoundedRectangle(cornerRadius: WaterConstants.vesselRadius)
+                .fill(tc.ringEmpty)          // same track as the macro bars beside it
+        )
+        .clipShape(RoundedRectangle(cornerRadius: WaterConstants.vesselRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: WaterConstants.vesselRadius)
+                .stroke(
+                    isOver ? tc.waterFill.adjustedBrightness(0.08) : DesignSystem.Erewhon.line,
+                    lineWidth: 1
+                )
+        )
+        // Overfull glow: brimming, never a warning. Breathes when motion is allowed and
+        // stays lit at full strength when it is not.
+        .shadow(
+            color: isOver
+                ? tc.waterFill.opacity(waterOverfullBreathing && !reduceMotion ? 0.72 : 1.0).opacity(0.5)
+                : .clear,
+            radius: isOver ? 7 : 0
+        )
+        .animation(.spring(response: 0.26, dampingFraction: 0.7), value: units)
+        .overlay(waterGoalRing)              // drawn OUTSIDE the clip so it can expand past it
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) {
+                waterOverfullBreathing = true
+            }
+        }
+    }
+
+    /// The fill itself: a quantised body plus the stepped crest that rides its surface.
+    private func waterFillBody(units: Int, isStill: Bool, isOver: Bool) -> some View {
+        let height = CGFloat(units) * WaterConstants.unitSize
+        return Rectangle()
+            .fill(
+                LinearGradient(
+                    colors: [
+                        isOver ? tc.waterFill.adjustedBrightness(0.06) : tc.waterFill,
+                        tc.waterFill.adjustedBrightness(-0.30)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .frame(height: height)
+            .overlay(alignment: .top) {
+                waterCrest(isStill: isStill)
+                    .opacity(isStill ? 0 : 1)
+                    .animation(.easeOut(duration: 0.32), value: isStill)
+            }
+            // One unit of inset at each end — the mockup's outline slot, kept in the hybrid
+            // so the fill never fights the shell's corners.
+            .padding(.bottom, WaterConstants.unitSize)
+    }
+
+    /// The stepped waterline. Drift is a rotation of the crest's index, never a sub-unit
+    /// translate, so every frame lands on the grid (the mockup's `steps(8)`, load-bearing).
+    /// Reduce Motion holds it still mid-crest rather than snapping it flat.
+    private func waterCrest(isStill: Bool) -> some View {
+        TimelineView(.periodic(from: .now, by: WaterConstants.waveStepSeconds)) { context in
+            let frozen = isStill || reduceMotion
+            let phase = frozen ? 0 : waterCrestPhase(at: context.date)
+            let columns = Int(
+                (WaterConstants.vesselWidth / WaterConstants.unitSize).rounded(.up)
+            )
+            HStack(spacing: 0) {
+                ForEach(0..<columns, id: \.self) { column in
+                    let profile = WaterConstants.crestProfile
+                    let rise = profile[(column + phase) % profile.count]
+                    // Foam sits ON the crest: one unit, at the waterline or one unit above it.
+                    Rectangle()
+                        .fill(Color.white.opacity(0.85))   // specular only — never on the page
+                        .frame(width: WaterConstants.unitSize, height: WaterConstants.unitSize)
+                        .offset(y: -CGFloat(rise) * WaterConstants.unitSize)
+                }
+            }
+        }
+    }
+
+    /// Whole-unit wave phase for a given instant.
+    private func waterCrestPhase(at date: Date) -> Int {
+        let steps = Int(date.timeIntervalSinceReferenceDate / WaterConstants.waveStepSeconds)
+        let period = WaterConstants.crestProfile.count
+        return ((steps % period) + period) % period
+    }
+
+    /// One-shot arrival ring. Fires ONLY from a goal crossing (see `addWaterCup`) — never
+    /// on a redraw, never from a goal edit, and suppressed entirely under Reduce Motion.
+    ///
+    /// Built fresh per crossing (`.id(token)`) and animated from `onAppear`, the same shape
+    /// the splash uses. That indirection is load-bearing: driving scale+opacity from one
+    /// 0->1 state does NOT work, because SwiftUI interpolates between the START and END
+    /// modifier values — a ring that ends at opacity 0 and only *exists* while firing is
+    /// invisible for its whole life. Caught on video; the ring band measured flat zero.
+    @ViewBuilder
+    private var waterGoalRing: some View {
+        if waterGoalRingActive {
+            WaterGoalRing(color: tc.waterFill, cornerRadius: WaterConstants.vesselRadius)
+                .id(waterGoalRingToken)
+                .allowsHitTesting(false)
+        }
+    }
+
+    /// The count as rendered: cups, or `count x mlPerCup` in ml mode.
+    private var waterReadingText: String {
+        switch settings.waterUnit {
+        case .cups: return "\(viewModel.waterCupCount)"
+        case .ml:   return "\(WaterConstants.milliliters(cups: viewModel.waterCupCount))"
+        }
+    }
+
+    /// Spoken reading for both the column and the button, in the unit on screen.
+    private var waterReadingAccessibilityValue: String {
+        switch settings.waterUnit {
+        case .cups:
+            return "\(viewModel.waterCupCount) of \(viewModel.waterGoalCups) cups"
+        case .ml:
+            let current = WaterConstants.milliliters(cups: viewModel.waterCupCount)
+            let target = WaterConstants.milliliters(cups: viewModel.waterGoalCups)
+            return "\(current) of \(target) millilitres"
+        }
+    }
+
+    // MARK: - Water Corner Button (WATER-1 D15)
+
+    /// The add control: a disc of water, so striking it is what splashes. Tap = +1;
+    /// long-press = -1. `ExclusiveGesture` (long press first) is what keeps a held press
+    /// from also firing the tap on release and netting zero.
+    private var waterAddButton: some View {
+        let longPress = LongPressGesture(minimumDuration: 0.5)
+            .onEnded { _ in removeWaterCup() }
+        let tap = TapGesture().onEnded { addWaterCup() }
+
+        return ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [tc.waterFill, tc.waterFill.adjustedBrightness(-0.30)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            Image(systemName: "drop.fill")
+                .font(AppFont.bold(20))
+                // Knocked out in a deep tone derived from the water itself: the disc is the
+                // same pale cyan in both themes, so the glyph must be dark in both.
+                .foregroundColor(tc.waterFill.adjustedBrightness(-0.55))
+        }
+        .frame(width: WaterConstants.buttonDiameter, height: WaterConstants.buttonDiameter)
+        .scaleEffect(waterDiscScale)
+        .shadow(color: tc.waterFill.opacity(0.34), radius: 9, x: 0, y: 6)
+        // Reduce Motion acknowledgement: a wash that brightens the disc and fades. Nothing
+        // moves and nothing scales.
+        .overlay {
+            if waterPulseActive {
+                WaterTapPulse(color: tc.waterFill)
+                    .id(waterPulseToken)
+                    .allowsHitTesting(false)
+            }
+        }
+        // The crown and ripples clear the rim, so they are drawn OUTSIDE the disc and are
+        // never clipped. Keyed by token: each tap builds a fresh burst instead of queueing.
+        .overlay {
+            if waterSplashRunning && !reduceMotion {
+                WaterSplashBurst(
+                    color: tc.waterFill,
+                    discRadius: WaterConstants.buttonDiameter / 2
+                )
+                .id(waterSplashToken)
+                    .allowsHitTesting(false)
+            }
+        }
+        .contentShape(Circle())
+        .gesture(longPress.exclusively(before: tap))
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("Add water")
+        .accessibilityValue(waterReadingAccessibilityValue)
+        // Long-press is not discoverable by VoiceOver, so decrement is exposed as a named
+        // action rather than left behind the gesture.
+        .accessibilityAction { addWaterCup() }
+        .accessibilityAction(named: Text("Remove a cup")) { removeWaterCup() }
+    }
+
+    // MARK: - Water Actions (WATER-1 D14/D15)
+
+    /// +1 cup. The feedback fires from the mutation's RESULT, so a crossing is a fact and
+    /// not a prediction — that is what makes "success haptic replaces the impact" exact and
+    /// keeps a failed write silent. The splash starts immediately and never waits on it.
+    private func addWaterCup() {
+        let before = viewModel.waterCupCount
+        let goal = viewModel.waterGoalCups
+        fireWaterSplash()
+
+        Task {
+            await viewModel.incrementWater()
+            let after = viewModel.waterCupCount
+            // The ring is per-CROSSING, not per-day: dropping back below the goal re-arms it.
+            let crossed = before < goal && after >= goal
+            if crossed && !reduceMotion { fireWaterGoalRing() }
+
+            #if os(iOS)
+            if crossed {
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+            } else {
+                // No escalation past the goal — cups 9, 10, 11 get the light impact again.
+                let generator = UIImpactFeedbackGenerator(style: .light)
+                generator.impactOccurred()
+            }
+            #endif
+        }
+    }
+
+    /// -1 cup, floored at 0. At 0 this is a no-op with no haptic.
+    private func removeWaterCup() {
+        guard viewModel.waterCupCount > 0 else { return }
+        Task {
+            await viewModel.decrementWater()
+            #if os(iOS)
+            let generator = UIImpactFeedbackGenerator(style: .rigid)
+            generator.impactOccurred()
+            #endif
+        }
+    }
+
+    /// Disc dip + rebound, plus the burst. Under Reduce Motion nothing moves or scales —
+    /// a single 180 ms brightness decay acknowledges the tap instead.
+    private func fireWaterSplash() {
+        guard !reduceMotion else {
+            // Built fresh per tap and animated from `onAppear`, like the ring and the
+            // burst. Setting a flag true and animating it false in ONE update coalesces to
+            // "no change" and renders nothing — measured: the disc's luma never moved.
+            waterPulseToken += 1
+            waterPulseActive = true
+            let pulseToken = waterPulseToken
+            Task {
+                try? await Task.sleep(for: .milliseconds(220))
+                if waterPulseToken == pulseToken { waterPulseActive = false }
+            }
+            return
+        }
+
+        waterSplashToken += 1
+        waterSplashRunning = true
+        let token = waterSplashToken
+
+        withAnimation(.easeOut(duration: 0.11)) { waterDiscScale = 0.86 }
+        // A low-damping spring is what produces the ~1.07 rebound before it settles.
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.45).delay(0.11)) {
+            waterDiscScale = 1
+        }
+
+        Task {
+            try? await Task.sleep(for: .milliseconds(600))
+            if waterSplashToken == token { waterSplashRunning = false }
+        }
+    }
+
+    /// The one-shot arrival ring, retargeted (never queued) if it fires again mid-flight.
+    private func fireWaterGoalRing() {
+        waterGoalRingToken += 1
+        waterGoalRingActive = true
+        let token = waterGoalRingToken
+
+        Task {
+            try? await Task.sleep(for: .milliseconds(560))
+            if waterGoalRingToken == token { waterGoalRingActive = false }
+        }
     }
 
     /// Mockup `.mini-ring`: calorie progress arc + centered display figure (D9).
@@ -1027,6 +1425,11 @@ struct FoodLogView: View {
     }
 
     /// Mockup `.fm`: colored macro label + display value/goal over a token track fill.
+    ///
+    /// WATER-1: this row's `spacing: 6` and its three label fonts are a SHARED CONVENTION
+    /// with `waterCountLabel`, which mirrors both to stay exactly as tall as this label row.
+    /// That equality is what centres the water vessel on the bar run with no magic offset —
+    /// if either changes here, change it there too.
     private func macroTrackClean(
         label: String, value: Int, target: Int, unit: String,
         progress: Double, color: Color
@@ -1837,6 +2240,107 @@ private struct SwipeableEntryCard: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: date)
+    }
+}
+
+// MARK: - Water Tap Pulse (WATER-1 D15, Reduce Motion)
+
+/// The Reduce-Motion acknowledgement: a brightening wash over the disc that fades over
+/// 180 ms. No crown, no ripples, no dip — nothing that moves or scales — but the tap is
+/// still unmistakable. Created fresh per tap so repeat taps restart it.
+private struct WaterTapPulse: View {
+
+    let color: Color
+
+    @State private var faded = false
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .opacity(faded ? 0 : 0.55)
+            .onAppear {
+                withAnimation(.easeOut(duration: 0.18)) { faded = true }
+            }
+    }
+}
+
+// MARK: - Water Goal Ring (WATER-1 D14)
+
+/// The arrival ring: expands past the vessel's own clip and fades, once, on the tap that
+/// crosses the goal. Created fresh per crossing and animated from `onAppear` so a repeat
+/// crossing restarts it rather than queueing behind it.
+private struct WaterGoalRing: View {
+
+    let color: Color
+    let cornerRadius: CGFloat
+
+    @State private var expanded = false
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .stroke(color, lineWidth: 2)
+            .scaleEffect(expanded ? 1.34 : 1)
+            .opacity(expanded ? 0 : 0.9)
+            .onAppear {
+                withAnimation(.easeOut(duration: 0.52)) { expanded = true }
+            }
+    }
+}
+
+// MARK: - Water Splash Burst (WATER-1 D15)
+
+/// The struck-water burst: three expanding ripples plus a crown thrown clear of the rim.
+///
+/// Built to be created fresh per tap (`.id(token)` at the call site) and animated from
+/// `onAppear`, which is what makes a second tap RETARGET the burst rather than queue behind
+/// it. Purely decorative and non-interactive; never rendered under Reduce Motion.
+private struct WaterSplashBurst: View {
+
+    let color: Color
+    /// Radius of the disc being struck — the crown's throw distances are fractions of it.
+    let discRadius: CGFloat
+
+    /// Ripple stagger, mockup §4: 0 / 80 / 150 ms.
+    private static let rippleDelays: [Double] = [0, 0.08, 0.15]
+
+    /// Crown droplets: angle in degrees and throw distance as a fraction of the disc radius.
+    /// Angles and distances vary together — an evenly spaced crown of identical dots reads
+    /// as a mechanical starburst rather than thrown water.
+    private static let crown: [(angle: Double, throwFactor: CGFloat, size: CGFloat, delay: Double)] = [
+        (-90, 1.00, 4.0, 0.00), (-58, 0.82, 3.0, 0.02), (-122, 0.86, 3.5, 0.01),
+        (-26, 0.74, 2.5, 0.03), (-154, 0.78, 3.0, 0.02), (6, 0.68, 2.5, 0.03),
+        (-186, 0.70, 2.5, 0.01), (-72, 0.92, 2.5, 0.02)
+    ]
+
+    @State private var expanded = false
+
+    var body: some View {
+        ZStack {
+            ForEach(Array(Self.rippleDelays.enumerated()), id: \.offset) { index, delay in
+                Circle()
+                    .stroke(color, lineWidth: 1.5)
+                    .frame(width: discRadius * 2, height: discRadius * 2)
+                    .scaleEffect(expanded ? 2.45 : 0.3)
+                    .opacity(expanded ? 0 : 0.85)
+                    .animation(.easeOut(duration: 0.42).delay(delay), value: expanded)
+                    .id(index)
+            }
+
+            ForEach(Array(Self.crown.enumerated()), id: \.offset) { _, droplet in
+                let radians = droplet.angle * .pi / 180
+                let distance = expanded ? discRadius * droplet.throwFactor : 0
+                Circle()
+                    .fill(color)
+                    .frame(width: droplet.size, height: droplet.size)
+                    .offset(
+                        x: distance * CGFloat(cos(radians)),
+                        y: distance * CGFloat(sin(radians))
+                    )
+                    .opacity(expanded ? 0 : 1)
+                    .animation(.easeOut(duration: 0.38).delay(droplet.delay), value: expanded)
+            }
+        }
+        .onAppear { expanded = true }
     }
 }
 
