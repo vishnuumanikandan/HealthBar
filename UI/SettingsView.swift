@@ -55,9 +55,17 @@ struct SettingsView: View {
 
     /// The version row's subtitle, reading the shipped marketing version exactly the way
     /// `DataManager.submitFeedback` stamps it.
-    private static var appVersionSubtitle: String {
+    ///
+    /// ABOUTHINT-1: the SECRET-1 reveal hangs off this row's tap handler and was
+    /// undiscoverable, so the subtitle carries a copy-only wink. It is no longer `static`
+    /// for exactly one reason — the trailing clause reads `secretMenuRevealed`, and a
+    /// static property cannot see the instance's `@AppStorage`. Copy only: no treatment,
+    /// no animation, no new state, and the reveal mechanics are untouched.
+    private var appVersionSubtitle: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
-        return "Version \(version)"
+        return secretMenuRevealed
+            ? "Version \(version) · you found it"
+            : "Version \(version) · nothing to see here"
     }
 
     // MARK: - TABVIS-1b (build gate + debug flags)
@@ -172,7 +180,7 @@ struct SettingsView: View {
                 settingButton(
                     icon: "info.circle",
                     title: "About",
-                    subtitle: Self.appVersionSubtitle,
+                    subtitle: appVersionSubtitle,
                     action: { registerSecretTap() }
                 )
 
