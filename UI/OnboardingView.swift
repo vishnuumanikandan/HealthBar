@@ -55,10 +55,25 @@ struct OnboardingView: View {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 26))
                             .foregroundColor(tc.textSecondary)
+                            // ONBEXIT-1: the glyph alone is ~26 pt, so the hit area was well
+                            // short of the 44 pt minimum on the one control that gets someone
+                            // out of a full-screen flow. The frame is what makes the target
+                            // real; `contentShape` is what makes the empty part of it tappable
+                            // rather than just occupied. The glyph itself is unchanged.
+                            // 44 as a literal is this codebase's tap-target convention
+                            // (FoodLogView, GuildView, BattleView, AddFoodFormView all do the
+                            // same); `DesignSystem.Sizes` holds decorative sizes, not targets.
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
-                    .accessibilityLabel("Close profile editor")
-                    .padding(.trailing, DesignSystem.Spacing.md)
-                    .padding(.top, DesignSystem.Spacing.md)
+                    // The box grew 26 -> 44 pt, so the outer padding is reduced to absorb it
+                    // rather than letting the fix push the header down: the row height goes
+                    // ~47 -> 48 pt and the glyph's distance from the trailing edge ~29 -> 30 pt.
+                    // The glyph does sit ~5 pt higher than before; that is the whole visible
+                    // cost of making the target real, and it is bounded on purpose.
+                    .accessibilityLabel("Exit without saving")
+                    .padding(.trailing, DesignSystem.Spacing.sm)
+                    .padding(.top, DesignSystem.Spacing.xs)
                 }
             }
 
