@@ -116,6 +116,7 @@
 		BE7B0C102FE5000000000014 /* DuelPrimerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0C0F2FE5000000000013 /* DuelPrimerSheet.swift */; };
 		BE7B0D022FE5000000000008 /* StandingsPieces.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7B0D012FE5000000000007 /* StandingsPieces.swift */; };
 		BED60B332FFA316A00F9E190 /* QTEDay.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B322FFA316A00F9E190 /* QTEDay.swift */; };
+		BEDA7E012FFA000000000001 /* WaterDay.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEDA7E002FFA000000000001 /* WaterDay.swift */; };
 		BED60B352FFA318800F9E190 /* QTEDayDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B342FFA318800F9E190 /* QTEDayDTO.swift */; };
 		BED60B372FFA318F00F9E190 /* DuelDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B362FFA318F00F9E190 /* DuelDTO.swift */; };
 		BED60B392FFA31B100F9E190 /* MacroGuessQTESheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED60B382FFA31B100F9E190 /* MacroGuessQTESheet.swift */; };
@@ -307,6 +308,7 @@
 		BE7B0C0F2FE5000000000013 /* DuelPrimerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuelPrimerSheet.swift; sourceTree = "<group>"; };
 		BE7B0D012FE5000000000007 /* StandingsPieces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StandingsPieces.swift; sourceTree = "<group>"; };
 		BED60B322FFA316A00F9E190 /* QTEDay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QTEDay.swift; sourceTree = "<group>"; };
+		BEDA7E002FFA000000000001 /* WaterDay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaterDay.swift; sourceTree = "<group>"; };
 		BED60B342FFA318800F9E190 /* QTEDayDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QTEDayDTO.swift; sourceTree = "<group>"; };
 		BED60B362FFA318F00F9E190 /* DuelDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuelDTO.swift; sourceTree = "<group>"; };
 		BED60B382FFA31B100F9E190 /* MacroGuessQTESheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacroGuessQTESheet.swift; sourceTree = "<group>"; };
@@ -678,6 +680,7 @@
 			isa = PBXGroup;
 			children = (
 				BED60B322FFA316A00F9E190 /* QTEDay.swift */,
+				BEDA7E002FFA000000000001 /* WaterDay.swift */,
 				BE102AB72FD9353900E9744F /* FriendRequest.swift */,
 				BE102AB52FD9352E00E9744F /* Friend.swift */,
 				BEF96DF02FCAAA7E00FB0F83 /* FoodClarification.swift */,
@@ -978,6 +981,7 @@
 				BE1030442FE49A7000E9744F /* GuildDTO.swift in Sources */,
 				BED60B8D2FFCBB3000F9E190 /* GlobalLeaderboardView.swift in Sources */,
 				BED60B332FFA316A00F9E190 /* QTEDay.swift in Sources */,
+				BEDA7E012FFA000000000001 /* WaterDay.swift in Sources */,
 				BED60B3F2FFA31C600F9E190 /* SparkQTESheet.swift in Sources */,
 				BEF96B552F88511800FB0F83 /* BadgeDefinition.swift in Sources */,
 				BEF96A972F7CC7A200FB0F83 /* UserProfileDTO.swift in Sources */,

@@ -1431,7 +1431,12 @@ final class DataManager {
                     sodiumTarget: mostRecent.sodiumTarget,
                     saturatedFatTarget: mostRecent.saturatedFatTarget,
                     cholesterolTarget: mostRecent.cholesterolTarget,
-                    potassiumTarget: mostRecent.potassiumTarget
+                    potassiumTarget: mostRecent.potassiumTarget,
+                    // WATER-1 D8: carries the field's EXACT value, including nil. This
+                    // never searches backward for the most recent non-nil water goal —
+                    // tier 1 carries one row forward, whole. (Tier 3 leaves it nil, which
+                    // renders as WaterConstants.defaultGoalCups.)
+                    waterGoalCups: mostRecent.waterGoalCups
                 )
                 carried.userId = userId
                 return carried
@@ -1463,7 +1468,8 @@ final class DataManager {
         sodiumTarget: Double? = nil,
         saturatedFatTarget: Double? = nil,
         cholesterolTarget: Double? = nil,
-        potassiumTarget: Double? = nil
+        potassiumTarget: Double? = nil,
+        waterGoalCups: Int? = nil
     ) async throws {
         guard let userId = currentUserId, !userId.isEmpty else { return }
 
@@ -1482,6 +1488,9 @@ final class DataManager {
             existingGoal.saturatedFatTarget = saturatedFatTarget
             existingGoal.cholesterolTarget = cholesterolTarget
             existingGoal.potassiumTarget = potassiumTarget
+            // Water goal (WATER-1). Assigned unconditionally, exactly like the sibling
+            // optionals above — preserving an existing value is the CALLER's job (D9).
+            existingGoal.waterGoalCups = waterGoalCups
             goalToUpload = existingGoal
         } else {
             // Create new goal for today and stamp with current user
@@ -1497,7 +1506,8 @@ final class DataManager {
                 sodiumTarget: sodiumTarget,
                 saturatedFatTarget: saturatedFatTarget,
                 cholesterolTarget: cholesterolTarget,
-                potassiumTarget: potassiumTarget
+                potassiumTarget: potassiumTarget,
+                waterGoalCups: waterGoalCups
             )
             newGoal.userId = userId  // TODO: replace with Firebase UID in Phase 3
             modelContext.insert(newGoal)
@@ -1514,6 +1524,94 @@ final class DataManager {
                 try? await firestoreService.uploadDailyGoal(dto)
             }
         }
+    }
+
+    // MARK: - Water (WATER-1)
+
+    // Ints only cross this boundary — no managed `WaterDay` object ever leaves DataManager.
+    //
+    // Day bucketing uses the app's existing `Date().startOfDay` / `isSameDay` helpers in the
+    // user's LOCAL calendar and timezone. Deliberate contrast with `aiUsage`, which is UTC by
+    // design (it mirrors a server's calendar); water is local by design, because it rolls over
+    // when the user's day does. Reset is bucketing, not a job (D16) — a new day simply has no
+    // row until the first tap.
+    //
+    // Fully functional for guests: `WaterDay` is local-only, so there is no Firestore entry
+    // point to guard. `currentUserId` resolves to "guest" and scopes the rows, exactly like
+    // every other local model.
+    //
+    // The two mutations are `@MainActor` — DataManager's existing isolation for modelContext
+    // access — and their bodies contain no suspension point, so they run to completion once
+    // entered. Two concurrent increments therefore produce exactly +2. No second ModelContext,
+    // no new actor, no queue.
+
+    /// Today's water count in cups for the current user. 0 when there is no row.
+    @MainActor
+    func getTodaysWaterCount() -> Int {
+        todaysWaterDay()?.cupCount ?? 0
+    }
+
+    /// Adds one cup to today's row, creating it if today has none. Returns the new count.
+    @MainActor
+    func incrementWater() async throws -> Int {
+        guard let userId = currentUserId, !userId.isEmpty else {
+            throw DataManagerError.notAuthenticated
+        }
+
+        let day: WaterDay
+        if let existing = todaysWaterDay() {
+            day = existing
+        } else {
+            // Every newly created row explicitly stamps currentUserId, the way
+            // makeGoalForToday() does. No new row ever carries the "legacy" default.
+            day = WaterDay(date: Date().startOfDay, cupCount: 0, userId: userId)
+            modelContext.insert(day)
+        }
+
+        day.cupCount += 1
+        try modelContext.save()
+        return day.cupCount
+    }
+
+    /// Removes one cup from today's row, floored at 0. Returns the new count.
+    /// A day with no row is already at 0 — that is a no-op, not a new row.
+    @MainActor
+    func decrementWater() async throws -> Int {
+        guard currentUserId?.isEmpty == false else {
+            throw DataManagerError.notAuthenticated
+        }
+        guard let day = todaysWaterDay(), day.cupCount > 0 else { return 0 }
+
+        day.cupCount = max(0, day.cupCount - 1)
+        try modelContext.save()
+        return day.cupCount
+    }
+
+    /// Today's row for the current user, or nil. At most one row per (userId, day) should
+    /// exist; if the fetch finds more, take the latest-by-date row and warn — mirroring
+    /// `makeGoalForToday()`'s duplicate handling. Never sums, never dedupes here.
+    @MainActor
+    private func todaysWaterDay() -> WaterDay? {
+        guard let userId = currentUserId, !userId.isEmpty else { return nil }
+        let startOfToday = Date().startOfDay
+        guard let startOfTomorrow = Calendar.current.date(byAdding: .day, value: 1, to: startOfToday) else {
+            return nil
+        }
+
+        var descriptor = FetchDescriptor<WaterDay>(
+            predicate: #Predicate { day in
+                day.userId == userId && day.date >= startOfToday && day.date < startOfTomorrow
+            },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        // 2, not 1: the second row exists only to detect a same-day duplicate.
+        descriptor.fetchLimit = 2
+        let rows = (try? modelContext.fetch(descriptor)) ?? []
+
+        if rows.count > 1 {
+            print("\u{26A0}\u{FE0F} WATER-1: multiple WaterDay rows share day \(startOfToday) — using the latest timestamp")
+        }
+        return rows.first
     }
 
     // MARK: - Progress Methods
@@ -6202,6 +6300,12 @@ final class DataManager {
             FetchDescriptor<UserProfile>(predicate: #Predicate { $0.userId == "guest" })
         )
         for profile in guestProfiles { modelContext.delete(profile) }
+
+        // WATER-1: guest water rows only. An authenticated user's rows are untouched.
+        let guestWaterDays = try modelContext.fetch(
+            FetchDescriptor<WaterDay>(predicate: #Predicate { $0.userId == "guest" })
+        )
+        for day in guestWaterDays { modelContext.delete(day) }
 
         try modelContext.save()
     }

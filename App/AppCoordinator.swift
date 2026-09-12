@@ -293,7 +293,8 @@ final class AppCoordinator {
         sodiumTarget: Double? = nil,
         saturatedFatTarget: Double? = nil,
         cholesterolTarget: Double? = nil,
-        potassiumTarget: Double? = nil
+        potassiumTarget: Double? = nil,
+        waterGoalCups: Int? = nil
     ) async throws {
         try await dataManager.updateDailyGoal(
             calories: calories,
@@ -306,8 +307,27 @@ final class AppCoordinator {
             sodiumTarget: sodiumTarget,
             saturatedFatTarget: saturatedFatTarget,
             cholesterolTarget: cholesterolTarget,
-            potassiumTarget: potassiumTarget
+            potassiumTarget: potassiumTarget,
+            waterGoalCups: waterGoalCups
         )
+    }
+
+    // MARK: - Water (WATER-1)
+
+    /// Today's water count in cups (0 when there is no row). Local-only — no Firestore.
+    @MainActor
+    func getTodaysWaterCount() -> Int {
+        dataManager.getTodaysWaterCount()
+    }
+
+    /// Adds one cup to today's count. Returns the new count.
+    func incrementWater() async throws -> Int {
+        try await dataManager.incrementWater()
+    }
+
+    /// Removes one cup from today's count (floored at 0). Returns the new count.
+    func decrementWater() async throws -> Int {
+        try await dataManager.decrementWater()
     }
 
     // MARK: - Progress & XP

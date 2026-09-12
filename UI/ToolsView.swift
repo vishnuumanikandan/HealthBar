@@ -42,12 +42,16 @@ struct ToolsView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: columns, spacing: DesignSystem.Spacing.md) {
-                    ForEach(CalculatorCard.allCards) { card in
-                        NavigationLink(destination: destinationView(for: card)) {
-                            CalculatorCardView(card: card, tc: tc)
+                VStack(spacing: DesignSystem.Spacing.md) {
+                    waterTrackerRow
+
+                    LazyVGrid(columns: columns, spacing: DesignSystem.Spacing.md) {
+                        ForEach(CalculatorCard.allCards) { card in
+                            NavigationLink(destination: destinationView(for: card)) {
+                                CalculatorCardView(card: card, tc: tc)
+                            }
+                            .buttonStyle(PlainButtonStyle())
                         }
-                        .buttonStyle(PlainButtonStyle())
                     }
                 }
                 .padding(DesignSystem.Spacing.md)
@@ -62,6 +66,30 @@ struct ToolsView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Water Tracker Toggle (WATER-1 D4)
+
+    /// A single visible row above the calculator grid — §7 reading A ("a small extra toggle
+    /// tucked in Tools"), NOT the SECRET-1 hidden pattern. Turning it off hides every water
+    /// surface and keeps all data (the `trackAdvancedNutrition` precedent).
+    private var waterTrackerRow: some View {
+        Toggle(isOn: $settings.waterTrackerEnabled) {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                Text("Water Tracker")
+                    .font(AppFont.bold(16))
+                    .foregroundColor(tc.textPrimary)
+
+                Text("Adds a water column to the Food Log")
+                    .font(AppFont.regular(12))
+                    .foregroundColor(tc.textSecondary)
+            }
+        }
+        .tint(tc.primary)
+        .padding(DesignSystem.Spacing.md)
+        .adaptiveCard(borderColor: tc.primary.opacity(0.25), fillColor: tc.cardBackground)
+        .accessibilityLabel("Water tracker")
+        .accessibilityHint("When enabled, adds a water column to the Food Log")
     }
 
     @ViewBuilder

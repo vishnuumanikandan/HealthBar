@@ -46,6 +46,16 @@ final class FoodLogViewModel {
     /// Favorited foods for quick-log (one per fingerprint)
     var favoriteFoods: [FoodEntry] = []
 
+    // MARK: - Water (WATER-1)
+
+    /// Today's water count in cups. Refreshed at the `loadTodaysData()` chokepoint and set
+    /// straight from the mutation's return value — never optimistically, so there is only
+    /// ever one source for it.
+    var waterCupCount: Int = 0
+
+    /// Today's resolved water goal in cups: `waterGoalCups ?? defaultGoalCups`, display-clamped.
+    var waterGoalCups: Int = WaterConstants.defaultGoalCups
+
     // MARK: - Toast State
 
     /// Toast message to display
@@ -382,6 +392,13 @@ final class FoodLogViewModel {
             if isViewingToday {
                 displayedEntries = todaysEntries
             }
+
+            // WATER-1: water refreshes HERE and nowhere else. This is the existing
+            // today-refresh chokepoint (`.task` on appear, pull-to-refresh, and every
+            // mutation path), so a midnight crossing corrects itself on the next refresh —
+            // no timer, no scene-phase observer, no midnight observer (D16).
+            waterCupCount = coordinator.getTodaysWaterCount()
+            waterGoalCups = WaterConstants.resolvedGoal(summary.goal.waterGoalCups)
 
             // M9: a reload re-fetches from the DB, where a pending (not-yet-finalized) delete still
             // exists — it would resurrect into the lists mid-undo-window. Strip the current pending
@@ -1597,6 +1614,22 @@ final class FoodLogViewModel {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         #endif
+    }
+
+    // MARK: - Water (WATER-1)
+
+    /// Adds one cup. The published count is set from the method's RETURN value — no
+    /// optimistic bump, so the view never renders a number the store does not hold.
+    /// Failure leaves the count exactly where it was.
+    func incrementWater() async {
+        guard let newCount = try? await coordinator.incrementWater() else { return }
+        waterCupCount = newCount
+    }
+
+    /// Removes one cup (floored at 0). A no-op at 0, including when today has no row.
+    func decrementWater() async {
+        guard let newCount = try? await coordinator.decrementWater() else { return }
+        waterCupCount = newCount
     }
 
     // MARK: - Drag and Drop

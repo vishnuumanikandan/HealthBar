@@ -35,6 +35,24 @@ enum TextSizeOption: String, CaseIterable {
     }
 }
 
+/// WATER-1 (D3). rawValues are persisted in UserDefaults — PERMANENT identifiers;
+/// never rename them. A missing key or an unrecognized stored rawValue resolves to
+/// `.cups` without crashing (see `SettingsManager.waterUnit`).
+///
+/// Display preference only: storage is cups-canonical (`WaterConstants`), and ml is a
+/// render-time conversion. Device-local, never uid-scoped, never synced.
+enum WaterUnit: String, CaseIterable {
+    case cups = "cups"
+    case ml = "ml"
+
+    var displayName: String {
+        switch self {
+        case .cups: return "Cups"
+        case .ml: return "ml (\(WaterConstants.mlPerCup) per cup)"
+        }
+    }
+}
+
 /// Manages user preferences and app settings
 ///
 /// Uses UserDefaults for persistent storage. All settings update UI immediately.
@@ -55,6 +73,8 @@ final class SettingsManager {
         static let themePreference = "themePreference"
         static let textSizePreference = "textSizePreference"
         static let didMigrateToErewhon = "didMigrateToErewhon"
+        static let waterTrackerEnabled = "waterTrackerEnabled"
+        static let waterUnitPreference = "waterUnitPreference"
     }
 
     // MARK: - Settings Properties
@@ -135,6 +155,31 @@ final class SettingsManager {
 
     var textScaleFactor: CGFloat { textSizeOption.scaleFactor }
 
+    // MARK: - Water Tracker (WATER-1)
+
+    /// Whether the water column + corner button appear on the Food Log (D4).
+    /// OFF by default (missing key → false). Turning it off hides every water surface but
+    /// keeps ALL data — the `trackAdvancedNutrition` precedent.
+    var waterTrackerEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(waterTrackerEnabled, forKey: Keys.waterTrackerEnabled)
+        }
+    }
+
+    /// Stored `WaterUnit` rawValue (D3). Device-scoped (UserDefaults only, never synced),
+    /// mirroring the `textSizePreference` shape. Unknown/legacy values resolve to cups via
+    /// the `waterUnit` accessor.
+    var waterUnitPreference: String {
+        didSet {
+            UserDefaults.standard.set(waterUnitPreference, forKey: Keys.waterUnitPreference)
+        }
+    }
+
+    /// Display unit. Missing key OR unrecognized stored rawValue → `.cups`.
+    var waterUnit: WaterUnit {
+        WaterUnit(rawValue: waterUnitPreference) ?? .cups
+    }
+
     // MARK: - Initialization
 
     private init() {
@@ -162,6 +207,18 @@ final class SettingsManager {
             self.textSizePreference = sizePref
         } else {
             self.textSizePreference = "standard"
+        }
+
+        // Water tracker (WATER-1). Off by default — `bool(forKey:)` returns false for a
+        // missing key, which is exactly the wanted default.
+        self.waterTrackerEnabled = UserDefaults.standard.bool(forKey: Keys.waterTrackerEnabled)
+
+        // Water unit preference. Fresh installs (and any unrecognized stored value, which
+        // the `waterUnit` accessor absorbs) resolve to cups.
+        if let unitPref = UserDefaults.standard.string(forKey: Keys.waterUnitPreference) {
+            self.waterUnitPreference = unitPref
+        } else {
+            self.waterUnitPreference = WaterUnit.cups.rawValue
         }
 
         // One-time migration to the Erewhon reskin (D2). Runs once, after the pref loads.

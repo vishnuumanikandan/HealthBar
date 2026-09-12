@@ -86,6 +86,21 @@ struct ThemeColors {
     let macroBarFat: Color
     let macroBarTrack: Color
 
+    /// Water fill (WATER-1 D13). The ONE water token: the mockup's §6 fixed pixel palette
+    /// is superseded, and depth/neon/foam are derived from this at the draw site rather
+    /// than tokenised.
+    ///
+    /// Deliberately a `let` WITH a value rather than an initializer parameter: rev 10 ruled
+    /// "one water colour, both themes" — pale cyan in Erewhon Light as well as Dark — so
+    /// there is nothing per-theme to pass. (That also keeps every existing palette
+    /// initializer below untouched; a `let` with a default is excluded from the memberwise
+    /// init.) Unused by the pixel palettes, which have no water surface — the column renders
+    /// only in the Erewhon food hero (`TODO-water-pixel-arm`).
+    ///
+    /// Cyan at ~190°, a ~31° hue separation from the accent, so water never reads as one
+    /// more accent bar. Reading text stays on ink/muted and NEVER uses this.
+    let waterFill: Color = Color(hex: "#7BDFF2")
+
     // Buttons (Log Food / Scan)
     let buttonLight: Color
     let buttonMid: Color

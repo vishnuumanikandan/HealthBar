@@ -69,6 +69,17 @@ final class DailyGoal {
     /// Target potassium intake in milligrams (minimum - user should aim to reach)
     var potassiumTarget: Double? = nil
 
+    // MARK: - Water Goal (WATER-1)
+
+    /// Daily water goal in CUPS (cups-canonical — see `WaterConstants`). Optional with an
+    /// inline default, exactly like the advanced-nutrition fields above, so SwiftData
+    /// lightweight migration accepts it.
+    ///
+    /// `nil` means "never set" and renders/edits as `WaterConstants.defaultGoalCups`.
+    /// Syncs through `DailyGoalDTO` on the existing goal path — the count does NOT (it
+    /// lives in the local-only `WaterDay`).
+    var waterGoalCups: Int? = nil
+
     /// Initializes a new daily goal with nutritional targets
     /// - Parameters:
     ///   - id: Unique identifier (defaults to new UUID)
@@ -92,7 +103,9 @@ final class DailyGoal {
         sodiumTarget: Double? = nil,
         saturatedFatTarget: Double? = nil,
         cholesterolTarget: Double? = nil,
-        potassiumTarget: Double? = nil
+        potassiumTarget: Double? = nil,
+        // Water goal in cups (WATER-1)
+        waterGoalCups: Int? = nil
     ) {
         self.id = id
         self.date = date
@@ -108,5 +121,7 @@ final class DailyGoal {
         self.saturatedFatTarget = saturatedFatTarget
         self.cholesterolTarget = cholesterolTarget
         self.potassiumTarget = potassiumTarget
+        // Water goal
+        self.waterGoalCups = waterGoalCups
     }
 }
