@@ -60,10 +60,15 @@ struct FoodLogView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Corner-button disc scale: dips on the tap and springs back past 1 (mockup §4).
-    @State private var waterDiscScale: CGFloat = 1
+    /// Corner-button disc sink, in points. WATERSTYLE-1 D5: the press is a 1-unit SINK,
+    /// never a scale — scaling a sprite resamples it and the pixel art goes soft, which is
+    /// the one thing the medium cannot survive. Snaps (mockup `steps(1)`), never eases.
+    @State private var waterDiscSink: CGFloat = 0
     /// Bumped per tap so the splash restarts rather than queueing (D15 retargeting).
     @State private var waterSplashToken = 0
+    /// When the current crown started. Stamped per tap so each particle's step index is
+    /// measured from the tap, not from an arbitrary timeline origin.
+    @State private var waterSplashStart = Date()
     /// Whether a splash burst is currently on screen.
     @State private var waterSplashRunning = false
     /// Reduce-Motion stand-in for the splash: one 180 ms wash that fades. Keyed by token
@@ -1129,13 +1134,17 @@ struct FoodLogView: View {
             height: WaterConstants.vesselHeight,
             alignment: .bottom
         )
+        // WATERSTYLE-1 D2: a pointed rectangle, not a rounded one. `Rectangle()` IS the
+        // zero-radius case, so the radius disappears rather than becoming a literal 0 —
+        // `WaterConstants.vesselRadius` (7) is now unused by the vessel and is left
+        // declared because `Models/WaterDay.swift` is out of this prompt's Files list.
         .background(
-            RoundedRectangle(cornerRadius: WaterConstants.vesselRadius)
+            Rectangle()
                 .fill(tc.ringEmpty)          // same track as the macro bars beside it
         )
-        .clipShape(RoundedRectangle(cornerRadius: WaterConstants.vesselRadius))
+        .clipShape(Rectangle())
         .overlay(
-            RoundedRectangle(cornerRadius: WaterConstants.vesselRadius)
+            Rectangle()
                 .stroke(
                     isOver ? tc.waterFill.adjustedBrightness(0.08) : DesignSystem.Erewhon.line,
                     lineWidth: 1
@@ -1159,30 +1168,116 @@ struct FoodLogView: View {
         }
     }
 
-    /// The fill itself: a quantised body plus the stepped crest that rides its surface.
+    /// The fill itself: the mockup's pixel body — FLAT, with deepened bottom rows and two
+    /// drifting caustic layers — plus the stepped crest that rides its surface.
+    ///
+    /// WATERSTYLE-1: the gradient this replaced was WATER-1's stand-in for the caustic
+    /// ("the fill's gradient carries the depth instead"). The texture is now transcribed
+    /// from the mockup's `pixelVessel()`, whose draw order this mirrors exactly:
+    /// body → deep bottom two rows → crest → caustic(deep) → caustic(foam).
     private func waterFillBody(units: Int, isStill: Bool, isOver: Bool) -> some View {
         let height = CGFloat(units) * WaterConstants.unitSize
+        // `r(1,top,innerW,water,PX.water)` — one flat colour, no ramp. The overfull lift is
+        // WATER-1's, kept: the mockup says nothing about brightening the body when over.
         return Rectangle()
-            .fill(
-                LinearGradient(
-                    colors: [
-                        isOver ? tc.waterFill.adjustedBrightness(0.06) : tc.waterFill,
-                        tc.waterFill.adjustedBrightness(-0.30)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
+            .fill(isOver ? WaterPixelPalette.water.adjustedBrightness(0.06) : WaterPixelPalette.water)
             .frame(height: height)
+            // `if (water > 2) r(1,h-3,innerW,2,PX.deep)` — the bottom two rows deepened so
+            // the column has weight. Bottom-aligned, so it sits on the well floor.
+            .overlay(alignment: .bottom) {
+                if units > 2 {
+                    Rectangle()
+                        .fill(WaterPixelPalette.waterDeep)
+                        .frame(height: WaterConstants.unitSize * 2)
+                }
+            }
+            // `sp(' b', 5, PX.deep) + sp('', 2, PX.foam)` — two layers, different offsets,
+            // different step rates, drawn OVER the deepened floor exactly as the mockup
+            // orders them.
+            .overlay {
+                waterCaustic(units: units, isStill: isStill)
+            }
             .overlay(alignment: .top) {
                 waterCrest(isStill: isStill)
                     .opacity(isStill ? 0 : 1)
                     .animation(.easeOut(duration: 0.32), value: isStill)
             }
+            .clipped()                       // the mockup's inner-well clipPath
             // One unit of inset at each end — the mockup's outline slot, kept in the hybrid
-            // so the fill never fights the shell's corners.
+            // so the fill never fights the shell's edge.
             .padding(.bottom, WaterConstants.unitSize)
     }
+
+    /// The caustic: horizontal streaks that drift in whole units, two layers at different
+    /// step rates. Transcribed from the mockup's `SPARK` table and its `sp()` builder.
+    ///
+    /// The mockup's `x = 1 + cx + rep*8` carries a 1-unit inset because its inner well
+    /// starts after a drawn pixel outline. The hybrid has no horizontal outline — the
+    /// themed shell supplies the edge — so the inset is dropped and `cx` is used directly.
+    /// Rows are relative to the waterline, which is this view's own top.
+    ///
+    /// Motion freezes (phase 0) but the texture stays DRAWN when the water is still or
+    /// Reduce Motion is on — the mockup's `body.rm .pxcaustic{animation:none}`, which stops
+    /// the drift without removing the streaks.
+    @ViewBuilder
+    private func waterCaustic(units: Int, isStill: Bool) -> some View {
+        let frozen = isStill || reduceMotion
+        // `.pxcaustic` 3.6 s and `.pxcaustic.b` 5.2 s, both `steps(8)` over one 8-unit
+        // period — 8 units / 3.6 s and 8 units / 5.2 s. Single-site timings, so they stay
+        // inline (WATER-1's rule; only `waveStepSeconds` is shared).
+        let foamStep = 3.6 / 8.0
+        let deepStep = 5.2 / 8.0
+
+        TimelineView(.periodic(from: .now, by: min(foamStep, deepStep))) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            // `.b` runs `animation-direction:reverse`, so it drifts the other way.
+            let deepPhase = frozen ? 0 : -Self.causticPhase(t, step: deepStep)
+            let foamPhase = frozen ? 0 : Self.causticPhase(t, step: foamStep)
+
+            ZStack(alignment: .topLeading) {
+                causticLayer(units: units, rowOffset: 5, phase: deepPhase, color: WaterPixelPalette.waterDeep)
+                causticLayer(units: units, rowOffset: 2, phase: foamPhase, color: WaterPixelPalette.foam)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    /// One caustic layer: the `SPARK` table repeated across `rep in -1..<3`, offset down by
+    /// `rowOffset` rows and sideways by the layer's whole-unit `phase`.
+    private func causticLayer(units: Int, rowOffset: Int, phase: Int, color: Color) -> some View {
+        let unit = WaterConstants.unitSize
+        return ZStack(alignment: .topLeading) {
+            ForEach(-1..<3, id: \.self) { rep in
+                ForEach(Array(Self.causticSpark.enumerated()), id: \.offset) { _, spark in
+                    let row = spark.row + rowOffset
+                    // `if (y < h-2 && y > top)` — strictly below the waterline, above the
+                    // floor. Rows past the fill are simply outside it and clip away.
+                    if row > 0 && row < units {
+                        Rectangle()
+                            .fill(color)
+                            .frame(width: CGFloat(spark.width) * unit, height: unit)
+                            .offset(
+                                x: CGFloat(spark.column + rep * 8 + phase) * unit,
+                                y: CGFloat(row) * unit
+                            )
+                    }
+                }
+            }
+        }
+    }
+
+    /// Whole-unit drift phase for a caustic layer, wrapped to the 8-unit period.
+    private static func causticPhase(_ t: TimeInterval, step: Double) -> Int {
+        let steps = Int(t / step)
+        return ((steps % 8) + 8) % 8
+    }
+
+    /// The mockup's `SPARK`: horizontal streaks as [col, rowFromWaterTop, width], period 8
+    /// across. "Single dots read as carbonation; short runs read as light on water."
+    private static let causticSpark: [(column: Int, row: Int, width: Int)] = [
+        (0, 3, 3), (4, 1, 2), (3, 6, 3), (1, 9, 3), (5, 4, 2), (2, 12, 3), (4, 15, 2),
+        (0, 18, 3), (3, 21, 3), (1, 24, 2), (4, 28, 2), (0, 31, 3), (2, 35, 3), (5, 38, 2)
+    ]
 
     /// The stepped waterline. Drift is a rotation of the crest's index, never a sub-unit
     /// translate, so every frame lands on the grid (the mockup's `steps(8)`, load-bearing).
@@ -1200,7 +1295,7 @@ struct FoodLogView: View {
                     let rise = profile[(column + phase) % profile.count]
                     // Foam sits ON the crest: one unit, at the waterline or one unit above it.
                     Rectangle()
-                        .fill(Color.white.opacity(0.85))   // specular only — never on the page
+                        .fill(WaterPixelPalette.foam)      // PX.foam — specular only
                         .frame(width: WaterConstants.unitSize, height: WaterConstants.unitSize)
                         .offset(y: -CGFloat(rise) * WaterConstants.unitSize)
                 }
@@ -1226,7 +1321,7 @@ struct FoodLogView: View {
     @ViewBuilder
     private var waterGoalRing: some View {
         if waterGoalRingActive {
-            WaterGoalRing(color: tc.waterFill, cornerRadius: WaterConstants.vesselRadius)
+            WaterGoalRing(color: tc.waterFill)
                 .id(waterGoalRingToken)
                 .allowsHitTesting(false)
         }
@@ -1262,55 +1357,46 @@ struct FoodLogView: View {
             .onEnded { _ in removeWaterCup() }
         let tap = TapGesture().onEnded { addWaterCup() }
 
-        return ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [tc.waterFill, tc.waterFill.adjustedBrightness(-0.30)],
-                        startPoint: .top,
-                        endPoint: .bottom
+        return WaterPixelDiscView()
+            .frame(width: WaterConstants.buttonDiameter, height: WaterConstants.buttonDiameter)
+            // WATERSTYLE-1 D5: a 1-unit sink, never a scale. Applied as an offset so the
+            // sprite is translated by a whole unit and never resampled.
+            .offset(y: waterDiscSink)
+            .shadow(color: tc.waterFill.opacity(0.34), radius: 9, x: 0, y: 6)
+            // Reduce Motion acknowledgement (D6): a single stepped wash over the disc's own
+            // pixel silhouette. Nothing moves, nothing scales, no crown.
+            .overlay {
+                if waterPulseActive {
+                    WaterTapPulse(color: WaterPixelPalette.foam)
+                        .id(waterPulseToken)
+                        .allowsHitTesting(false)
+                }
+            }
+            // The crown lands clear of the disc, so it is drawn OUTSIDE and never clipped.
+            // Keyed by token: each tap builds a fresh crown instead of queueing behind one.
+            .overlay {
+                if waterSplashRunning && !reduceMotion {
+                    WaterPixelCrown(
+                        color: settings.isCleanDark
+                            ? WaterPixelPalette.crownOnDarkCard
+                            : WaterPixelPalette.crownOnLightCard,
+                        start: waterSplashStart
                     )
-                )
-            Image(systemName: "drop.fill")
-                .font(AppFont.bold(20))
-                // Knocked out in a deep tone derived from the water itself: the disc is the
-                // same pale cyan in both themes, so the glyph must be dark in both.
-                .foregroundColor(tc.waterFill.adjustedBrightness(-0.55))
-        }
-        .frame(width: WaterConstants.buttonDiameter, height: WaterConstants.buttonDiameter)
-        .scaleEffect(waterDiscScale)
-        .shadow(color: tc.waterFill.opacity(0.34), radius: 9, x: 0, y: 6)
-        // Reduce Motion acknowledgement: a wash that brightens the disc and fades. Nothing
-        // moves and nothing scales.
-        .overlay {
-            if waterPulseActive {
-                WaterTapPulse(color: tc.waterFill)
-                    .id(waterPulseToken)
+                    .id(waterSplashToken)
                     .allowsHitTesting(false)
+                }
             }
-        }
-        // The crown and ripples clear the rim, so they are drawn OUTSIDE the disc and are
-        // never clipped. Keyed by token: each tap builds a fresh burst instead of queueing.
-        .overlay {
-            if waterSplashRunning && !reduceMotion {
-                WaterSplashBurst(
-                    color: tc.waterFill,
-                    discRadius: WaterConstants.buttonDiameter / 2
-                )
-                .id(waterSplashToken)
-                    .allowsHitTesting(false)
-            }
-        }
-        .contentShape(Circle())
-        .gesture(longPress.exclusively(before: tap))
-        .accessibilityElement(children: .ignore)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityLabel("Add water")
-        .accessibilityValue(waterReadingAccessibilityValue)
-        // Long-press is not discoverable by VoiceOver, so decrement is exposed as a named
-        // action rather than left behind the gesture.
-        .accessibilityAction { addWaterCup() }
-        .accessibilityAction(named: Text("Remove a cup")) { removeWaterCup() }
+            // Unchanged (D1): the hit area is still the 52 pt disc, comfortably past 44 pt.
+            .contentShape(Circle())
+            .gesture(longPress.exclusively(before: tap))
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel("Add water")
+            .accessibilityValue(waterReadingAccessibilityValue)
+            // Long-press is not discoverable by VoiceOver, so decrement is exposed as a named
+            // action rather than left behind the gesture.
+            .accessibilityAction { addWaterCup() }
+            .accessibilityAction(named: Text("Remove a cup")) { removeWaterCup() }
     }
 
     // MARK: - Water Actions (WATER-1 D14/D15)
@@ -1355,8 +1441,8 @@ struct FoodLogView: View {
         }
     }
 
-    /// Disc dip + rebound, plus the burst. Under Reduce Motion nothing moves or scales —
-    /// a single 180 ms brightness decay acknowledges the tap instead.
+    /// Disc sink + crown. Under Reduce Motion nothing moves or scales — a single 180 ms
+    /// brightness decay acknowledges the tap instead (D6).
     private func fireWaterSplash() {
         guard !reduceMotion else {
             // Built fresh per tap and animated from `onAppear`, like the ring and the
@@ -1373,13 +1459,21 @@ struct FoodLogView: View {
         }
 
         waterSplashToken += 1
+        waterSplashStart = Date()
         waterSplashRunning = true
         let token = waterSplashToken
 
-        withAnimation(.easeOut(duration: 0.11)) { waterDiscScale = 0.86 }
-        // A low-damping spring is what produces the ~1.07 rebound before it settles.
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.45).delay(0.11)) {
-            waterDiscScale = 1
+        // WATERSTYLE-1 D5: `pxSink 240ms steps(1)` — the disc drops one whole unit, HOLDS
+        // there for the duration, then snaps back. `steps(1)` never interpolates, so this
+        // is deliberately assigned outside `withAnimation`: any easing here would be the
+        // resampled, soft motion the pixel medium cannot survive.
+        waterDiscSink = WaterPixelDisc.unit
+
+        Task {
+            try? await Task.sleep(for: .milliseconds(240))
+            // Token-guarded like the crown: a second tap RETARGETS the sink (it re-sinks
+            // and re-times) rather than letting this teardown cut the new press short.
+            if waterSplashToken == token { waterDiscSink = 0 }
         }
 
         Task {
@@ -2255,8 +2349,10 @@ private struct WaterTapPulse: View {
     @State private var faded = false
 
     var body: some View {
-        Circle()
-            .fill(color)
+        // WATERSTYLE-1: washes the disc's OWN pixel silhouette. A `Circle()` here would
+        // spill past the hand-set shoulders and put a soft anti-aliased edge on a sprite
+        // that has none — the disc is a placed-by-eye disc, not a rasterised circle.
+        WaterPixelDiscSilhouette(color: color)
             .opacity(faded ? 0 : 0.55)
             .onAppear {
                 withAnimation(.easeOut(duration: 0.18)) { faded = true }
@@ -2272,12 +2368,12 @@ private struct WaterTapPulse: View {
 private struct WaterGoalRing: View {
 
     let color: Color
-    let cornerRadius: CGFloat
 
     @State private var expanded = false
 
     var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius)
+        // WATERSTYLE-1 D2: follows the vessel, so it goes pointed with it.
+        Rectangle()
             .stroke(color, lineWidth: 2)
             .scaleEffect(expanded ? 1.34 : 1)
             .opacity(expanded ? 0 : 0.9)
@@ -2287,60 +2383,169 @@ private struct WaterGoalRing: View {
     }
 }
 
-// MARK: - Water Splash Burst (WATER-1 D15)
+// MARK: - Water Pixel Disc (WATERSTYLE-1 D3)
 
-/// The struck-water burst: three expanding ripples plus a crown thrown clear of the rim.
-///
-/// Built to be created fresh per tap (`.id(token)` at the call site) and animated from
-/// `onAppear`, which is what makes a second tap RETARGET the burst rather than queue behind
-/// it. Purely decorative and non-interactive; never rendered under Reduce Motion.
-private struct WaterSplashBurst: View {
+/// The mockup §6 13x13 hand-set pixel disc, transcribed cell-for-cell from
+/// `design/erewhon/water-tracker.html` at `94b36fe`. Not redrawn by eye: "rasterising a
+/// circle at this size looks wrong unless the shoulders are placed by eye", so the shoulder
+/// placement IS the artwork and is copied, not recomputed.
+private enum WaterPixelDisc {
 
-    let color: Color
-    /// Radius of the disc being struck — the crown's throw distances are fractions of it.
-    let discRadius: CGFloat
+    /// One grid unit, in points. 13 units x 4 pt = 52 pt, which is exactly the shipped
+    /// `WaterConstants.buttonDiameter` — the disc lands at native size and is never scaled
+    /// or resampled.
+    static let unit: CGFloat = 4
 
-    /// Ripple stagger, mockup §4: 0 / 80 / 150 ms.
-    private static let rippleDelays: [Double] = [0, 0.08, 0.15]
-
-    /// Crown droplets: angle in degrees and throw distance as a fraction of the disc radius.
-    /// Angles and distances vary together — an evenly spaced crown of identical dots reads
-    /// as a mechanical starburst rather than thrown water.
-    private static let crown: [(angle: Double, throwFactor: CGFloat, size: CGFloat, delay: Double)] = [
-        (-90, 1.00, 4.0, 0.00), (-58, 0.82, 3.0, 0.02), (-122, 0.86, 3.5, 0.01),
-        (-26, 0.74, 2.5, 0.03), (-154, 0.78, 3.0, 0.02), (6, 0.68, 2.5, 0.03),
-        (-186, 0.70, 2.5, 0.01), (-72, 0.92, 2.5, 0.02)
+    /// `const PXCIRCLE` — [startX, width] per row, 13 rows:
+    ///
+    ///     [[4,5],[2,9],[1,11],[1,11],[0,13],[0,13],[0,13],[0,13],[0,13],[1,11],[1,11],[2,9],[4,5]]
+    ///
+    ///     ....#####....      row 0   (4,5)
+    ///     ..#########..      row 1   (2,9)
+    ///     .###########.      rows 2-3 (1,11)
+    ///     #############      rows 4-8 (0,13)
+    ///     .###########.      rows 9-10 (1,11)
+    ///     ..#########..      row 11  (2,9)
+    ///     ....#####....      row 12  (4,5)
+    static let circle: [(x: Int, width: Int)] = [
+        (4, 5), (2, 9), (1, 11), (1, 11), (0, 13), (0, 13), (0, 13),
+        (0, 13), (0, 13), (1, 11), (1, 11), (2, 9), (4, 5)
     ]
 
-    @State private var expanded = false
+    /// `PXCIRCLE.slice(9)` re-drawn in `PX.deep` — the 1-unit darker underside, "so the
+    /// disc reads as an object rather than a sticker". Rows 9 through 12.
+    static let undersideFirstRow = 9
+
+    /// `const PXDROP` — the droplet, 7 wide x 9 tall, knocked out in the outline colour:
+    ///
+    ///     [[3,1],[2,3],[2,3],[1,5],[1,5],[0,7],[0,7],[1,5],[2,3]]
+    ///
+    ///     ...#...      ..#..
+    ///     ..###..      .###.
+    ///     ..###..       ...
+    ///     .#####.
+    ///     .#####.
+    ///     #######
+    ///     #######
+    ///     .#####.
+    ///     ..###..
+    static let drop: [(x: Int, width: Int)] = [
+        (3, 1), (2, 3), (2, 3), (1, 5), (1, 5), (0, 7), (0, 7), (1, 5), (2, 3)
+    ]
+
+    /// `r(3+x, 2+y, ...)` — the droplet is centred at (3, 2) on the 13x13 grid.
+    static let dropOrigin = (x: 3, y: 2)
+
+    /// Fills one grid row into a `GraphicsContext`. Every rect is a whole number of units
+    /// on both axes, so at any integer screen scale the edges land on device pixels and
+    /// nothing is anti-aliased.
+    static func fill(_ context: GraphicsContext, x: Int, y: Int, width: Int, color: Color) {
+        let rect = CGRect(
+            x: CGFloat(x) * unit,
+            y: CGFloat(y) * unit,
+            width: CGFloat(width) * unit,
+            height: unit
+        )
+        context.fill(Path(rect), with: .color(color))
+    }
+}
+
+/// The disc as drawn by the mockup's `pixelButton()`, in its exact three-pass order:
+/// the whole circle in `PX.water`, the bottom four rows re-drawn in `PX.deep`, then the
+/// droplet knocked out in `PX.outline`.
+private struct WaterPixelDiscView: View {
 
     var body: some View {
-        ZStack {
-            ForEach(Array(Self.rippleDelays.enumerated()), id: \.offset) { index, delay in
-                Circle()
-                    .stroke(color, lineWidth: 1.5)
-                    .frame(width: discRadius * 2, height: discRadius * 2)
-                    .scaleEffect(expanded ? 2.45 : 0.3)
-                    .opacity(expanded ? 0 : 0.85)
-                    .animation(.easeOut(duration: 0.42).delay(delay), value: expanded)
-                    .id(index)
+        Canvas { context, _ in
+            // 1. `PXCIRCLE.forEach(([x,w],y)=> g += r(x,y,w,1,PX.water))`
+            for (row, span) in WaterPixelDisc.circle.enumerated() {
+                WaterPixelDisc.fill(context, x: span.x, y: row, width: span.width,
+                                    color: WaterPixelPalette.water)
             }
-
-            ForEach(Array(Self.crown.enumerated()), id: \.offset) { _, droplet in
-                let radians = droplet.angle * .pi / 180
-                let distance = expanded ? discRadius * droplet.throwFactor : 0
-                Circle()
-                    .fill(color)
-                    .frame(width: droplet.size, height: droplet.size)
-                    .offset(
-                        x: distance * CGFloat(cos(radians)),
-                        y: distance * CGFloat(sin(radians))
-                    )
-                    .opacity(expanded ? 0 : 1)
-                    .animation(.easeOut(duration: 0.38).delay(droplet.delay), value: expanded)
+            // 2. `PXCIRCLE.slice(9).forEach(([x,w],i)=> g += r(x,9+i,w,1,PX.deep))`
+            for (offset, span) in WaterPixelDisc.circle[WaterPixelDisc.undersideFirstRow...].enumerated() {
+                WaterPixelDisc.fill(context, x: span.x,
+                                    y: WaterPixelDisc.undersideFirstRow + offset,
+                                    width: span.width, color: WaterPixelPalette.waterDeep)
+            }
+            // 3. `PXDROP.forEach(([x,w],y)=> g += r(3+x,2+y,w,1,PX.outline))`
+            for (row, span) in WaterPixelDisc.drop.enumerated() {
+                WaterPixelDisc.fill(context, x: WaterPixelDisc.dropOrigin.x + span.x,
+                                    y: WaterPixelDisc.dropOrigin.y + row,
+                                    width: span.width, color: WaterPixelPalette.outline)
             }
         }
-        .onAppear { expanded = true }
+    }
+}
+
+/// The disc's silhouette in one flat colour — `PXCIRCLE` with no underside and no droplet.
+/// Used by the Reduce-Motion wash so the acknowledgement stays on the sprite's own edge.
+private struct WaterPixelDiscSilhouette: View {
+
+    let color: Color
+
+    var body: some View {
+        Canvas { context, _ in
+            for (row, span) in WaterPixelDisc.circle.enumerated() {
+                WaterPixelDisc.fill(context, x: span.x, y: row, width: span.width, color: color)
+            }
+        }
+    }
+}
+
+// MARK: - Water Pixel Crown (WATERSTYLE-1 D5)
+
+/// The struck-water crown, in the pixel medium: blocky 1-unit particles thrown clear of the
+/// disc, each travelling a WHOLE number of units.
+///
+/// The step count equals the unit count, which is the whole point — "a 20 pt travel over 4
+/// steps would put frames on 5 pt boundaries, which is off-grid at a 4 pt unit and resamples
+/// every one of them." Directions are cardinal/diagonal only, for the same reason: an
+/// arbitrary angle puts the two axes on different step sizes and one of them lands between
+/// pixels.
+///
+/// Created fresh per tap (`.id(token)` at the call site) with a stamped `start`, which is
+/// what makes a second tap RETARGET the crown rather than queue behind it.
+private struct WaterPixelCrown: View {
+
+    let color: Color
+    /// When this crown was fired; every particle's step index is measured from it.
+    let start: Date
+
+    /// `const PXCROWN` — dx/dy in UNITS, `n` == the step count, `d` == the delay in ms.
+    private static let particles: [(dx: Int, dy: Int, steps: Int, delay: Double)] = [
+        (0, -7, 7, 0.00), (5, -5, 5, 0.04), (-5, -5, 5, 0.02), (7, 0, 7, 0.06),
+        (-7, 0, 7, 0.03), (3, -3, 3, 0.08), (-3, -3, 3, 0.07)
+    ]
+
+    /// `--dur:${p.n*54}ms` over `steps(p.n)`. Every particle therefore advances one unit
+    /// every 54 ms regardless of how far it travels, so ONE tick drives all seven.
+    private static let stepSeconds: Double = 0.054
+
+    /// The last particle to finish: `max(delay + steps * 54 ms)` = 60 ms + 378 ms.
+    static let duration: Double = 0.438
+
+    var body: some View {
+        TimelineView(.periodic(from: start, by: Self.stepSeconds)) { context in
+            let elapsed = context.date.timeIntervalSince(start)
+            ZStack {
+                ForEach(Array(Self.particles.enumerated()), id: \.offset) { _, particle in
+                    let raw = (elapsed - particle.delay) / Self.stepSeconds
+                    let step = min(max(Int(raw.rounded(.down)), 0), particle.steps)
+                    let progress = CGFloat(step) / CGFloat(particle.steps)
+                    Rectangle()
+                        .fill(color)
+                        .frame(width: WaterPixelDisc.unit, height: WaterPixelDisc.unit)
+                        .offset(
+                            x: CGFloat(particle.dx) * WaterPixelDisc.unit * progress,
+                            y: CGFloat(particle.dy) * WaterPixelDisc.unit * progress
+                        )
+                        // `.pxsd{opacity:0}` before the delay, then the keyframe's
+                        // 1 -> 0 ramp, stepped by the same `steps(n)` as the travel.
+                        .opacity(raw < 0 ? 0 : Double(1 - progress))
+                }
+            }
+        }
     }
 }
 
