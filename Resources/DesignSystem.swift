@@ -1733,3 +1733,54 @@ struct ColorSwatch: View {
         }
     }
 }
+
+// MARK: - Water Pixel Palette (WATERSTYLE-1 D4)
+
+/// FIXED mockup colours by ruling — **NOT theme tokens; do not reuse outside the water
+/// button and its vessel texture.**
+///
+/// Transcribed hex-for-hex from `design/erewhon/water-tracker.html` §6 at `94b36fe`, from
+/// the `PX` object the mockup's renderer actually draws with:
+///
+///     const PX = {w:9, h:42, scale:4,
+///       water:'#7BDFF2', deep:'#2A9CC4', foam:'#FFFFFF', neon:'#5FE9FF',
+///       outline:'#17232E', track:'#E5E7EB'};
+///
+/// These are deliberately the values the mockup DRAWS, not the ones its "Pixel palette —
+/// proposed, for ruling" swatch row documents (`#45C2E6` / `#1D7CA6` / `#DFF7FF`). That
+/// swatch row is marked RETIRED by the mockup's own §9 ruling 10 — "the hybrid is the
+/// single renderer, so there is a SINGLE palette: these are the §1 token hexes, not a
+/// separate pixel set" — so the drawn values are the live ones. See the PR for the
+/// hex-for-hex trace.
+///
+/// `water` is the same hex as `ThemeColors.waterFill`; that is the point of ruling 10, not
+/// a coincidence. It is restated here as a fixed constant because this control must render
+/// identically in BOTH Erewhon themes and must not follow a future re-tint of the token.
+enum WaterPixelPalette {
+
+    /// `PX.water` — the disc body and the flat fill body. The pixel arm has no gradient,
+    /// so this is the whole fill.
+    static let water = Color(hex: "#7BDFF2")
+
+    /// `PX.deep` — the disc's 4-row underside, the fill's bottom two rows, and the slower
+    /// caustic layer. What makes the disc read as an object rather than a sticker.
+    static let waterDeep = Color(hex: "#2A9CC4")
+
+    /// `PX.foam` — crest blocks and the faster caustic layer.
+    static let foam = Color(hex: "#FFFFFF")
+
+    /// `PX.outline` — the droplet knocked out of the disc.
+    static let outline = Color(hex: "#17232E")
+
+    /// Crown particles land on the CARD, not on the disc, so they are read against the
+    /// card and are the one part of this palette that flips per theme — the mockup's own
+    /// rule (`.pixeltile .pxsd{--pxsd:#1D7CA6}` / `.pixeltile.night .pxsd{--pxsd:#DFF7FF}`):
+    /// "foam-white is invisible on parchment. The night card flips it back to foam."
+    ///
+    /// Resolved through `SettingsManager.isCleanDark`, which is the app's actual
+    /// light/dark discriminator — there is no `Color(light:dark:)` initializer in this
+    /// codebase (`adaptiveGradient(light:mid:dark:)` and `threeBand(light:mid:dark:)` take
+    /// GRADIENT STOPS, not themes, and are not that thing).
+    static let crownOnLightCard = Color(hex: "#1D7CA6")
+    static let crownOnDarkCard = Color(hex: "#DFF7FF")
+}
